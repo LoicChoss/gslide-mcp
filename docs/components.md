@@ -1,0 +1,280 @@
+# Components, themes and the `draw` canvas
+
+Google Slides has no design system of its own: no CSS, no component
+library, not even a table style. What it has is shapes, lines, text boxes
+and tables with explicit properties. This layer turns that into something a
+model can use safely:
+
+- **themes** — one JSON file per brand: palette, *roles* (`accent`, `ink`,
+  `surface`…), font, *named text styles* (`kpi_value`, `label`…);
+- **components** — recipes that draw a KPI, a card, a callout, a table, a
+  chart… using only roles and named styles, so a brand change is a theme
+  change;
+- **`draw`** — the primitive ops every component compiles to, exposed as a
+  tool for one-off elements;
+- **recipes** — components written as JSON by the model itself and saved
+  for reuse.
+
+Everything is one `batchUpdate` per insert, grouped into a single element.
+
+## Tools
+
+| Tool | Does |
+|---|---|
+| `list_components(theme?)` | Catalogue: every component with `description` (what it draws), `use` (when to pick it and the close alternatives), its props (type, default, choices, required), an example, its source (`builtin` / `recipe`); the available themes; how to add one. |
+| `insert_component(presentation, slide, component, props, x_pt, y_pt, width_pt, height_pt?, theme?)` | Renders a component at a position, in one atomic batch, grouped. Returns `group_id` (the element to move/delete), `element_ids`, `height_pt`. |
+| `draw(presentation, slide, ops, x_pt, y_pt, theme?, group?)` | Primitive ops on a slide (see below). |
+| `save_component(recipe)` | Validates and stores a JSON recipe under `~/.gslides-mcp/components/`; it is listed and insertable right away. |
+| `delete_component(name)` | Removes a saved recipe (built-ins can't be deleted). |
+
+The default theme is `periscope`; set `GSLIDES_MCP_THEME` (or the *Theme*
+field of the Claude Desktop bundle) to change it.
+
+## Built-in components
+
+Every built-in carries a `use` sentence in the catalogue — the situations
+it fits and what tips the choice between neighbours (`stats` vs `kpi_grid`
+vs `bigstat`, `process` vs `flowchart` vs `phase_cards`…). The source is
+`components/uses.py`; a recipe sets its own `use` key. The tables below
+list props; read `list_components()` for the guidance.
+
+| Name | Props | Notes |
+|---|---|---|
+| `kpi` | `value*`, `label*`, `delta`, `dark` | Accent bar, big value, label; `delta` colored by its sign (`+` positive, otherwise negative). |
+| `kpi_grid` | `items*` `[{value, label, delta}]`, `cols`, `row_gap`, `dark` | `kpi` repeated in columns. |
+| `card` | `variant` (`light` `dark` `mint` `acid` `outline` `plain`), `label`, `big`, `num`, `title`, `body` (markdown), `dot`, `icon`, `icon_color` | The flat card pattern; natural height follows the content. `icon` names a PNG of the assets folder (`bolt`, `people`…) drawn in a white disc, tinted with `icon_color` (default `ink`). |
+| `card_grid` | `cards*` (list of `card` props), `cols`, `gap` | Rows of cards with equalised heights — the "three pillars" slide. |
+| `callout` | `type` (`info` `idea` `warn` `alert` `dark`), `title`, `body*` (markdown) | Flat box with an accent bar on the left. |
+| `badge` | `text*`, `fill`, `color` | Small uppercase tag; width follows the text. |
+| `steps` | `items*` (markdown), `dark` | Numbered circles + text. |
+| `quote` | `text*` (markdown), `author`, `role`, `dark` | Accent-outlined box, bold italic quote. |
+| `table` | `rows*`, `col_w`, `row_h`, `header`, `total_row`, `align`, `size` | Accent header, bold first column, banded rows, thin horizontal rules, optional accent total row. |
+| `chart_bars` | `labels*`, `values*`, `horizontal`, `unit`, `max`, `show_values`, `color`, `y_axis`, `dividers` | Vertical histogram with baseline (optional graduated Y axis with grid, period dividers `[{after, left, right}]`), or horizontal bars on grey tracks. Values in French format (`4 000 000 €`). |
+| `chart_line` | `labels*`, `series*` `[{name, values, dash, color}]`, `y_max`, `legend` | Grid, axis labels, markers, dashed series, `null` = gap, legend. |
+| `donut` | `segments*` `[{label, value, color}]`, `thickness`, `center`, `legend` | Ring with legend and percentages. |
+| `pie` | `segments*`, `legend` | Full disc (a donut whose thickness is its radius, drawn as two concentric bands). |
+| `funnel` | `items*` `[{label, value, sub, color}]`, `pct` (`first` `prev` `both` `none`), `unit`, `label_w`, `value_w`, `bar_h`, `min_frac`, `legend` | Centred bars scaled to the first step, values with French thousands separators, rate pills (accent = vs first step, outlined = vs previous) and their legend. |
+| `timeline` | `phases*` `[{date, title, text, color}]` | Horizontal line, one dot per phase, date above, title and text below. |
+| `process` | `steps*` `[{label, sub, fill, color, w}]`, `arrow_w` | Boxes separated by → arrows. |
+| `hub_spoke` | `center*`, `sats*` `[{label, hl}]`, `hub_w`, `hub_h`, `sat_d` | Accent hub linked to round satellites laid out on an ellipse (`hl` = accent outline). |
+| `stack` | `items*` `[{label, sub, fill, color, width}]`, `item_h`, `gap`, `min_ratio` | Centred layers of decreasing width (pyramid / simple funnel). |
+| `bigstat` | `value*`, `label*`, `sub`, `color` | One 54 pt figure, centred. |
+| `stats` | `items*` `[{value, label, sub}]`, `color` | Row of centred figures, optional caption under each. |
+| `pill` | `text*`, `color`, `outline`, `size` | Capsule, filled or outlined (uppercase), width follows the text. |
+| `checklist` | `items*` (text or `{text, done}`), `gap`, `color` | Square boxes; done items are filled with a tick. |
+| `chevrons` / `arrows` | `items*`, `size`, `spacing` | One text box, one paragraph per item, › (accent) or → prefix. |
+| `compare_bars` | `bars*` `[{label, frac, color}]`, `gap` | Full-width grey tracks with a filled fraction. |
+| `effort_matrix` | `bubbles*` `[{n, label, x, y, d, fill, color, above}]`, `x_label`, `y_label` | Two axes, numbered bubbles at fractional positions (y = 1 is top). |
+| `bubbles` | `points*` `[{name, x, y, size, color}]`, `x_max`, `y_max`, `x_title` | Bubble chart on a 4×4 grid with axis ticks. |
+| `heatmap` | `rows*` (header row, label column, numbers or `null`), `col_w`, `row_h`, `size` | Table whose numeric cells are binned into `heat_1…heat_4`. |
+
+Mockups (tag `mockups`):
+
+| Name | Props | Notes |
+|---|---|---|
+| `serp` | `title*`, `site`, `url`, `desc`, `rating`, `reviews`, `frame` | A Google result: favicon disc with the initial, site and URL, blue title, 0–5 stars (partial star masked), review count, description. Uses Google's own colours on purpose, not the theme. |
+| `browser` | `url`, `image`, `image_aspect`, `screen`, `screen_text` | Flat browser chrome (three theme-coloured dots, URL field) around a screenshot from the assets folder; the frame takes the screenshot's aspect. Without `image`: a coloured screen with centred text. |
+| `laptop` | `image`, `image_aspect`, `screen`, `screen_text` | Dark rounded screen on a base. The screenshot is cropped to the 16:10 screen like `object-fit: cover`. |
+| `phone` | `image`, `image_aspect`, `screen`, `screen_text`, `notch` | Smartphone frame (9:19.5 screen by default), screenshot cropped to the screen. |
+
+Text and structure (lot 4):
+
+| Name | Props | Notes |
+|---|---|---|
+| `agenda` | `items*` (text or `{num, title}`), `dark`, `size`, `row_h` | Table of contents: acid chip with the number, section title. `dark=True` on a dark layout. |
+| `numbered_list` | `items*` `[{title, sub, icon}]`, `marker` (`circle` `square`), `start`, `card`, `connector`, `gap` | Vertical list: accent disc (picto or number) + `#n` + title/sub, or square chip + uppercase title. Optional light cards and a vertical accent connector. |
+| `big_numbers` | `items*` `[{num, title, text}]`, `cols`, `row_gap`, `highlight` | "1 2 3" columns: 54 pt figure, highlighted bold title (line breaks allowed), centred paragraph. |
+| `phase_cards` | `phases*` `[{num, title, text, icon, note, deliverables}]`, `cols`, `gap`, `num_size` | Methodology cards: big accent number above an accent-outlined card, picto + note row, "LIVRABLES" list with → bullets. Heights equalised per row. |
+| `compare_cards` | `cards*` `[{kind (bad/good/neutral), label, title, text}]`, `cols`, `gap` | Myth vs. answer: ✗ card on `danger_bg`, ✓ card on `surface_dark` with accent label, neutral on `surface`. |
+| `before_after` | `before*` / `after*` `{title, items, note}`, `arrow`, `gap` | Two rounded panels (`danger_bg` / `success_bg`) with a caps title, rule-separated lines, italic note, → between them. |
+| `stat_pair` | `pairs*` `[{label, before, after}]`, `cols` | Before → after figures: muted before, bold after. |
+| `palette` | `swatches*` `[{color, text, name, ratio, sample}]`, `cols`, `sample` | "Aa" swatches with name and contrast ratio (RGAA slides, brand palettes). |
+
+People, logos, KPI cards (assets folder):
+
+| Name | Props | Notes |
+|---|---|---|
+| `person_card` | `photo`, `name*`, `role`, `bio` (markdown), `contact`, `photo_size`, `layout` (`side` `top`) | Square photo (cover) or initials on `photo_bg`, name, role, bio, contact. |
+| `team_grid` | `people*` (person props), `cols`, `gap`, `photo_size`, `layout` | `person_card` in a grid with equalised rows. |
+| `logo_grid` | `items*` `[{logo, logo_url, name, title, text}]`, `cols`, `gap`, `dividers`, `highlight`, `tint` | Tools / partners: logo (contain) + name, highlighted title, text, dashed dividers. `tint` recolours white pictos. |
+| `logo_wall` | `logos*` (asset names or `{logo, logo_url, name}`), `cols`, `gap`, `logo_h`, `cell_h`, `names`, `dark`, `tint` | Client logo wall, each logo fitted in its cell at its own aspect. |
+| `kpi_cards` | `items*` `[{label, value, delta, icon, color}]`, `cols`, `gap`, `card_h`, `icon_tint` | Outlined cards: picto + label, ▲/▼ delta coloured by sign, series dot + value. |
+
+Charts and diagrams (lot 4):
+
+| Name | Props | Notes |
+|---|---|---|
+| `gauge` | `value*`, `max`, `label`, `text`, `unit`, `color`, `size`, `thickness`, `value_size` | Half ring on a grey track, value in the middle, label below. |
+| `target` | `rings*` `[{label, value, color}]`, `max`, `thickness`, `gap`, `center`, `legend` | Concentric rings, each filled to its percentage from 12 o'clock (radial bar chart), legend. |
+| `chart_stacked` | `labels*`, `series*` `[{name, values, color}]`, `horizontal`, `max`, `unit`, `show_values`, `legend`, `bar_h`, `gap`, `y_axis`, `dividers` | Stacked bars, horizontal (default) or vertical columns with graduated Y axis and period dividers (« ISF | IFI »), totals, legend. |
+| `chart_combo` | `labels*`, `bars*` `{name, values, color}`, `line*` `{name, values, color}`, `unit`, `unit2`, `y_max`, `y2_max`, `y_axis`, `show_values`, `legend`, `dividers` | Bars on the left axis + line with markers on the right axis, values on every bar and point in each series' colour, two graduated axes, legend. |
+| `tree` | `root*`, `children*` `[{label, items, fill, hl}]`, `node_h`, `gap_y`, `gap_x` | Two-level sitemap / org chart: accent root, children on a bus, bulleted sub-items under each. |
+| `flowchart` | `nodes*` `[{id, label, sub, col, row, fill, color, shape, hl, w}]`, `edges` (`[from, to]` or `{from, to, label, dash, color}`), `cols`, `node_w`, `node_h`, `gap_x`, `gap_y` | Nodes on a grid, elbow connectors with arrowheads (forward, vertical, and backward through a lane under the grid), edge labels. |
+
+`*` = required. Series and segments default to the theme's `series_1…6`
+roles.
+
+Example — a KPI row then a comparison card, on slide 5 of a deck:
+
+```
+insert_component(deck, 5, "kpi_grid", {"items": [
+    {"value": "1 625 394", "label": "Impressions", "delta": "-66,57 %"},
+    {"value": "12 400", "label": "Sessions", "delta": "+8 %"},
+    {"value": "3,2 %", "label": "CTR"}], "cols": 3},
+    x_pt=40, y_pt=90, width_pt=640)
+
+insert_component(deck, 5, "card", {"variant": "dark", "num": "01", "title": "Visibilité",
+    "body": "- Autorité de domaine\n- **Contenu** evergreen", "dot": True},
+    x_pt=40, y_pt=190, width_pt=200)
+```
+
+Then `screenshot(deck, 5)` to check the result. Components return their
+natural height so the next one can be placed right below.
+
+**Marker highlight.** Every markdown prop accepts `==texte==`: the span gets
+the theme's `highlight` role as text background — the marker effect the
+Periscope decks use on key phrases. `runs` take a `highlight` key with any
+colour, and a text op's `highlight` key changes the colour used by `==…==`
+in that box.
+
+## Assets (pictos, logos, screenshots)
+
+`createImage` only accepts URLs, so every picture a component uses lives in
+one shared Drive folder: `GSLIDES_MCP_ASSETS_FOLDER` (the *Assets folder*
+field of the Claude Desktop bundle; id or URL). Any `image` prop (`icon`,
+`image`) and the `asset` key of a `draw` image op take either:
+
+- a **name** — `bolt` finds `bolt.png` in the folder;
+- a **local path** — the file is uploaded into the folder the first time
+  (shared read-only by link, which Slides needs to fetch it), then reused.
+
+Tinted variants are generated on demand: a card's `icon_color: "accent"`
+recolours the picto (alpha kept) and stores `bolt__00f5b4.png` next to the
+original, so one white/black picto serves every theme. Resolved ids and
+image sizes are cached in `~/.gslides-mcp/assets.json`. `list_assets()` returns the usable names (without extension, tinted
+variants hidden); `list_components` also carries the raw file list under
+`assets` (or `assets_error` when the folder is not configured).
+
+Shipped pictos in the Periscope folder: `bolt`, `download`, `google`,
+`lightbulb`, `megaphone`, `people`, `search`, `share`, `star`, `video`;
+demo screenshots `screen-demo` (16:9) and `laptop-demo`. The pictos are
+white on transparent: `card.icon` tints them with `icon_color`, and
+`logo_grid` / `logo_wall` need `tint: "ink"` to show them on a light
+background (real logos are coloured and need no tint).
+
+## Text size floors
+
+A theme may carry `text_rules`: `min_size` for running text, `small_min_size`
+for labels, captions, badges, legends and chart values (`small_styles`), and
+`exempt_styles` (tables). Periscope: 11 pt / 10 pt, `table_cell` and
+`table_header` exempt. The floor applies at render time to every text —
+named style, explicit `size`, runs — so `draw` ops and recipes comply too;
+the built-in components also declare compliant sizes so their computed
+box heights are right.
+
+## Themes
+
+`periscope.json` (the Slidev theme tokens) and `default.json` (neutral)
+ship with the server; drop `~/.gslides-mcp/themes/<name>.json` to add one,
+optionally extending another:
+
+```json
+{"extends": "periscope",
+ "colors": {"acme_red": "#AA0000"},
+ "roles": {"accent": "acme_red"},
+ "text_styles": {"label": {"size": 12}}}
+```
+
+A theme has four parts:
+
+- `colors` — the palette, token → hex;
+- `roles` — what the palette is *for*: `background`, `ink`, `text`,
+  `muted`, `accent`, `accent_alt`, `on_accent`, `on_dark`, `surface`,
+  `surface_dark`, `rule`, `grid`, `positive`, `negative`, `series_1…6`,
+  plus per-component roles (`callout_info_bg`, `step_bg`…);
+- `font` — one family for everything (must exist in Google Fonts or the
+  deck: Barlow does);
+- `text_styles` — named `{size, bold, italic, color}` sets: `title`,
+  `body`, `label`, `caption`, `kpi_value`, `card_big`, `table_header`…
+
+Components reference roles and style names only. To recolor every KPI bar,
+change `roles.accent`; to shrink every table, change `text_styles.table_cell`.
+
+## `draw` ops
+
+Coordinates in points, relative to the tool's `x_pt`/`y_pt`; colors are
+roles, tokens or `#RRGGBB`; `style` names a theme text style.
+
+```
+box       x y w h [fill] [line {color, weight}] [shape]  (+ any text key below)
+text      x y w h  text | markdown | runs=[[{text, bold, italic, color, size, font, highlight}], …]
+          [style] [size] [color] [bold] [italic] [align] [valign] [spacing] [highlight]
+          (markdown ==x== → text background in the highlight role)
+line      x1 y1 x2 y2 [color] [weight] [dash] [end_arrow] [start_arrow]
+          (arrow | open | dot | stealth | none)
+polyline  points=[[x, y], …] [color] [weight] [dash] [end_arrow]   arrow on the last segment
+arc       cx cy r a0 a1 weight [color]           degrees, 0 = east, clockwise
+ring      cx cy r thickness segments=[{value, color}] [start] [span]   span < 360 = gauge
+table     x y w rows [col_w] [row_h] [header {fill, color, bold}] [banding]
+          [first_col_bold] [align] [borders {color, weight, position} | null]
+          [row_fills] [bold_rows] [size]
+image     x y w h  drive_file_id | url | asset [tint] [cover] [contain]
+```
+
+`asset` is a name in the Drive assets folder or a local path (see
+*Assets*); `tint` a role or `#RRGGBB`; `cover: true` crops the source to the
+box without distortion (`object-fit: cover`); `contain: true` shrinks and
+centres the box to the source's aspect (logos). Both need the source size,
+which the resolver knows for assets, not for bare URLs.
+
+`shape` is any Slides predefined type (`RECTANGLE`, `ROUND_RECTANGLE`,
+`ELLIPSE`, `STAR_5`, `CHEVRON`, `TRAPEZOID`…).
+
+## Recipes
+
+A recipe is a component with no code — the same ops, templated:
+
+```json
+{"name": "pill_row",
+ "description": "Rangée de pastilles.",
+ "props": {"items": {"type": "list", "description": "Textes.", "required": true},
+           "fill":  {"type": "color", "description": "Fond.", "default": "accent"}},
+ "height": "16",
+ "ops": [
+   {"each": "items", "ops": [
+     {"op": "box", "x": "i * 70", "y": 0, "w": 64, "h": 16, "fill": "{fill}",
+      "text": "{item}", "style": "badge", "align": "CENTER", "valign": "MIDDLE"}]},
+   {"op": "text", "x": 0, "y": 20, "w": "w", "h": 12, "text": "{len(items)} pastilles", "style": "caption"}]}
+```
+
+- numeric keys (`x`, `y`, `w`, `h`, `x1`…, `r`, `weight`, `size`…) are
+  expressions: arithmetic over the props plus `w`, `h` and, inside an `each`
+  block, `i`, `n` and the item; `min/max/round/abs/len` only;
+- string keys are templates: `{item}`, `{row.name}`, `{len(items)} pastilles`;
+- `each` unrolls a list prop; `as` renames the item (`{row.name}`).
+
+`save_component` dry-renders the recipe with sample props and reports the
+failing op by index. The intended loop for the model: sketch with `draw`,
+screenshot, adjust, then freeze as a recipe.
+
+## What the Slides API imposes
+
+- **No freeform geometry.** Curves are straight `createLine` segments;
+  rings and pies are radial spokes, one per degree (a donut or a pie is 360
+  lines grouped into one element — count on 3–8 s per chart). Partial
+  fills (the SERP's 4.6 stars) are a full shape masked by a white box.
+- **Fixed text insets** (~7 pt left/right, ~4 pt top/bottom) that can't be
+  changed. Components budget for them; when you `draw` text yourself, add
+  8 pt to box heights and expect text to start 7 pt in.
+- **No adjust handles** on predefined shapes: a `ROUND_RECTANGLE`'s radius
+  or a `TRAPEZOID`'s slant are what Google gives.
+- **Line caps are square**, so a very thick arc shows faint oblique seams
+  where segments meet.
+- **Fonts** are set by name; Barlow renders because Google Fonts has it. A
+  font the deck can't resolve silently falls back to Arial.
+- **Images are URLs.** No upload in the Slides API: pictos and screenshots
+  go through the Drive assets folder, and an image's crop can only be set
+  with all four offsets at once.
+- **Write quota**: 60 requests per minute per user. Every write here is one
+  `batchUpdate`, retried with backoff on 429; building a whole catalogue in
+  one go still needs a pause between inserts.

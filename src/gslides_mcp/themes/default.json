@@ -1,0 +1,243 @@
+{
+  "description": "Neutral theme: Google-blue accent, Arial. Same roles and text styles as every other theme, so components render on any deck.",
+  "font": "Arial",
+  "colors": {
+    "blue": "#1A73E8",
+    "blue_dark": "#174EA6",
+    "dark": "#202124",
+    "gray_text": "#5F6368",
+    "gray_light": "#F1F3F4",
+    "line": "#DADCE0",
+    "green": "#188038",
+    "red": "#D93025",
+    "amber": "#F9AB00",
+    "purple": "#9334E6",
+    "teal": "#12B5CB",
+    "orange": "#E8710A",
+    "white": "#FFFFFF"
+  },
+  "roles": {
+    "background": "white",
+    "ink": "dark",
+    "text": "dark",
+    "muted": "gray_text",
+    "accent": "blue",
+    "accent_alt": "amber",
+    "on_accent": "white",
+    "on_dark": "white",
+    "surface": "gray_light",
+    "surface_dark": "dark",
+    "surface_dark_2": "blue_dark",
+    "rule": "line",
+    "grid": "line",
+    "positive": "green",
+    "negative": "red",
+    "warning": "amber",
+    "danger": "red",
+    "series_1": "blue",
+    "series_2": "red",
+    "series_3": "amber",
+    "series_4": "green",
+    "series_5": "purple",
+    "series_6": "teal",
+    "callout_info_bg": "#E8F0FE",
+    "callout_info_bar": "blue",
+    "callout_info_title": "blue_dark",
+    "callout_idea_bg": "#FEF7E0",
+    "callout_idea_bar": "amber",
+    "callout_idea_title": "#B06000",
+    "callout_warn_bg": "#FEF3E0",
+    "callout_warn_bar": "orange",
+    "callout_warn_title": "#8A4B00",
+    "callout_alert_bg": "#FCE8E6",
+    "callout_alert_bar": "red",
+    "callout_alert_title": "red",
+    "callout_dark_bg": "surface_dark",
+    "callout_dark_bar": "blue",
+    "callout_dark_title": "white",
+    "step_bg": "gray_light",
+    "step_bg_dark": "blue_dark",
+    "step_number_dark": "white",
+    "track": "surface",
+    "marker": "background",
+    "heat_0": "background",
+    "heat_1": "gray_light",
+    "heat_2": "#D2E3FC",
+    "heat_3": "blue",
+    "heat_4": "blue_dark",
+    "stat": "accent",
+    "device_frame": "dark",
+    "device_base": "line",
+    "highlight": "blue",
+    "highlight_alt": "amber",
+    "success_bg": "#E8F0FE",
+    "success_ink": "green",
+    "danger_bg": "#FCE8E6",
+    "danger_ink": "red",
+    "chip": "blue",
+    "on_chip": "white",
+    "divider": "line",
+    "photo_bg": "gray_light"
+  },
+  "text_styles": {
+    "title": {
+      "size": 24,
+      "bold": true,
+      "color": "ink"
+    },
+    "subtitle": {
+      "size": 14,
+      "color": "text"
+    },
+    "body": {
+      "size": 11,
+      "color": "text"
+    },
+    "label": {
+      "size": 11,
+      "color": "text"
+    },
+    "caption": {
+      "size": 10,
+      "color": "muted"
+    },
+    "kpi_value": {
+      "size": 28,
+      "bold": true,
+      "color": "ink"
+    },
+    "kpi_label": {
+      "size": 11,
+      "color": "text"
+    },
+    "kpi_delta": {
+      "size": 11,
+      "bold": true,
+      "color": "positive"
+    },
+    "card_label": {
+      "size": 10,
+      "bold": true,
+      "color": "ink"
+    },
+    "card_big": {
+      "size": 26,
+      "bold": true,
+      "color": "accent"
+    },
+    "card_num": {
+      "size": 18,
+      "bold": true,
+      "color": "ink"
+    },
+    "card_title": {
+      "size": 11,
+      "bold": true,
+      "color": "ink"
+    },
+    "card_body": {
+      "size": 11,
+      "color": "text"
+    },
+    "callout_title": {
+      "size": 11,
+      "bold": true,
+      "color": "ink"
+    },
+    "callout_body": {
+      "size": 11,
+      "color": "text"
+    },
+    "badge": {
+      "size": 10,
+      "bold": true,
+      "color": "on_accent"
+    },
+    "step_number": {
+      "size": 10,
+      "bold": true,
+      "color": "ink"
+    },
+    "step_text": {
+      "size": 11,
+      "color": "text"
+    },
+    "quote": {
+      "size": 12,
+      "bold": true,
+      "italic": true,
+      "color": "ink"
+    },
+    "quote_author": {
+      "size": 10,
+      "color": "text"
+    },
+    "table_header": {
+      "size": 10.5,
+      "bold": true,
+      "color": "on_accent"
+    },
+    "table_cell": {
+      "size": 10.5,
+      "color": "text"
+    },
+    "chart_label": {
+      "size": 10,
+      "color": "text"
+    },
+    "chart_value": {
+      "size": 10,
+      "bold": true,
+      "color": "ink"
+    },
+    "axis": {
+      "size": 10,
+      "color": "muted"
+    },
+    "legend": {
+      "size": 10,
+      "color": "text"
+    },
+    "stat_value": {
+      "size": 54,
+      "bold": true,
+      "color": "stat"
+    },
+    "stat_label": {
+      "size": 13.5,
+      "bold": true,
+      "color": "stat"
+    },
+    "pill": {
+      "size": 11,
+      "bold": true,
+      "color": "on_accent"
+    },
+    "list": {
+      "size": 12.5,
+      "color": "text"
+    }
+  },
+  "text_rules": {
+    "min_size": 11,
+    "small_min_size": 10,
+    "small_styles": [
+      "caption",
+      "card_label",
+      "badge",
+      "kpi_delta",
+      "chart_label",
+      "chart_value",
+      "axis",
+      "legend",
+      "pill",
+      "step_number",
+      "quote_author",
+      "stat_label"
+    ],
+    "exempt_styles": [
+      "table_cell",
+      "table_header"
+    ]
+  }
+}

@@ -1,0 +1,257 @@
+{
+  "description": "Charte Periscope 2026 — tokens de theme/styles/vars.css du template Slidev, roles et styles de texte des composants P*.vue.",
+  "font": "Barlow",
+  "colors": {
+    "navy": "#002B3C",
+    "navy_2": "#073F55",
+    "mint": "#00F6B5",
+    "mint_dark": "#00D9A0",
+    "acid": "#E8FF00",
+    "ink": "#111418",
+    "cyan": "#45DBFF",
+    "coral": "#FF9170",
+    "magenta": "#FA00A6",
+    "violet": "#9E38FF",
+    "orange": "#F5A623",
+    "red": "#FF4646",
+    "green": "#00C48C",
+    "gray": "#EDEDED",
+    "gray_2": "#C7C9C7",
+    "gray_text": "#6B7075",
+    "card": "#F2F4F4",
+    "strip": "#F5F6F6",
+    "row_line": "#E3E7E7",
+    "step_bg": "#E9EDED",
+    "info_bg": "#E5FEF6",
+    "idea_bg": "#FBFFD6",
+    "warn_bg": "#FEF3E0",
+    "warn_ink": "#8A5A00",
+    "alert_bg": "#FFE9E9",
+    "alert_ink": "#B30000",
+    "white": "#FFFFFF"
+  },
+  "roles": {
+    "background": "white",
+    "ink": "navy",
+    "text": "ink",
+    "muted": "gray_text",
+    "accent": "mint",
+    "accent_alt": "acid",
+    "on_accent": "navy",
+    "on_dark": "white",
+    "surface": "card",
+    "surface_dark": "navy",
+    "surface_dark_2": "navy_2",
+    "rule": "row_line",
+    "grid": "row_line",
+    "positive": "mint_dark",
+    "negative": "orange",
+    "warning": "orange",
+    "danger": "red",
+    "series_1": "mint",
+    "series_2": "navy",
+    "series_3": "acid",
+    "series_4": "violet",
+    "series_5": "cyan",
+    "series_6": "coral",
+    "callout_info_bg": "info_bg",
+    "callout_info_bar": "accent",
+    "callout_info_title": "ink",
+    "callout_idea_bg": "idea_bg",
+    "callout_idea_bar": "accent_alt",
+    "callout_idea_title": "ink",
+    "callout_warn_bg": "warn_bg",
+    "callout_warn_bar": "orange",
+    "callout_warn_title": "warn_ink",
+    "callout_alert_bg": "alert_bg",
+    "callout_alert_bar": "red",
+    "callout_alert_title": "alert_ink",
+    "callout_dark_bg": "surface_dark",
+    "callout_dark_bar": "accent",
+    "callout_dark_title": "accent",
+    "step_bg": "step_bg",
+    "step_bg_dark": "navy_2",
+    "step_number_dark": "accent",
+    "track": "surface",
+    "marker": "background",
+    "heat_0": "background",
+    "heat_1": "card",
+    "heat_2": "info_bg",
+    "heat_3": "mint",
+    "heat_4": "navy",
+    "stat": "accent",
+    "device_frame": "navy",
+    "device_base": "gray_2",
+    "highlight": "mint",
+    "highlight_alt": "acid",
+    "success_bg": "info_bg",
+    "success_ink": "green",
+    "danger_bg": "alert_bg",
+    "danger_ink": "red",
+    "chip": "accent_alt",
+    "on_chip": "ink",
+    "divider": "gray_2",
+    "photo_bg": "surface"
+  },
+  "text_styles": {
+    "title": {
+      "size": 24,
+      "bold": true,
+      "color": "ink"
+    },
+    "subtitle": {
+      "size": 14,
+      "color": "text"
+    },
+    "body": {
+      "size": 11,
+      "color": "text"
+    },
+    "label": {
+      "size": 11,
+      "color": "text"
+    },
+    "caption": {
+      "size": 10,
+      "color": "muted"
+    },
+    "kpi_value": {
+      "size": 28,
+      "bold": true,
+      "color": "ink"
+    },
+    "kpi_label": {
+      "size": 11,
+      "color": "text"
+    },
+    "kpi_delta": {
+      "size": 11,
+      "bold": true,
+      "color": "positive"
+    },
+    "card_label": {
+      "size": 10,
+      "bold": true,
+      "color": "ink"
+    },
+    "card_big": {
+      "size": 26,
+      "bold": true,
+      "color": "accent"
+    },
+    "card_num": {
+      "size": 18,
+      "bold": true,
+      "color": "ink"
+    },
+    "card_title": {
+      "size": 11,
+      "bold": true,
+      "color": "ink"
+    },
+    "card_body": {
+      "size": 11,
+      "color": "text"
+    },
+    "callout_title": {
+      "size": 11,
+      "bold": true,
+      "color": "ink"
+    },
+    "callout_body": {
+      "size": 11,
+      "color": "text"
+    },
+    "badge": {
+      "size": 10,
+      "bold": true,
+      "color": "on_accent"
+    },
+    "step_number": {
+      "size": 10,
+      "bold": true,
+      "color": "ink"
+    },
+    "step_text": {
+      "size": 11,
+      "color": "text"
+    },
+    "quote": {
+      "size": 12,
+      "bold": true,
+      "italic": true,
+      "color": "ink"
+    },
+    "quote_author": {
+      "size": 10,
+      "color": "text"
+    },
+    "table_header": {
+      "size": 10.5,
+      "bold": true,
+      "color": "ink"
+    },
+    "table_cell": {
+      "size": 10.5,
+      "color": "text"
+    },
+    "chart_label": {
+      "size": 10,
+      "color": "text"
+    },
+    "chart_value": {
+      "size": 10,
+      "bold": true,
+      "color": "ink"
+    },
+    "axis": {
+      "size": 10,
+      "color": "muted"
+    },
+    "legend": {
+      "size": 10,
+      "color": "text"
+    },
+    "stat_value": {
+      "size": 54,
+      "bold": true,
+      "color": "stat"
+    },
+    "stat_label": {
+      "size": 13.5,
+      "bold": true,
+      "color": "stat"
+    },
+    "pill": {
+      "size": 11,
+      "bold": true,
+      "color": "on_accent"
+    },
+    "list": {
+      "size": 12.5,
+      "color": "text"
+    }
+  },
+  "text_rules": {
+    "min_size": 11,
+    "small_min_size": 10,
+    "small_styles": [
+      "caption",
+      "card_label",
+      "badge",
+      "kpi_delta",
+      "chart_label",
+      "chart_value",
+      "axis",
+      "legend",
+      "pill",
+      "step_number",
+      "quote_author",
+      "stat_label"
+    ],
+    "exempt_styles": [
+      "table_cell",
+      "table_header"
+    ]
+  }
+}

@@ -15,10 +15,30 @@ import urllib.request
 
 import certifi
 
-from ..app import mcp
+from ..app import READ_ONLY, mcp
 
 
 _USER_AGENT = "gslides-mcp/0.1 (+https://github.com/jemmanuele/gslide-mcp)"
+
+
+@mcp.tool(annotations=READ_ONLY)
+def list_assets() -> dict:
+    """Names available in the Drive assets folder (pictos, logos, photos, screenshots).
+
+    These are the values accepted by the ``icon`` / ``image`` / ``logo`` /
+    ``photo`` props of components and by the ``asset`` key of ``draw`` image
+    ops — by name, without extension (``bolt``, ``screen-demo``). Tinted
+    variants (``name__hex.png``) are generated on demand and not listed.
+    A local file path is also accepted by those props: it is uploaded to the
+    folder on first use and appears here afterwards.
+
+    Returns: ``{folder, assets: [names], files: [file names]}``.
+    """
+    from .. import assets as store
+
+    files = store.list_assets()
+    names = sorted({f.rsplit(".", 1)[0] for f in files if "__" not in f})
+    return {"folder": store.folder_id(), "assets": names, "files": files}
 _SSL_CTX = ssl.create_default_context(cafile=certifi.where())
 
 
@@ -58,7 +78,7 @@ def _head_ok(url: str, timeout: float = 4.0, *, raster_only: bool = True) -> boo
     return False
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def fetch_logo_by_domain(domain: str, prefer: str = "wordmark") -> dict:
     """Resolve a public logo URL for a brand by domain.
 
