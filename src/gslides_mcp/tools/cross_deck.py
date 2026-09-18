@@ -18,14 +18,16 @@ from __future__ import annotations
 import json
 import os
 import ssl
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from pathlib import Path
 
 import certifi
 
-from ..app import mcp
+from ..app import ADDITIVE, READ_ONLY, mcp
 from ..util import parse_pres_id
 
 
@@ -39,16 +41,29 @@ _APPSCRIPT_URL_FILE = Path.home() / ".gslides-mcp" / "appscript_url"
 _APPSCRIPT_HOST = "script.google.com"
 
 
-# A urllib opener that does NOT follow redirects. Apps Script /exec endpoints
-# respond 200 with a JSON body on success and don't redirect in normal use;
-# allowing redirects would risk replaying the Authorization header across hosts.
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
+# Every POST to an Apps Script /exec URL answers 302 to this host, where the
+# real (JSON) response is served. That single hop is the ONLY redirect we
+# follow, and we follow it the way browsers do: as a bare GET with no body and
+# no Authorization header, so the bearer token never leaves script.google.com.
+_ECHO_HOST = "script.googleusercontent.com"
+
+_USER_AGENT = "gslides-mcp/0.1"
+
+
+class _EchoOnlyRedirect(urllib.request.HTTPRedirectHandler):
+    max_redirections = 1
+
     def redirect_request(self, req, fp, code, msg, hdrs, newurl):  # noqa: ARG002
-        return None
+        parts = urllib.parse.urlparse(newurl)
+        if parts.scheme != "https" or parts.hostname != _ECHO_HOST:
+            return None  # surfaces to the caller as HTTPError(code)
+        return urllib.request.Request(
+            newurl, headers={"User-Agent": _USER_AGENT}, method="GET"
+        )
 
 
-_NO_REDIRECT_OPENER = urllib.request.build_opener(
-    _NoRedirect(),
+_OPENER = urllib.request.build_opener(
+    _EchoOnlyRedirect(),
     urllib.request.HTTPSHandler(context=_SSL_CTX),
 )
 
@@ -68,20 +83,80 @@ def _appscript_url() -> str:
     )
 
 
-def _post_json(url: str, payload: dict, timeout: float = 180.0) -> dict:
-    """POST a JSON payload to the Apps Script web app and return parsed JSON.
+# Google's response relay (the echo hop) intermittently serves a Drive
+# "unable to open the file at this time" 404 for a result the script already
+# produced. The user_content_key is single-use, so the only recovery is to
+# replay the POST — which is safe for ping, and for copy only once the
+# deployed script deduplicates by requestId (v0.4+).
+_RELAY_ATTEMPTS = 4  # 1 initial + 3 replays, backoff 1s/2s/4s
+
+_REPLAY_HINT = (
+    "Google's response relay dropped the result (transient 404 on "
+    "script.googleusercontent.com). Redeploy appscript/cross_deck_copy.gs "
+    "v0.4 so the MCP can replay copies safely; until then, re-run the call."
+)
+
+# Deployed script version per URL, learned lazily via ping. Gates copy replay.
+_SCRIPT_VERSION: dict[str, tuple[int, ...]] = {}
+
+
+class _RelayError(RuntimeError):
+    """The echo hop 404'd after the script ran; the response is lost."""
+
+
+def _raise_for(e: urllib.error.HTTPError) -> None:
+    """Translate an HTTPError from either hop into a RuntimeError."""
+    # Truncate aggressively — Apps Script error bodies can be large and
+    # we don't want any echoed request headers ending up in user output.
+    msg = e.read().decode("utf-8", errors="replace")
+    if e.code == 404 and urllib.parse.urlparse(e.url).hostname == _ECHO_HOST:
+        raise _RelayError("appscript relay 404") from None
+    if 300 <= e.code < 400:
+        # A refused redirect: name the destination host so a private
+        # deployment (accounts.google.com) or a /dev URL is obvious.
+        target = urllib.parse.urlparse(e.headers.get("Location", "")).hostname
+        msg = f"refused redirect to {target or '<no Location>'}"
+    raise RuntimeError(f"appscript HTTP {e.code}: {msg[:500]}") from None
+
+
+def _post_json(
+    url: str, payload: dict, timeout: float = 180.0, retry: bool = True
+) -> dict:
+    """POST to the Apps Script web app, replaying on relay 404s if ``retry``.
+
+    ``retry=False`` is for calls that would have a side effect twice if the
+    script has already run — i.e. copy against a pre-0.4 script.
+    """
+    for attempt in range(1, _RELAY_ATTEMPTS + 1):
+        try:
+            return _post_json_once(url, payload, timeout)
+        except _RelayError:
+            if not retry:
+                raise RuntimeError(_REPLAY_HINT) from None
+            if attempt == _RELAY_ATTEMPTS:
+                raise RuntimeError(
+                    f"appscript relay 404 on {attempt} consecutive attempts; "
+                    "Google's response relay is degraded — retry later."
+                ) from None
+            time.sleep(2 ** (attempt - 1))
+    raise AssertionError("unreachable")
+
+
+def _post_json_once(url: str, payload: dict, timeout: float) -> dict:
+    """One POST to the Apps Script web app; returns parsed JSON.
 
     Security: the OAuth bearer token is attached ONLY when the destination
     host is script.google.com. A misconfigured ``GSLIDES_MCP_APPSCRIPT_URL``
     (typo, hostile takeover of the URL file, swap to a dev tunnel) would
     otherwise leak a usable Google access token to an arbitrary endpoint.
-    Redirects are also disabled — Apps Script doesn't issue them, and we
-    don't want a same-scheme cross-host redirect to replay the token.
+    Apps Script always 302s a POST to script.googleusercontent.com; that hop
+    is followed as a token-less GET (see ``_EchoOnlyRedirect``). Any other
+    redirect is refused so the token can't be replayed to another host.
     """
     body = json.dumps(payload).encode("utf-8")
     headers = {
         "Content-Type": "application/json",
-        "User-Agent": "gslides-mcp/0.1",
+        "User-Agent": _USER_AGENT,
     }
     host = urllib.parse.urlparse(url).hostname or ""
     if host == _APPSCRIPT_HOST:
@@ -93,13 +168,22 @@ def _post_json(url: str, payload: dict, timeout: float = 180.0) -> dict:
             pass
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
-        with _NO_REDIRECT_OPENER.open(req, timeout=timeout) as resp:
+        with _OPENER.open(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        # Truncate aggressively — Apps Script error bodies can be large and
-        # we don't want any echoed request headers ending up in user output.
-        msg = e.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"appscript HTTP {e.code}: {msg[:500]}") from None
+        _raise_for(e)
+    raise AssertionError("unreachable")
+
+
+def _script_supports_replay(url: str) -> bool:
+    """True if the deployed script dedupes copies by requestId (v0.4+).
+
+    One ping per server lifetime and URL; ping itself is replay-safe.
+    """
+    if url not in _SCRIPT_VERSION:
+        raw = str(cross_deck_ping().get("version", "0"))
+        _SCRIPT_VERSION[url] = tuple(int(p) for p in raw.split(".") if p.isdigit())
+    return _SCRIPT_VERSION[url] >= (0, 4)
 
 
 def _maybe_token() -> str | None:
@@ -126,7 +210,7 @@ def _maybe_token() -> str | None:
     return creds.token
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 def copy_slide_cross_deck(
     src_presentation: str,
     src_slide: str,
@@ -163,13 +247,16 @@ def copy_slide_cross_deck(
     }
     if insertion_index is not None:
         payload["insertionIndex"] = insertion_index
-    result = _post_json(url, payload)
+    # requestId lets a v0.4+ script answer a replayed POST from cache instead
+    # of appending the slide a second time (see _RELAY_ATTEMPTS).
+    payload["requestId"] = uuid.uuid4().hex
+    result = _post_json(url, payload, retry=_script_supports_replay(url))
     if "error" in result:
         raise RuntimeError(f"appscript error: {result['error']}")
     return result
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def cross_deck_ping() -> dict:
     """Health-check the deployed Apps Script web app.
 
@@ -177,7 +264,7 @@ def cross_deck_ping() -> dict:
     version. Use this to debug deployment before relying on
     ``copy_slide_cross_deck``.
 
-    Returns: ``{ok: True, version: "0.3", url: "..."}`` on success.
+    Returns: ``{ok: True, version: "0.4", url: "..."}`` on success.
     """
     url = _appscript_url()
     result = _post_json(url, {"op": "ping"})

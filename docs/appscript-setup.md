@@ -107,7 +107,7 @@ To persist this across sessions, add the export line to your shell profile (`~/.
 From your MCP client, call `cross_deck_ping`. Expected response:
 
 ```json
-{"ok": true, "version": "0.3", "url": "https://script.google.com/macros/s/AKfycbx.../exec"}
+{"ok": true, "version": "0.4", "url": "https://script.google.com/macros/s/AKfycbx.../exec"}
 ```
 
 If you get an error, check the troubleshooting section below.
@@ -155,7 +155,15 @@ Common causes:
 
 ### `cross_deck_ping` returns the wrong version
 
-You may be running an old deployment. Follow the update steps above to create a new version. The current expected version string is `"0.3"`.
+You may be running an old deployment. Follow the update steps above to create a new version. The current expected version string is `"0.4"`.
+
+A `"0.3"` deployment still works, with one limitation: the MCP will not replay a `copy_slide_cross_deck` call after a relay 404 (see below), because a 0.3 script would append the slide a second time. Redeploy to 0.4 to enable safe replays.
+
+### Intermittent `appscript relay 404` / "Google's response relay dropped the result"
+
+Every Apps Script web-app response is served through a redirect to `script.googleusercontent.com`. That relay occasionally answers with a Drive "unable to open the file at this time" page (HTTP 404) even though the script ran fine — roughly one call in four on a bad day. Nothing in your deployment causes this.
+
+The MCP handles it automatically: `cross_deck_ping` is replayed up to three times with backoff, and so is `copy_slide_cross_deck` when the deployed script is 0.4 or newer (the script deduplicates replays by `requestId`, so the slide is never copied twice). If every attempt fails, the relay is degraded on Google's side; retry a few minutes later.
 
 ### Timeouts on large decks
 

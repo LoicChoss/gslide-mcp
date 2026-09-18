@@ -1,0 +1,95 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/dist/mcpb-manifest-v0.4.schema.json",
+  "manifest_version": "0.4",
+  "name": "gslide-mcp",
+  "display_name": "Google Slides MCP",
+  "version": "0.2.0",
+  "description": "Typed tools for building Google Slides decks from Claude: layouts, themed components, charts, tables, notes, comments.",
+  "long_description": "Build, edit and screenshot Google Slides presentations from Claude Desktop: create decks from templates, fill placeholders, insert images and charts, copy slides across decks, and render slide ranges to PNG for visual QA.\n\nFirst run requires a Google OAuth Desktop-app client (credentials.json) — see the OAuth setup guide linked below.",
+  "author": {
+    "name": "Jan Emmanuele",
+    "url": "https://github.com/jemmanuele"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jemmanuele/gslide-mcp"
+  },
+  "homepage": "https://github.com/jemmanuele/gslide-mcp",
+  "documentation": "https://github.com/jemmanuele/gslide-mcp/blob/main/docs/oauth-setup.md",
+  "support": "https://github.com/jemmanuele/gslide-mcp/issues",
+  "server": {
+    "type": "uv",
+    "entry_point": "src/gslides_mcp/server.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "python",
+        "-m",
+        "gslides_mcp.server"
+      ],
+      "env": {
+        "GSLIDES_MCP_CRED_DIR": "${user_config.cred_dir}",
+        "GSLIDES_MCP_APPSCRIPT_URL": "${user_config.appscript_url}",
+        "GSLIDES_MCP_LOGODEV_TOKEN": "${user_config.logodev_token}",
+        "GSLIDES_MCP_THEME": "${user_config.theme}",
+        "GSLIDES_MCP_ASSETS_FOLDER": "${user_config.assets_folder}"
+      }
+    }
+  },
+  "user_config": {
+    "cred_dir": {
+      "type": "directory",
+      "title": "Credentials directory",
+      "description": "Folder holding your Google OAuth credentials.json; token.json is written here after first sign-in.",
+      "required": true,
+      "default": "${HOME}/.gslides-mcp/creds"
+    },
+    "appscript_url": {
+      "type": "string",
+      "title": "Apps Script web-app URL (optional)",
+      "description": "Deployed web-app URL for cross-deck slide copy. Leave empty unless you followed docs/appscript-setup.md.",
+      "required": false
+    },
+    "logodev_token": {
+      "type": "string",
+      "title": "logo.dev token (optional)",
+      "description": "Enables logo.dev as an extra source for company logos in the assets tools.",
+      "required": false,
+      "sensitive": true
+    },
+    "theme": {
+      "type": "string",
+      "title": "Theme",
+      "description": "Default theme for components (periscope, default, or a theme in ~/.gslides-mcp/themes).",
+      "required": false,
+      "default": "periscope"
+    },
+    "assets_folder": {
+      "type": "string",
+      "title": "Assets folder (Drive)",
+      "description": "Id or URL of the shared Drive folder holding pictos and logos (PNG) used by components.",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
+    "runtimes": {
+      "python": ">=3.11"
+    }
+  },
+  "keywords": [
+    "google-slides",
+    "presentations",
+    "slides",
+    "mcp",
+    "uv"
+  ],
+  "license": "MIT"
+}

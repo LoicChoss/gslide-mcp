@@ -1,0 +1,515 @@
+{
+  "presentationId": "PRES1",
+  "title": "Fixture deck",
+  "pageSize": {
+    "width": {
+      "magnitude": 9144000,
+      "unit": "EMU"
+    },
+    "height": {
+      "magnitude": 5143500,
+      "unit": "EMU"
+    }
+  },
+  "masters": [
+    {
+      "objectId": "m_main",
+      "pageType": "MASTER",
+      "masterProperties": {
+        "displayName": "Simple Light"
+      }
+    },
+    {
+      "objectId": "m_orphan",
+      "pageType": "MASTER",
+      "masterProperties": {
+        "displayName": "Orphan Master"
+      }
+    }
+  ],
+  "layouts": [
+    {
+      "objectId": "lay_title",
+      "pageType": "LAYOUT",
+      "layoutProperties": {
+        "masterObjectId": "m_main",
+        "name": "TITLE",
+        "displayName": "Diapositive de titre"
+      },
+      "pageElements": [
+        {
+          "objectId": "lay_title_t",
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "placeholder": {
+              "type": "CENTERED_TITLE"
+            }
+          }
+        },
+        {
+          "objectId": "lay_title_s",
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "placeholder": {
+              "type": "SUBTITLE"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "objectId": "lay_body",
+      "pageType": "LAYOUT",
+      "layoutProperties": {
+        "masterObjectId": "m_main",
+        "name": "TITLE_AND_BODY",
+        "displayName": "Titre et corps"
+      },
+      "pageElements": [
+        {
+          "objectId": "lay_body_t",
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "placeholder": {
+              "type": "TITLE"
+            }
+          }
+        },
+        {
+          "objectId": "lay_body_b",
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "placeholder": {
+              "type": "BODY",
+              "index": 1
+            }
+          }
+        },
+        {
+          "objectId": "lay_body_n",
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "placeholder": {
+              "type": "SLIDE_NUMBER"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "objectId": "lay_two",
+      "pageType": "LAYOUT",
+      "layoutProperties": {
+        "masterObjectId": "m_main",
+        "name": "TITLE_AND_TWO_COLUMNS",
+        "displayName": "A_Retenir"
+      },
+      "pageElements": [
+        {
+          "objectId": "lay_two_t",
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "placeholder": {
+              "type": "TITLE"
+            }
+          }
+        },
+        {
+          "objectId": "lay_two_b1",
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "placeholder": {
+              "type": "BODY",
+              "index": 1
+            }
+          }
+        },
+        {
+          "objectId": "lay_two_b2",
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "placeholder": {
+              "type": "BODY",
+              "index": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "objectId": "lay_summary",
+      "pageType": "LAYOUT",
+      "layoutProperties": {
+        "masterObjectId": "m_main",
+        "name": "SECTION_HEADER",
+        "displayName": "Résumé"
+      },
+      "pageElements": [
+        {
+          "objectId": "lay_summary_t",
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "placeholder": {
+              "type": "TITLE"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "objectId": "lay_dup_a",
+      "pageType": "LAYOUT",
+      "layoutProperties": {
+        "masterObjectId": "m_main",
+        "name": "CUSTOM",
+        "displayName": "Arborescence"
+      },
+      "pageElements": [
+        {
+          "objectId": "lay_dup_a_t",
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "placeholder": {
+              "type": "TITLE"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "objectId": "lay_dup_b",
+      "pageType": "LAYOUT",
+      "layoutProperties": {
+        "masterObjectId": "m_orphan",
+        "name": "CUSTOM_1",
+        "displayName": "Arborescence"
+      },
+      "pageElements": [
+        {
+          "objectId": "lay_dup_b_t",
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "placeholder": {
+              "type": "TITLE"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "objectId": "lay_orphan",
+      "pageType": "LAYOUT",
+      "layoutProperties": {
+        "masterObjectId": "m_orphan",
+        "name": "BLANK",
+        "displayName": "Vide"
+      },
+      "pageElements": []
+    }
+  ],
+  "slides": [
+    {
+      "objectId": "slide_1",
+      "pageType": "SLIDE",
+      "slideProperties": {
+        "layoutObjectId": "lay_title",
+        "masterObjectId": "m_main",
+        "notesPage": {
+          "objectId": "notes_1",
+          "pageType": "NOTES",
+          "notesProperties": {
+            "speakerNotesObjectId": "notes_1_shape"
+          },
+          "pageElements": [
+            {
+              "objectId": "notes_1_shape",
+              "shape": {
+                "shapeType": "TEXT_BOX",
+                "placeholder": {
+                  "type": "BODY"
+                },
+                "text": {
+                  "textElements": [
+                    {
+                      "textRun": {
+                        "content": "Existing note\n"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "pageElements": [
+        {
+          "objectId": "s1_title",
+          "size": {
+            "width": {
+              "magnitude": 3000000,
+              "unit": "EMU"
+            },
+            "height": {
+              "magnitude": 500000,
+              "unit": "EMU"
+            }
+          },
+          "transform": {
+            "scaleX": 1,
+            "scaleY": 1,
+            "translateX": 100000,
+            "translateY": 200000,
+            "unit": "EMU"
+          },
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "placeholder": {
+              "type": "CENTERED_TITLE",
+              "parentObjectId": "lay_title_t"
+            },
+            "text": {
+              "textElements": [
+                {
+                  "textRun": {
+                    "content": "Hello title\n"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "objectId": "s1_sub",
+          "size": {
+            "width": {
+              "magnitude": 3000000,
+              "unit": "EMU"
+            },
+            "height": {
+              "magnitude": 500000,
+              "unit": "EMU"
+            }
+          },
+          "transform": {
+            "scaleX": 1,
+            "scaleY": 1,
+            "translateX": 100000,
+            "translateY": 900000,
+            "unit": "EMU"
+          },
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "placeholder": {
+              "type": "SUBTITLE",
+              "parentObjectId": "lay_title_s"
+            },
+            "text": {
+              "textElements": [
+                {
+                  "textRun": {
+                    "content": "Sub\n"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "objectId": "s1_box",
+          "size": {
+            "width": {
+              "magnitude": 1000000,
+              "unit": "EMU"
+            },
+            "height": {
+              "magnitude": 400000,
+              "unit": "EMU"
+            }
+          },
+          "transform": {
+            "scaleX": 1,
+            "scaleY": 1,
+            "translateX": 5000000,
+            "translateY": 3000000,
+            "unit": "EMU"
+          },
+          "shape": {
+            "shapeType": "RECTANGLE",
+            "shapeProperties": {
+              "shapeBackgroundFill": {
+                "solidFill": {
+                  "color": {
+                    "rgbColor": {
+                      "red": 1,
+                      "green": 0,
+                      "blue": 0
+                    }
+                  }
+                }
+              }
+            },
+            "text": {
+              "textElements": [
+                {
+                  "textRun": {
+                    "content": "Box\n"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "objectId": "s1_img",
+          "size": {
+            "width": {
+              "magnitude": 800000,
+              "unit": "EMU"
+            },
+            "height": {
+              "magnitude": 600000,
+              "unit": "EMU"
+            }
+          },
+          "transform": {
+            "scaleX": 1,
+            "scaleY": 1,
+            "translateX": 6000000,
+            "translateY": 1000000,
+            "unit": "EMU"
+          },
+          "image": {
+            "contentUrl": "https://lh7.googleusercontent.com/img1",
+            "sourceUrl": "https://example.com/logo.png"
+          }
+        }
+      ]
+    },
+    {
+      "objectId": "slide_2",
+      "pageType": "SLIDE",
+      "slideProperties": {
+        "layoutObjectId": "lay_body",
+        "masterObjectId": "m_main",
+        "notesPage": {
+          "objectId": "notes_2",
+          "pageType": "NOTES",
+          "notesProperties": {
+            "speakerNotesObjectId": "notes_2_shape"
+          },
+          "pageElements": [
+            {
+              "objectId": "notes_2_shape",
+              "shape": {
+                "shapeType": "TEXT_BOX",
+                "placeholder": {
+                  "type": "BODY"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "pageElements": [
+        {
+          "objectId": "tbl_1",
+          "size": {
+            "width": {
+              "magnitude": 3000000,
+              "unit": "EMU"
+            },
+            "height": {
+              "magnitude": 1000000,
+              "unit": "EMU"
+            }
+          },
+          "transform": {
+            "scaleX": 1,
+            "scaleY": 1,
+            "translateX": 100000,
+            "translateY": 100000,
+            "unit": "EMU"
+          },
+          "table": {
+            "rows": 2,
+            "columns": 2,
+            "tableRows": [
+              {
+                "tableCells": [
+                  {
+                    "location": {
+                      "rowIndex": 0,
+                      "columnIndex": 0
+                    },
+                    "text": {
+                      "textElements": [
+                        {
+                          "textRun": {
+                            "content": "A\n"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "location": {
+                      "rowIndex": 0,
+                      "columnIndex": 1
+                    },
+                    "text": {
+                      "textElements": [
+                        {
+                          "paragraphMarker": {}
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "tableCells": [
+                  {
+                    "location": {
+                      "rowIndex": 1,
+                      "columnIndex": 0
+                    }
+                  },
+                  {
+                    "location": {
+                      "rowIndex": 1,
+                      "columnIndex": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "objectId": "s2_group",
+          "elementGroup": {
+            "children": [
+              {
+                "objectId": "s2_child",
+                "shape": {
+                  "shapeType": "RECTANGLE"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "objectId": "slide_3",
+      "pageType": "SLIDE",
+      "slideProperties": {
+        "layoutObjectId": "lay_body",
+        "masterObjectId": "m_main",
+        "isSkipped": true
+      },
+      "pageElements": []
+    }
+  ]
+}

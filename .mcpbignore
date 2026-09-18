@@ -1,0 +1,38 @@
+# Version control & local envs
+.git/
+.github/
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Python build artefacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets — never ship
+credentials*.json
+apikey/
+token*.json
+appscript_url
+
+# Not needed at runtime
+docs/
+examples/
+appscript/
+tests/
+*.mcpb
+.mcpbignore
+.gitignore
+.vscode/
+.idea/
+.DS_Store
+tmp/
+.claude/

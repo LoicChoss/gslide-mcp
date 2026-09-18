@@ -32,3 +32,11 @@ env/
 # Local scratch
 *.local
 tmp/
+
+# MCP bundles (built into dist/)
+*.mcpb
+
+# Local OAuth material in any form
+apikey/
+credentials*.json
+token*.json

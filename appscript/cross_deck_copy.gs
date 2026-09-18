@@ -24,14 +24,22 @@
  * new version. The URL stays the same.
  */
 
+var VERSION = "0.4";
+
+// Successful copy results are remembered for this long, keyed by the
+// caller's requestId, so a replayed request returns the same answer.
+var REPLAY_CACHE_SECONDS = 21600; // 6h, the CacheService maximum
+
 function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents || "{}");
     var op = body.op || "copy";
     if (op === "copy") {
-      return _json(copySlide_(body));
+      return _json(_replaySafe_(body.requestId, function () {
+        return copySlide_(body);
+      }));
     } else if (op === "ping") {
-      return _json({ok: true, version: "0.3"});
+      return _json({ok: true, version: VERSION});
     } else {
       return _json({error: "unknown op: " + op}, 400);
     }
@@ -40,6 +48,35 @@ function doPost(e) {
     // any caller could probe it with malformed input and harvest script
     // internals via the response.
     return _json({error: String(err)}, 500);
+  }
+}
+
+/**
+ * Run `fn` at most once per requestId.
+ *
+ * Google's response relay (script.googleusercontent.com) sometimes 404s a
+ * result this script already produced. The MCP then replays the POST with
+ * the same requestId; answering from cache keeps the slide from being
+ * appended twice. Requests without a requestId (pre-0.4 clients) run as-is.
+ */
+function _replaySafe_(requestId, fn) {
+  if (!requestId) {
+    return fn();
+  }
+  var key = "req:" + String(requestId).slice(0, 64);
+  var cache = CacheService.getScriptCache();
+  var lock = LockService.getScriptLock();
+  lock.waitLock(60000); // a replay may arrive while the first run is still going
+  try {
+    var hit = cache.get(key);
+    if (hit) {
+      return JSON.parse(hit);
+    }
+    var result = fn(); // errors propagate uncached: nothing was appended
+    cache.put(key, JSON.stringify(result), REPLAY_CACHE_SECONDS);
+    return result;
+  } finally {
+    lock.releaseLock();
   }
 }
 
