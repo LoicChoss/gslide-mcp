@@ -1,0 +1,48 @@
+# Changelog
+
+All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/) (0.x: minor bumps may change tool signatures).
+
+## [0.2.0] — 2026-09-15
+
+### Added
+
+- **Layouts** — `list_layouts`, `screenshot_layout` (with `annotate=True` to render the placeholder-key map on a temporary slide), `screenshot_layouts`, `create_slide_from_layout`, `build_from_outline`, `relayout_slide` (speaker notes carried over). Layouts are addressed by id or display name (case/accent-insensitive; ambiguous names fail with the candidates listed). Placeholders are filled from markdown in the same `batchUpdate` as `createSlide`, with no `deleteText` on inherited placeholders. `build_from_outline` resolves every name before writing and creates all slides atomically. Guide: `docs/layouts.md`.
+- **Raw readers** — `get_presentation` (field-mask passthrough, trimmed to 200 kB by whole slides) and `get_page` (slide / layout / master / notes with `page_kind`; `compact=True` for one line per element).
+- Returned slide `index` values are 1-based everywhere (the ref `screenshot` / `delete_slides` take); `insertion_index` arguments stay 0-based like `create_slide`.
+- **Speaker notes** — `get_speaker_notes`, `set_speaker_notes` (atomic rewrite; no `deleteText` on an empty notes shape).
+- **Tables** — `create_table` (≤ 20×20, optional data, one batch), `edit_table` (insert/delete rows and columns), `set_table_cell` (markdown into a cell).
+- **Local images** — `insert_image_local`: magic-byte sniffing (PNG/JPEG/GIF, ≤ 50 MB), temporary Drive upload shared read-only, deleted in a `finally`; a failed cleanup is reported with the file id and its public/private state.
+- **Comments** — `manage_comments` over Drive `comments`/`replies` (list, get, create — unanchored by API limitation —, reply/resolve, delete).
+- **Escape hatch** — `raw_request`: GET/POST strictly under `https://slides.googleapis.com/v1/presentations/<id>`; schemes, hosts, `//`, `@`, `..`, whitespace and Drive paths are refused so the OAuth token never leaves the Slides host.
+- **Components and themes** — `list_components`, `insert_component`, `draw`, `save_component`, `delete_component`. Themes (`gslides_mcp/themes/*.json`, user themes in `~/.gslides-mcp/themes/`) hold palette, roles, font and named text styles; components (`kpi`, `kpi_grid`, `card`, `callout`, `badge`, `pill`, `steps`, `checklist`, `chevrons`, `arrows`, `quote`, `bigstat`, `stats`, `table`, `heatmap`, `chart_bars`, `chart_line`, `pie`, `donut`, `funnel`, `timeline`, `process`, `hub_spoke`, `stack`, `compare_bars`, `effort_matrix`, `bubbles`, `card_grid`, `agenda`, `numbered_list`, `big_numbers`, `phase_cards`, `compare_cards`, `before_after`, `stat_pair`, `palette`, `person_card`, `team_grid`, `logo_grid`, `logo_wall`, `kpi_cards`, `gauge`, `target`, `chart_stacked`, `tree`, `flowchart`, and the mockups `serp`, `browser`, `laptop`, `phone`) reference roles and styles only and render as native shapes in one grouped `batchUpdate`. Rings and pies are drawn as radial spokes (one per degree). Markdown props accept `==texte==` for the marker highlight (theme role `highlight`); `draw` lines take `end_arrow` / `start_arrow`, rings a `span`, images `contain`. `draw` exposes the primitive ops (box, text runs/markdown, line, polyline, arc, ring, table, image); recipes are JSON components with templated ops saved by the model. Guide: `docs/components.md`.
+- **Assets folder** — `GSLIDES_MCP_ASSETS_FOLDER` (bundle field *Assets folder*): a shared Drive folder for pictos, logos and screenshots. `card.icon`, `browser.image`, `laptop.image` and the `asset` key of a `draw` image op take a name in the folder or a local path (uploaded once, shared by link); tinted variants (`bolt__002b3c.png`) are generated from the theme role and cached with the file ids and sizes in `~/.gslides-mcp/assets.json`. `browser` follows the screenshot's aspect; `laptop` crops it to its 16:10 screen (`cover`). `list_components` lists the folder.
+- `list_components` entries carry a `use` field — when to pick the component and the close alternatives — next to `description` (what it draws); recipes may set their own `use`.
+- **Claude Code skill** `gslides-prez` (`.claude/skills/`): gated workflow from a template deck (layouts chosen up front, plan, emptied clone, visual check, skill retrospective) with `periscope.md` reusable material.
+- `list_assets` tool: the names usable as `icon` / `image` / `logo` / `photo` and `asset`.
+- **Text size floors** in themes (`text_rules`): Periscope enforces 11 pt for running text and 10 pt for labels, captions, badges, legends and chart values, tables exempt; applied to every text at render time, and the built-in components declare compliant sizes.
+- Hidden slides: `list_slides` and `inspect_slide` report `hidden: true` for slides skipped in presentation mode; `set_slide_hidden` toggles the flag.
+- Charts: `chart_bars` and `chart_stacked` (vertical) gain a graduated Y axis with grid (`y_axis`) and period dividers (`dividers`, « ISF | IFI »); values are formatted the French way (`4 000 000 €`). New `chart_combo`: bars on the left axis + line with markers on the right axis, values on bars and points.
+- **MCP annotations** on every tool (`readOnlyHint`, `destructiveHint`, `idempotentHint`), presets in `app.py`.
+- **Test suite** (`tests/`): mocked Slides/Drive services with JSON fixtures, one test file per tool family, and an opt-in live round-trip (`GSLIDES_MCP_INTEGRATION_DECK`).
+- **Claude Desktop bundle** (`manifest.json`, `.mcpbignore`, `uv.lock`): `server.type: "uv"`, so Claude Desktop provisions Python and dependencies itself. Settings form for the credentials directory, Apps Script URL, logo.dev token, theme and assets folder.
+- `CHANGELOG.md` (this file).
+
+### Changed
+
+- `requires-python` is now `>=3.11` (`gslides-api 0.3.6` already required it; 3.10 never worked).
+- Apps Script web app v0.4: `copy` accepts a `requestId` and answers replays from cache (6 h) under a script lock. `cross_deck_ping` reports `"0.4"`.
+- Cross-deck HTTP client: replays the POST on the intermittent relay 404 from `script.googleusercontent.com` (up to 3 times, backoff) — always for `ping`, for `copy` only when the deployed script is ≥ 0.4.
+- `screenshot_range` compositing extracted into a shared helper reused by `screenshot_layouts` (no behavior change).
+- README: tool table regrouped (`Layout` = slide layouts, `Element` = element tools), new sections on layouts, tests and the `.mcpb` install.
+
+### Fixed
+
+- Cross-deck copy and ping failed with `appscript HTTP 302:` — the security-review opener refused the redirect every Apps Script POST answers with. The single hop to `script.googleusercontent.com` is now followed as a token-less GET; any other redirect is still refused, and the error names the destination host.
+
+### Known issues
+
+- `gslides-api` installs its own console script named `gslides-mcp`; whichever package installs last wins. The `.mcpb` bundle sidesteps it with `python -m gslides_mcp.server`; a `pip install -e .` also ends up correct because the project installs last. Renaming the entry point is planned for the next minor.
+
+## [0.1.0] — 2026-06-06
+
+Initial release: deck/slide/shape/content/element/QA tools, cross-deck copy via Apps Script, template library workflow.
