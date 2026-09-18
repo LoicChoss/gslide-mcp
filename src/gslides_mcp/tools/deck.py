@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from ..app import mcp
+from ..app import ADDITIVE, DESTRUCTIVE, READ_ONLY, mcp
 from ..auth import slide_service, drive_service
 from ..util import parse_pres_id, emu_to_pt
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 def create_presentation(title: str) -> dict:
     """Create a new blank Google Slides presentation.
 
@@ -23,7 +23,7 @@ def create_presentation(title: str) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 def clone_deck(src: str, name: str, parent_folder_id: str | None = None) -> dict:
     """Clone an existing Slides deck via Drive ``files.copy``.
 
@@ -54,11 +54,16 @@ def clone_deck(src: str, name: str, parent_folder_id: str | None = None) -> dict
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def list_slides(presentation: str, range_start: int | None = None, range_end: int | None = None) -> list[dict]:
     """One-line summary of every slide. Optionally restrict to a 1-based inclusive range.
 
-    Returns list of {index, object_id, summary} where summary is concatenated text.
+    Returns list of {index, object_id, summary[, hidden]} where summary is
+    concatenated text. ``hidden: true`` marks a slide skipped in
+    presentation mode (the Slides "Skip slide" toggle): it is still in the
+    deck, still counted in indexes, but not shown to the audience — often a
+    stale or discarded version. Treat its content as unreliable unless the
+    user says otherwise; ``set_slide_hidden`` toggles the flag.
     """
     pid = parse_pres_id(presentation)
     pres = slide_service().presentations().get(presentationId=pid).execute()
@@ -74,7 +79,10 @@ def list_slides(presentation: str, range_start: int | None = None, range_end: in
                 run = te.get("textRun", {}).get("content", "").strip()
                 if run:
                     chunks.append(run)
-        out.append({"index": i, "object_id": slide["objectId"], "summary": " | ".join(chunks)[:200]})
+        row = {"index": i, "object_id": slide["objectId"], "summary": " | ".join(chunks)[:200]}
+        if slide.get("slideProperties", {}).get("isSkipped"):
+            row["hidden"] = True
+        out.append(row)
     return out
 
 
@@ -150,7 +158,7 @@ def _walk_elements(elements: list, recursive: bool, out: list,
                 _walk_elements(children, recursive, out, tx, ty, sx, sy, el["objectId"])
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def inspect_slide(presentation: str, slide: str, recursive: bool = False) -> dict:
     """Dump every element on a slide: id, type, geometry (in pt), text content.
 
@@ -171,10 +179,13 @@ def inspect_slide(presentation: str, slide: str, recursive: bool = False) -> dic
 
     elements: list = []
     _walk_elements(sl.get("pageElements", []), recursive, elements)
-    return {"slide_id": sl["objectId"], "elements": elements}
+    out = {"slide_id": sl["objectId"], "elements": elements}
+    if sl.get("slideProperties", {}).get("isSkipped"):
+        out["hidden"] = True  # skipped in presentation mode: content often stale
+    return out
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def find_elements(
     presentation: str,
     slide: str | None = None,
@@ -241,7 +252,7 @@ def _resolve_slide_index(pres: dict, slide: str) -> int:
     raise ValueError(f"slide not found: {slide!r}")
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def export_pres(presentation: str, format: str = "pptx") -> dict:
     """Export the presentation via Drive. Returns local file path.
 
@@ -272,7 +283,7 @@ def export_pres(presentation: str, format: str = "pptx") -> dict:
     return {"path": path, "format": format}
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 def batch_apply(presentation: str, requests: list[dict]) -> dict:
     """Raw escape hatch: send a Slides API batchUpdate request list verbatim.
 

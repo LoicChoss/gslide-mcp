@@ -7,7 +7,7 @@ the base, giving a subtle ~5px visual instead of the aggressive default).
 
 from __future__ import annotations
 
-from ..app import mcp
+from ..app import ADDITIVE, IDEMPOTENT, mcp
 from ..auth import slide_service
 from ..util import (
     parse_pres_id,
@@ -19,7 +19,7 @@ from ..util import (
 )
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 def create_shape(
     presentation: str,
     slide: str,
@@ -155,7 +155,7 @@ def create_shape(
     return {"object_id": final_id, "slide_id": sid, "shape_type": shape_type}
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 def insert_image(
     presentation: str,
     slide: str,
@@ -207,7 +207,7 @@ def insert_image(
     return {"object_id": new_id, "slide_id": sid}
 
 
-@mcp.tool()
+@mcp.tool(annotations=IDEMPOTENT)
 def set_fill(presentation: str, element: str, hex_color: str | None = None) -> dict:
     """Set or remove solid shape fill.
 
@@ -235,7 +235,7 @@ def set_fill(presentation: str, element: str, hex_color: str | None = None) -> d
     return {"element": element, "fill": hex_color or "(removed)"}
 
 
-@mcp.tool()
+@mcp.tool(annotations=IDEMPOTENT)
 def set_outline(
     presentation: str,
     element: str,

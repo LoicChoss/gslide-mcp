@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ..app import mcp
+from ..app import ADDITIVE, READ_ONLY, mcp
 from ..auth import slide_service, drive_service
 from ..util import parse_pres_id
 
@@ -160,7 +160,7 @@ def _summarize_slide(slide: dict, index: int) -> dict:
 # Tool 1: summarize_deck
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def summarize_deck(presentation: str) -> dict:
     """Inspect a single deck and return a structured slide-by-slide index.
 
@@ -221,7 +221,7 @@ def summarize_deck(presentation: str) -> dict:
 # Tool 2: build_template_library
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 def build_template_library(
     decks: list[str],
     output_path: str | None = None,
@@ -284,7 +284,7 @@ def build_template_library(
 # Tool 3: assemble_from_template
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 def assemble_from_template(
     picks: list[dict],
     dst_title: str,

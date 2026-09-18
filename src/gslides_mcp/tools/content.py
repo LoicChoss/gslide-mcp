@@ -10,12 +10,12 @@ from __future__ import annotations
 from gslides_api import Presentation
 from gslides_api.element.shape import ShapeElement
 
-from ..app import mcp
+from ..app import ADDITIVE, IDEMPOTENT, mcp
 from ..auth import client, slide_service
 from ..util import parse_pres_id, parse_range, rgb_color, resolve_slide_ids
 
 
-@mcp.tool()
+@mcp.tool(annotations=IDEMPOTENT)
 def write_text_markdown(presentation: str, element: str, markdown: str) -> dict:
     """Write markdown content to a text-bearing element.
 
@@ -53,7 +53,7 @@ def write_text_markdown(presentation: str, element: str, markdown: str) -> dict:
     return {"element": element, "content_length": len(markdown)}
 
 
-@mcp.tool()
+@mcp.tool(annotations=IDEMPOTENT)
 def batch_write_markdown(presentation: str, edits: list[dict]) -> dict:
     """Apply markdown to MULTIPLE elements in a single batchUpdate. ~N× faster.
 
@@ -131,7 +131,7 @@ def batch_write_markdown(presentation: str, edits: list[dict]) -> dict:
     return {"edits": results, "total": len(results), "succeeded": succeeded}
 
 
-@mcp.tool()
+@mcp.tool(annotations=IDEMPOTENT)
 def set_text(presentation: str, element: str, text: str) -> dict:
     """Replace plain text on an element. Use write_text_markdown for any styling.
 
@@ -164,7 +164,7 @@ def set_text(presentation: str, element: str, text: str) -> dict:
     return {"element": element, "length": len(text)}
 
 
-@mcp.tool()
+@mcp.tool(annotations=IDEMPOTENT)
 def style_text(
     presentation: str,
     element: str,
@@ -220,7 +220,7 @@ def style_text(
     return {"element": element, "applied": fields, "range": text_range}
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 def replace_text(
     presentation: str,
     find: str | None = None,

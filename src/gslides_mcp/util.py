@@ -108,3 +108,90 @@ def validate_object_id(value: str | None) -> None:
             f"start with [A-Za-z_], and use only [A-Za-z0-9_-]. "
             f"(Slides API rejects shorter/exotic IDs with HTTP 400.)"
         )
+
+
+def fold_text(s: str) -> str:
+    """Case- and accent-insensitive comparison key ('Résumé' → 'resume')."""
+    import unicodedata
+
+    stripped = "".join(
+        c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c)
+    )
+    return stripped.casefold().strip()
+
+
+def resolve_layout(pres: dict, ref: str) -> dict:
+    """Find a layout page in ``pres`` by objectId or display name.
+
+    Match tiers, first hit wins: exact ``layout_id`` → exact ``displayName``
+    → case/accent-folded ``displayName`` → exact API ``name`` (e.g.
+    ``TITLE_AND_BODY``) → folded API ``name``. A tier with several hits is an
+    error listing every candidate with its id and master — copied decks pile
+    up same-named layouts across masters and picking one silently would put
+    content on the wrong theme.
+
+    ``pres`` needs ``layouts[].objectId`` and ``layouts[].layoutProperties``.
+    """
+    ref_s = str(ref).strip()
+    layouts = pres.get("layouts", [])
+
+    def props(layout: dict) -> dict:
+        return layout.get("layoutProperties", {})
+
+    tiers = (
+        lambda l: l.get("objectId") == ref_s,
+        lambda l: props(l).get("displayName") == ref_s,
+        lambda l: fold_text(props(l).get("displayName", "")) == fold_text(ref_s),
+        lambda l: props(l).get("name") == ref_s,
+        lambda l: fold_text(props(l).get("name", "")) == fold_text(ref_s),
+    )
+    for matches in tiers:
+        hits = [l for l in layouts if matches(l)]
+        if len(hits) == 1:
+            return hits[0]
+        if len(hits) > 1:
+            listing = "; ".join(
+                f"{props(l).get('displayName')!r} (layout_id={l['objectId']}, "
+                f"master={props(l).get('masterObjectId')})"
+                for l in hits
+            )
+            raise ValueError(
+                f"layout ref {ref!r} is ambiguous — {len(hits)} layouts match: "
+                f"{listing}. Pass the layout_id instead."
+            )
+    available = sorted({props(l).get("displayName") or l["objectId"] for l in layouts})
+    raise ValueError(
+        f"layout not found: {ref!r}. Available layouts: {', '.join(available)}. "
+        "Call list_layouts for ids, masters and placeholders."
+    )
+
+
+def md_requests(object_id: str, markdown: str, cell: tuple[int, int] | None = None) -> list[dict]:
+    """Slides API requests that write ``markdown`` into an EMPTY text container.
+
+    Same writer as ``write_text_markdown`` (gslides-api), minus the deleteText
+    it would emit for existing content: this is for freshly created shapes,
+    inherited placeholders and table cells, where a deleteText on empty text
+    makes the whole batchUpdate fail.
+
+    Args:
+        cell: ``(row, column)`` when ``object_id`` is a table.
+
+    Raises ValueError for markdown the writer can't express (fenced code,
+    block quotes…) so callers can fail before any write.
+    """
+    from gslides_api.domain.table_cell import TableCellLocation
+    from gslides_api.markdown.from_markdown import markdown_to_text_elements
+
+    try:
+        reqs = markdown_to_text_elements(markdown)
+    except Exception as exc:  # gslides-api raises its own error hierarchy
+        raise ValueError(f"unsupported markdown for {object_id!r}: {exc}") from None
+    location = TableCellLocation(rowIndex=cell[0], columnIndex=cell[1]) if cell else None
+    out: list[dict] = []
+    for r in reqs:
+        r.objectId = object_id
+        if location is not None:
+            r.cellLocation = location
+        out.extend(r.to_request())
+    return out

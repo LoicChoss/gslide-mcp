@@ -15,7 +15,7 @@ import urllib.request
 
 import certifi
 
-from ..app import mcp
+from ..app import ADDITIVE, mcp
 from ..auth import slide_service, drive_service
 from ..util import parse_pres_id, resolve_slide_ids, PT_TO_EMU
 
@@ -55,7 +55,7 @@ def _image_url_is_raster(url: str, timeout: float = 4.0) -> tuple[bool, str]:
     return False, "(unreachable)"
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 def swap_client(
     presentation: str,
     old_name: str,

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from ..app import mcp
+from ..app import ADDITIVE, DESTRUCTIVE, IDEMPOTENT, mcp
 from ..auth import slide_service
 from ..util import parse_pres_id, resolve_slide_ids, rgb_color, validate_object_id
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 def create_slide(presentation: str, insertion_index: int, object_id: str | None = None) -> dict:
     """Create a blank slide at insertion_index (0-based).
 
@@ -31,7 +31,7 @@ def create_slide(presentation: str, insertion_index: int, object_id: str | None 
     return {"slide_id": new_id}
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 def duplicate_slide(presentation: str, slide: str, to_index: int | None = None) -> dict:
     """Duplicate a slide within the same deck. Optionally move to to_index (0-based).
 
@@ -56,7 +56,7 @@ def duplicate_slide(presentation: str, slide: str, to_index: int | None = None) 
     return {"new_slide_id": new_id}
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 def move_slide(presentation: str, slide: str, to_index: int) -> dict:
     """Move a single slide to to_index (0-based).
 
@@ -75,7 +75,7 @@ def move_slide(presentation: str, slide: str, to_index: int) -> dict:
     return {"slide_id": sid, "moved_to": to_index}
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 def delete_slides(presentation: str, slides: list[str]) -> dict:
     """Delete one or more slides. Refs can be 1-based indexes or objectIds.
 
@@ -92,7 +92,7 @@ def delete_slides(presentation: str, slides: list[str]) -> dict:
     return {"deleted": ids}
 
 
-@mcp.tool()
+@mcp.tool(annotations=IDEMPOTENT)
 def set_background(presentation: str, slides: list[str], hex_color: str) -> dict:
     """Set solid background fill on one or more slides.
 
@@ -120,3 +120,23 @@ def set_background(presentation: str, slides: list[str], hex_color: str) -> dict
         presentationId=pid, body={"requests": reqs}
     ).execute()
     return {"updated": ids, "color": hex_color}
+
+
+@mcp.tool(annotations=IDEMPOTENT)
+def set_slide_hidden(presentation: str, slides: list[str], hidden: bool = True) -> dict:
+    """Hide slides from presentation mode (Slides' "Skip slide"), or show them again.
+
+    A hidden slide stays in the deck and keeps its index; ``list_slides``
+    reports it with ``hidden: true``. Refs can be 1-based indexes or objectIds.
+
+    Returns: ``{updated: [ids], hidden}``.
+    """
+    pid = parse_pres_id(presentation)
+    svc = slide_service()
+    ids = resolve_slide_ids(svc, pid, slides)
+    reqs = [
+        {"updateSlideProperties": {"objectId": sid, "slideProperties": {"isSkipped": bool(hidden)}, "fields": "isSkipped"}}
+        for sid in ids
+    ]
+    svc.presentations().batchUpdate(presentationId=pid, body={"requests": reqs}).execute()
+    return {"updated": ids, "hidden": bool(hidden)}
