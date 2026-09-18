@@ -37,6 +37,8 @@ All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachang
 
 ### Fixed
 
+- The server failed with `invalid_scope: Bad Request` about an hour after start (first token refresh): `gslides-api` rebuilt the credentials from `token.json` with its own scope list, which adds Sheets, never granted. The services are now built from the server's own credentials, refreshed on the granted scopes only.
+
 - Cross-deck copy and ping failed with `appscript HTTP 302:` — the security-review opener refused the redirect every Apps Script POST answers with. The single hop to `script.googleusercontent.com` is now followed as a token-less GET; any other redirect is still refused, and the error names the destination host.
 
 ### Known issues

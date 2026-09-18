@@ -114,6 +114,16 @@ Resolution: run the server on the machine where a browser is available, or set u
 
 Expired access tokens are refreshed automatically using the stored refresh token. You do not need to re-authenticate.
 
+### `invalid_scope: Bad Request` about an hour after the server started
+
+Every call fails with `('invalid_scope: Bad Request', …)` while a freshly
+started server works. This was a bug in versions before 0.2.0: the API
+services were built by `gslides-api`, which reloaded `token.json` with a
+scope list including Sheets, never granted, so the first token refresh
+was refused. Fixed in 0.2.0 (the services are built from the server's own
+credentials). Upgrade the bundle, then restart the extension; deleting
+`token.json` is not needed.
+
 ### Revoked refresh token or `invalid_grant` error
 
 Google revokes refresh tokens if:

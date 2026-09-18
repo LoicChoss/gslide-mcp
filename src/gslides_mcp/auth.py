@@ -152,12 +152,15 @@ def client() -> GoogleAPIClient:
     """
     d = cred_dir()
 
-    # Ensure we have valid credentials on disk before handing control to
-    # gslides-api, which reads token.json directly from the directory.
-    _load_or_refresh_creds(d)
-
+    # Build the services from OUR credentials object. gslides-api's own
+    # initialize_credentials() would reload token.json with its wider scope
+    # list (it adds spreadsheets); the first refresh then trips Google's
+    # "invalid_scope" — typically an hour after the server started, once the
+    # access token issued at startup expires. Passing the credentials in
+    # keeps every later refresh on the scopes the token was granted.
+    creds = _load_or_refresh_creds(d)
     c = GoogleAPIClient(auto_flush=True)
-    c.initialize_credentials(str(d))
+    c.set_credentials(creds)
     return c
 
 
