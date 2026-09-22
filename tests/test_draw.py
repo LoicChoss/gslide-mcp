@@ -143,7 +143,7 @@ def test_table_cells_header_banding_widths_and_borders():
     assert create["rows"] == 3 and create["columns"] == 2
     assert create["elementProperties"]["size"]["height"]["magnitude"] == 60 * PT
     texts = {(t["cellLocation"]["rowIndex"], t["cellLocation"]["columnIndex"]): t["text"] for t in _of(reqs, "insertText")}
-    assert texts == {(0, 0): "H1", (0, 1): "H2", (1, 0): "a", (2, 0): "c", (2, 1): "d"}
+    assert texts == {(0, 0): "H1", (0, 1): "H2", (1, 0): "a", (1, 1): " ", (2, 0): "c", (2, 1): "d"}  # empty cell: styled space
     cell_props = _of(reqs, "updateTableCellProperties")
     header = cell_props[0]
     assert header["tableRange"] == {"location": {"rowIndex": 0, "columnIndex": 0}, "rowSpan": 1, "columnSpan": 2}

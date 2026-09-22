@@ -169,7 +169,7 @@ def test_table_component_applies_the_theme_table_style():
     assert t["borders"] == {"color": "rule", "weight": 1, "position": "INNER_HORIZONTAL"}
     assert t["align"] == [None, "END"]
     assert t["row_fills"] == {2: "accent"} and t["bold_rows"] == [2]
-    assert height == t["row_h"] * 3
+    assert height == sum(t["row_heights"]) >= t["row_h"] * 3
 
 
 # --- charts -----------------------------------------------------------------------

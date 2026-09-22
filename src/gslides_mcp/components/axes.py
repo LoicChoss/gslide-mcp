@@ -58,9 +58,10 @@ def y_axis_ops(px: float, py: float, pw: float, ph: float, vmax: float, unit: st
                side: str = "left", label_w: float = 60.0, color: str | None = None) -> list[dict]:
     """Grid lines across the plot and tick labels on one side (baseline drawn by the caller)."""
     ops: list[dict] = []
-    for k in range(1, TICKS + 1):
-        t = vmax * k / TICKS
-        y = py + ph - ph * k / TICKS
+    ticks = TICKS if ph >= 70 else 2  # a short plot cannot fit five tick labels
+    for k in range(1, ticks + 1):
+        t = vmax * k / ticks
+        y = py + ph - ph * k / ticks
         if side == "left":
             ops.append({"op": "line", "x1": px, "y1": y, "x2": px + pw, "y2": y, "color": "chart_grid", "weight": GRID_W, "role": "grid"})
             ops.append({"op": "text", "x": px - label_w - 4, "y": y - 11, "w": label_w, "h": 14 + INSETS, "text": fmt_value(t, unit),
@@ -88,14 +89,22 @@ def thin_labels(labels: list, slot: float, size: float = 10.0) -> list[str | Non
     n = len(labels)
     if n == 0:
         return []
-    need = max(len(lb) for lb in labels) * size * GLYPH + 2 * INSET_X
-    k = max(1, -(-need // slot)) if slot > 0 else 1
+
+    def need(lb: str) -> float:
+        # a label may wrap on two lines at a space: what matters is its longest word
+        # (or half its length), at a tighter glyph width than the box-height estimate
+        words = lb.split() or [lb]
+        chars = max(max(len(wd) for wd in words), -(-len(lb) // 2))
+        return chars * size * 0.42 + 8
+
+    longest = max(need(lb) for lb in labels)
+    k = max(1, -(-longest // slot)) if slot > 0 else 1
     if k == 1:
         return list(labels)
     keep = {i for i in range(n) if i % k == 0}
     last = n - 1
     if last not in keep:
-        keep = {i for i in keep if last - i >= k} | {last}
+        keep = {i for i in keep if last - i >= k or i == 0} | {last}
     return [lb if i in keep else None for i, lb in enumerate(labels)]
 
 
@@ -123,6 +132,20 @@ def legend_ops(entries: list[dict], x: float, y: float, w: float, pos: str = "bo
         ops.append({"op": "text", "x": lx + 16, "y": y, "w": tw, "h": LEGEND_H, "text": name, "style": "legend", "valign": "MIDDLE"})
         lx += 18 + tw + 10
     return ops, LEGEND_H
+
+
+def value_label(cx: float, y: float, slot: float, text: str, h: float | None = None, color: str | None = None,
+                role: str = "value") -> dict:
+    """A value centred on ``cx`` over a bar: the box is wide enough for the text, and the
+    size drops under the charter floor (``small_ok``) when the slot is narrow."""
+    need = len(text) * 10 * 0.5 + 2 * INSET_X
+    op: dict = {"op": "text", "x": cx - max(slot, need) / 2, "y": y, "w": max(slot, need), "h": h or (14 + INSETS), "text": text,
+                "style": "chart_value", "align": "CENTER", "role": role}
+    if color:
+        op["color"] = color
+    if slot < need:
+        op.update({"size": 8.5 if slot < need * 0.75 else 9, "small_ok": True})
+    return op
 
 
 def inner_width(w: float, p: dict) -> float:
@@ -215,7 +238,7 @@ def _chart_combo(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list
     ml = axis_width(vmax, unit) + 6 if p["y_axis"] else 0.0
     mr = axis_width(vmax2, unit2) + 6 if p["y_axis"] else 0.0
     mt = (value_h + 4 if show_values else 6.0) + divider_height(p["dividers"]) + (legend_h if pos == "top" else 0.0)
-    mb = 22.0 + (legend_h if pos == "bottom" else 0.0)
+    mb = 30.0 + (legend_h if pos == "bottom" else 0.0)
     px, py, pw, ph = ml, mt, w_in - ml - mr, height - mt - mb
     slot = pw / n
     bar_w = slot * 0.62
@@ -242,11 +265,10 @@ def _chart_combo(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list
         bh = ph * v / vmax
         ops.append({"op": "box", "x": X(i) - bar_w / 2, "y": Y(v), "w": bar_w, "h": bh, "fill": bcol, "role": "bar"})
         if show_values and i < len(bvals):
-            ops.append({"op": "text", "x": X(i) - slot / 2, "y": Y(v) - value_h + 2, "w": slot, "h": value_h, "text": fmt_value(v, unit),
-                        "style": "chart_value", "color": bcol, "align": "CENTER", "role": "bar_value"})
+            ops.append(value_label(X(i), Y(v) - value_h + 2, slot, fmt_value(v, unit), value_h, color=bcol, role="bar_value"))
         if shown[i]:
-            lw = max(slot, 48.0)
-            ops.append({"op": "text", "x": X(i) - lw / 2, "y": py + ph + 3, "w": lw, "h": 14 + INSETS, "text": lb,
+            lw = max(slot, 56.0)
+            ops.append({"op": "text", "x": X(i) - lw / 2, "y": py + ph + 3, "w": lw, "h": 26 + INSETS, "text": lb,
                         "style": "chart_label", "align": "CENTER", "role": "label"})
     ops += divider_ops(p["dividers"], labels, px, py, slot, ph)
     pts = [[X(i), Y2(v)] for i, v in enumerate(lvals) if v is not None]

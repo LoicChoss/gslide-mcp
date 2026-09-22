@@ -12,7 +12,7 @@ from __future__ import annotations
 from ..themes import Theme
 from . import Component, Prop, register, shift, validate, get
 from .axes import (FRAME_PROPS, LEGEND_H, auto, axis_width, baseline_op, fmt_value, inner_width, legend_ops, panelize,
-                   thin_labels, y_axis_ops)
+                   thin_labels, value_label, y_axis_ops)
 from .builtin import INSETS, _chart_bars, _donut, _frame_h, _nice_max
 
 TINT_STEP = 0.55  # how much whiter each further series gets when categories carry the colour
@@ -79,12 +79,14 @@ def _chart_grouped(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
     height = (h - _frame_h(p)) if h else 200.0
     ml = axis_width(vmax, unit) + 6 if p["y_axis"] else 0.0
     top = (value_h + 2 if show_values else 4.0) + (legend_h if pos == "top" else 0.0)
-    bottom = 22.0 + (legend_h if pos == "bottom" else 0.0)
+    bottom = 30.0 + (legend_h if pos == "bottom" else 0.0)
     px, pw = ml, w_in - ml
     py, ph = top, height - top - bottom
     slot = pw / max(n, 1)
     inner = slot * 0.72
     bw = (inner - (m - 1) * 2) / m
+    if str(p["show_values"]).lower() == "auto" and bw < 40:
+        show_values = False  # paired values would touch: no value over narrow bars
     if pos == "top":
         ops += legend_ops(entries, px, 0, pw, "top")[0]
     if p["y_axis"]:
@@ -99,12 +101,10 @@ def _chart_grouped(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
             x = gx + k * (bw + 2)
             ops.append({"op": "box", "x": x, "y": py + ph - bh, "w": bw, "h": bh, "fill": fill(k, i), "role": "bar", "series": k})
             if show_values:
-                vw = max(bw + 4, 56.0)
-                ops.append({"op": "text", "x": x + bw / 2 - vw / 2, "y": py + ph - bh - value_h + 3, "w": vw, "h": value_h,
-                            "text": fmt_value(v, unit), "style": "chart_value", "align": "CENTER", "role": "value"})
+                ops.append(value_label(x + bw / 2, py + ph - bh - value_h + 3, bw + 2, fmt_value(v, unit), value_h))
         if shown[i]:
-            lw = max(slot, 48.0)
-            ops.append({"op": "text", "x": px + (i + 0.5) * slot - lw / 2, "y": py + ph + 3, "w": lw, "h": 14 + INSETS, "text": lb,
+            lw = max(slot, 56.0)
+            ops.append({"op": "text", "x": px + (i + 0.5) * slot - lw / 2, "y": py + ph + 3, "w": lw, "h": 26 + INSETS, "text": lb,
                         "style": "chart_label", "align": "CENTER", "role": "label"})
     if pos == "bottom":
         ops += legend_ops(entries, px, height - LEGEND_H, pw, "bottom")[0]
@@ -192,14 +192,23 @@ def _mini_charts(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list
     gap = float(p["gap"])
     cw = (w - (cols - 1) * gap) / cols
     spec = get("chart_bars")
+    labels = [str(lb) for lb in p["labels"]]
+    colors = list(p["colors"] or [])
     ops: list[dict] = []
-    height = 0.0
+    top = 0.0
+    if p["legend"]:
+        # one shared legend instead of category labels under each narrow chart
+        entries = [{"name": lb, "color": colors[i] if i < len(colors) and colors[i] else "accent"} for i, lb in enumerate(labels)]
+        ops += legend_ops(entries, 0, 0, w, "top")[0]
+        top = LEGEND_H + 4
+    chart_h = (h - top) if h else None
+    height = top
     for i, c in enumerate(charts):
-        props = validate(spec, {"labels": p["labels"], "values": c.get("values", []), "unit": c.get("unit"), "max": c.get("max"),
-                                "colors": p["colors"], "y_axis": p["y_axis"], "show_values": p["show_values"],
-                                "title": c.get("title"), "panel": p["panel"]})
-        sub, sh = _chart_bars(props, theme, cw, h)
-        x, y = (i % cols) * (cw + gap), (i // cols) * ((h or sh) + gap)
+        props = validate(spec, {"labels": ["" for _ in labels] if p["legend"] else labels, "values": c.get("values", []),
+                                "unit": c.get("unit"), "max": c.get("max"), "colors": colors or None, "y_axis": p["y_axis"],
+                                "show_values": p["show_values"], "title": c.get("title"), "panel": p["panel"]})
+        sub, sh = _chart_bars(props, theme, cw, chart_h)
+        x, y = (i % cols) * (cw + gap), top + (i // cols) * ((chart_h or sh) + gap)
         ops.extend(shift(sub, x, y))
         height = max(height, y + sh)
     return ops, h or height
@@ -216,6 +225,7 @@ register(Component(
         Prop("gap", "number", "Espace entre graphiques.", default=12),
         Prop("y_axis", "bool", "Axe gradué sur chaque graphique.", default=True),
         Prop("show_values", "bool", "Valeurs sur les barres.", default=True),
+        Prop("legend", "bool", "Une légende commune au-dessus (couleur par catégorie) à la place des libellés sous chaque graphique.", default=True),
         Prop("panel", "bool", "Panneau gris clair autour de chaque graphique.", default=False),
     ],
     render=_mini_charts,

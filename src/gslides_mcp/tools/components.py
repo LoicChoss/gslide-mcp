@@ -149,13 +149,15 @@ def insert_component(
     svc = slide_service()
     sid = resolve_slide_ids(svc, pid, [slide])[0]
     gid = f"cmp_{uuid.uuid4().hex[:10]}"
-    reqs, ids = drawing.ops_to_requests(sid, ops, t, prefix=gid, offset=(x_pt, y_pt), group=gid, resolve_asset=_resolver(t))
+    # a table cannot be grouped with other elements: components built around one stay ungrouped
+    group = None if any(o.get("op") == "table" for o in ops) else gid
+    reqs, ids = drawing.ops_to_requests(sid, ops, t, prefix=gid, offset=(x_pt, y_pt), group=group, resolve_asset=_resolver(t))
     svc.presentations().batchUpdate(presentationId=pid, body={"requests": reqs}).execute(num_retries=5)
     return {
         "component": component,
         "theme": t.name,
         "slide_id": sid,
-        "group_id": gid if len(ids) >= 2 else None,
+        "group_id": gid if (group and len(ids) >= 2) else None,
         "element_ids": ids,
         "height_pt": height,
         "requests": len(reqs),

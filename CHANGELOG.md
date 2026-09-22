@@ -17,6 +17,8 @@ All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachang
 
 - **Chart style aligned on the PPTX bilans**: grid 0.5 pt (`chart_grid`), baseline 1 pt (`chart_axis`, no ink axis), lines 1.5 pt, markers 4 pt, legend swatches 8 pt; `chart_combo` puts its legend on top (`legend_pos`) and shows values and markers automatically up to 12 points (`show_values` / `markers` = `auto`); dense category labels are thinned so a 31-day axis stays readable. `chart_line` and `chart_stacked` gain `legend_pos`.
 - French number formatting keeps up to two decimals (`1,95`, `3,9`) instead of one.
+- **Alignment and fit**: a `kpi_grid` shares one geometry across its KPIs (one value size, one label height, one bar height, one delta line) so rows align KPI to KPI; a KPI value shrinks (down to 16 pt) instead of wrapping; chart values over thin bars shrink or step aside (`small_ok` text ops may go under the charter floor when the block cannot grow); dense category labels get two lines; a short plot draws two ticks instead of four.
+- `table`: empty cells get a styled space so Google's 18 pt default paragraph no longer stretches the row; the reported height uses the rendered row height (text line + cell padding); with `icons` the label column takes a double share. Components built around a table (`table` with icons, `ad_scoreboard`) are inserted ungrouped: the Slides API cannot group a table.
 
 ## [0.2.0] — 2026-09-15
 

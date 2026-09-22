@@ -103,7 +103,7 @@ def test_ad_scoreboard_transposed_table_with_image_row_and_placeholders():
     assert t["rows"][1] == ["Visuel", "", ""] and t["rows"][2] == ["Dépenses", "7 237,84 €", "224,50 €"]
     assert t["rows"][-1][0] == "CPA" and len(t["rows"]) == 6
     assert t["header"]["fill"] == "ink" and t["cell_fills"][(1, 0)] == "accent" and t["cell_fills"][(5, 0)] == "accent"
-    assert t["row_heights"][1] == 56 + 8 and t["row_heights"][2] == t["row_h"]
+    assert t["row_heights"][1] == 56 + 8 and t["row_heights"][2] >= t["row_h"]
     (img,) = _of(ops, "image")
     assert img["asset"] == "post-video" and img["contain"] and t["row_heights"][0] < img["y"] < t["row_heights"][0] + 8
     assert t["col_w"][0] < img["x"] < t["col_w"][0] + t["col_w"][1]

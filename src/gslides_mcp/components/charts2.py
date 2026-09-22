@@ -154,7 +154,7 @@ def _chart_stacked(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
         height = top_legend + n * (bar_h + gap) - gap
         ly = height + 8
     else:
-        plot_h = ((h - _frame_h(p)) if h else 180.0) - (legend_h if pos == "bottom" else 0.0) - 22
+        plot_h = ((h - _frame_h(p)) if h else 180.0) - (legend_h if pos == "bottom" else 0.0) - 30
         ml = axis_width(vmax, unit) + 6 if p["y_axis"] else 0.0
         top = (14 + INSETS + 2 if p["show_values"] else 0.0) + divider_height(p["dividers"]) + top_legend
         px, pw = ml, w_in - ml
@@ -178,12 +178,12 @@ def _chart_stacked(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
                 ops.append({"op": "text", "x": px + i * col_w, "y": y - 14 - INSETS + 2, "w": col_w, "h": 14 + INSETS,
                             "text": fmt_value(totals[i], unit), "style": "chart_value", "align": "CENTER", "role": "total"})
             if shown[i]:
-                lw = max(col_w, 48.0)
-                ops.append({"op": "text", "x": px + (i + 0.5) * col_w - lw / 2, "y": plot_h + 2, "w": lw, "h": 14 + INSETS, "text": lb,
+                lw = max(col_w, 56.0)
+                ops.append({"op": "text", "x": px + (i + 0.5) * col_w - lw / 2, "y": plot_h + 2, "w": lw, "h": 26 + INSETS, "text": lb,
                             "style": "chart_label", "align": "CENTER", "role": "label"})
         ops += divider_ops(p["dividers"], labels, px, top, col_w, plot_h - top)
         ops.insert(0, baseline_op(px, plot_h, pw))
-        height = plot_h + 22
+        height = plot_h + 30
         ly = height
     if pos == "bottom":
         ops += legend_ops(entries, 0.0, ly, w_in, "bottom")[0]

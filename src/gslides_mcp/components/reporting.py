@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from ..themes import Theme
 from . import Component, Prop, get, register, shift, validate
-from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height
+from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height, rendered_row_h
 
 DASH = {"color": "divider", "weight": 1, "dash": "DASH"}
 
@@ -232,7 +232,8 @@ def _ad_scoreboard(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
             [str(p["image_label"])] + [""] * len(ads)]
     for m in metrics:
         rows.append([m] + [str((a.get("values") or {}).get(m, "")) for a in ads])
-    heights = [row_h, img_h + 8] + [row_h] * len(metrics)
+    size = float(p["size"])
+    heights = [rendered_row_h(row_h, 10.5), img_h + 8] + [rendered_row_h(row_h, size)] * len(metrics)
     table: dict = {
         "op": "table", "x": 0, "y": 0, "w": w, "rows": rows, "col_w": [first_w] + [cw] * len(ads), "row_h": row_h, "row_heights": heights,
         "header": {"fill": "ink", "color": "on_dark", "bold": True}, "banding": ["background", "surface"], "first_col_bold": True,
@@ -251,9 +252,9 @@ def _ad_scoreboard(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
             ops.append({"op": "box", "x": x + 4, "y": y, "w": cw - 16, "h": img_h, "fill": "surface", "line": dict(DASH), "role": "placeholder"})
     height = sum(heights)
     if p["top_note"]:
-        ops.append({"op": "text", "x": w / 2, "y": height + 6, "w": w / 2, "h": 12 + INSETS, "text": str(p["top_note"]), "style": "caption",
+        ops.append({"op": "text", "x": w / 2, "y": height + 14, "w": w / 2, "h": 12 + INSETS, "text": str(p["top_note"]), "style": "caption",
                     "size": 10, "italic": True, "align": "END", "role": "top_note"})
-        height += 6 + 12 + INSETS
+        height += 14 + 12 + INSETS
     return ops, h or height
 
 
@@ -264,7 +265,7 @@ register(Component(
         Prop("ads", "list", "Annonces : {name, image? (asset), image_url?, values: {métrique: valeur formatée}}.", required=True),
         Prop("metrics", "list", "Métriques affichées, dans l'ordre des lignes (Dépenses, CTR, Dons, CPA).", required=True),
         Prop("image_h", "number", "Hauteur de la ligne des vignettes.", default=56),
-        Prop("row_h", "number", "Hauteur des autres lignes.", default=22),
+        Prop("row_h", "number", "Hauteur des autres lignes.", default=24),
         Prop("first_col_w", "number", "Largeur de la colonne des libellés.", default=76),
         Prop("name_label", "str", "Libellé de l'en-tête.", default="Nom visuel"),
         Prop("image_label", "str", "Libellé de la ligne des vignettes.", default="Visuel"),

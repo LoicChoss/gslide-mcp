@@ -63,25 +63,54 @@ def _nice_max(values: list[float]) -> float:
 
 # --- kpi ------------------------------------------------------------------------
 
-def _kpi(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
+KPI_VALUE_SIZE = 28.0
+KPI_VALUE_MIN = 16.0
+
+
+def _kpi_value_size(value: str, w: float) -> float:
+    """The value never wraps: it shrinks (down to 16 pt) when its column is too narrow."""
+    avail = w - PAD - 2 * INSET_X
+    return min(KPI_VALUE_SIZE, max(KPI_VALUE_MIN, avail / max(1, len(str(value)) * 0.58)))
+
+
+def _kpi_label_h(p: dict, w: float) -> float:
+    """Height of the label box once wrapped in the column (note included)."""
+    lines = _wrapped_lines(str(p["label"]) + (" " + str(p["note"]) if p.get("note") else ""), w - PAD, 11)
+    return 18.0 + (lines - 1) * 11 * LEADING
+
+
+def _kpi(p: dict, theme: Theme, w: float, h: float | None, value_size: float | None = None,
+         label_h: float | None = None, delta_row: bool | None = None) -> tuple[list[dict], float]:
+    """One KPI. ``value_size``, ``label_h`` and ``delta_row`` are set by ``kpi_grid`` so
+    every KPI of a grid shares the same geometry: values on one baseline, labels on one
+    line, bars of one height, deltas on one line."""
     fg = {"color": "on_dark"} if p["dark"] else {}
-    label: dict = {"op": "text", "x": PAD, "y": 36, "w": w - PAD, "h": 18, "style": "kpi_label", "role": "label", **fg}
+    value = str(p["value"])
+    size = value_size or _kpi_value_size(value, w)
+    # the value sits on the bottom of its box whatever its size, so a row shares one baseline
+    value_op: dict = {"op": "text", "x": PAD, "y": -3, "w": w - PAD, "h": 36, "text": value, "style": "kpi_value", "role": "value",
+                      "valign": "BOTTOM", **fg}
+    if size < KPI_VALUE_SIZE:
+        value_op.update({"size": round(size, 1), "small_ok": True})
+    label_h = label_h or _kpi_label_h(p, w)
+    label: dict = {"op": "text", "x": PAD, "y": 36, "w": w - PAD, "h": label_h, "style": "kpi_label", "role": "label", **fg}
     if p.get("note"):
         # « Collecte (GA4) » : the precision in small muted type after the label
         label["runs"] = [[{"text": str(p["label"])}, {"text": " " + str(p["note"]), "size": 10, "color": "muted"}]]
     else:
         label["text"] = str(p["label"])
+    height = 36.0 + label_h + 7
     ops: list[dict] = [
-        {"op": "box", "x": 0, "y": 0, "w": 5, "h": 61, "fill": "accent", "role": "bar"},
-        {"op": "text", "x": PAD, "y": -3, "w": w - PAD, "h": 36, "text": str(p["value"]), "style": "kpi_value", **fg},
+        {"op": "box", "x": 0, "y": 0, "w": 5, "h": height, "fill": "accent", "role": "bar"},
+        value_op,
         label,
     ]
-    height = 61.0
     if p["delta"]:
         sign = "positive" if str(p["delta"]).strip().startswith("+") else "negative"
-        ops.append({"op": "text", "x": PAD, "y": 58, "w": w - PAD, "h": 16, "text": str(p["delta"]),
-                    "style": "kpi_delta", "color": sign})
-        height = 76.0
+        ops.append({"op": "text", "x": PAD, "y": height - 3, "w": w - PAD, "h": 16, "text": str(p["delta"]),
+                    "style": "kpi_delta", "color": sign, "role": "delta"})
+    if p["delta"] or delta_row:
+        height += 15
     return ops, h or height
 
 
@@ -107,12 +136,19 @@ def _kpi_grid(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[di
     cols = int(p["cols"] or (-(-len(items) // len(rows)) if rows else len(items)) or 1)
     x0 = ROW_LABEL_W if rows else 0.0
     col_w = (w - x0) / cols
-    row_gap = float(p["row_gap"])
+    specs = [{"value": item.get("value", ""), "label": item.get("label", ""), "note": item.get("note"),
+              "delta": item.get("delta"), "dark": p["dark"]} for item in items]
+    # one geometry for the whole grid: the narrowest value sets the size, the longest label
+    # the label height, any delta reserves the delta line — so every row aligns KPI to KPI
+    size = min((_kpi_value_size(str(sp["value"]), col_w - 12) for sp in specs), default=KPI_VALUE_SIZE)
+    label_h = max((_kpi_label_h(sp, col_w - 12) for sp in specs), default=18.0)
+    delta_row = any(sp["delta"] for sp in specs)
+    rendered = [_kpi(sp, theme, col_w - 12, None, value_size=size, label_h=label_h, delta_row=delta_row) for sp in specs]
+    # rows never overlap: the gap grows with the row height (wrapped label + delta)
+    row_gap = max(float(p["row_gap"]), max((sh for _, sh in rendered), default=0.0) + 12)
     ops: list[dict] = []
     height = 0.0
-    for i, item in enumerate(items):
-        sub, sub_h = _kpi({"value": item.get("value", ""), "label": item.get("label", ""), "note": item.get("note"),
-                           "delta": item.get("delta"), "dark": p["dark"]}, theme, col_w - 12, None)
+    for i, (sub, sub_h) in enumerate(rendered):
         y = (i // cols) * row_gap
         ops.extend(shift(sub, x0 + (i % cols) * col_w, y))
         height = max(height, y + sub_h)
@@ -373,13 +409,21 @@ register(Component(
 
 # --- table ------------------------------------------------------------------------
 
-ICON_COL_W = 26.0  # table: width of the leading picto column
+ICON_COL_W = 32.0  # table: width of the leading picto column (Slides minimum column width)
+CELL_INSET_Y = 7.2  # Google's fixed top / bottom cell padding
+
+
+def rendered_row_h(row_h: float, size: float) -> float:
+    """The height Slides actually gives a row: ``minRowHeight`` or one text line plus the cell padding."""
+    return max(float(row_h), size * 1.2 + 2 * CELL_INSET_Y)
 
 
 def _table(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     rows = [list(r) for r in p["rows"]]
     row_h = float(p["row_h"])
     heights = [float(v) if v else row_h for v in (p["row_heights"] or [])] + [row_h] * (len(rows) - len(p["row_heights"] or []))
+    size = float(p["size"] or theme.text_styles.get("table_cell", {}).get("size", 10.5))
+    heights = [rendered_row_h(rh, size) for rh in heights]  # where the pictos land, and the height reported
     last = len(rows) - 1
     icons = list(p["icons"] or [])
     col_w = list(p["col_w"] or [])
@@ -389,7 +433,10 @@ def _table(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
         # a narrow empty column in front, the pictos drawn over its cells (contain)
         rows = [[""] + r for r in rows]
         n_c = max(len(r) for r in rows)
-        col_w = [ICON_COL_W] + (col_w or [(w - ICON_COL_W) / (n_c - 1)] * (n_c - 1))
+        if not col_w:
+            # the label column gets a double share so channel names do not wrap and push the pictos off their rows
+            unit = (w - ICON_COL_W) / (n_c - 1 + 1)
+            col_w = [ICON_COL_W, 2 * unit] + [unit] * (n_c - 2)
         align = [None] + align
         icon_w = float(p["icon_w"])
         y = heights[0] if p["header"] else 0.0
@@ -459,7 +506,7 @@ def _frame_h(p: dict) -> float:
 
 def _chart_bars(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     from .axes import (axis_width, baseline_op, divider_height, divider_ops, fmt_value, inner_width, panelize,
-                       thin_labels, y_axis_ops)
+                       thin_labels, value_label, y_axis_ops)
 
     w_in = inner_width(w, p)
     labels, values = list(p["labels"]), [float(v) for v in p["values"]]
@@ -488,10 +535,10 @@ def _chart_bars(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[
             else (ops, h or (n * row_h + (n - 1) * gap))
 
     height = (h - _frame_h(p)) if h else 150.0
-    label_h, value_h = 14.0 + INSETS, 14.0 + INSETS
+    label_h, value_h = 26.0 + INSETS, 14.0 + INSETS  # labels may wrap on two lines
     ml = axis_width(vmax, unit) + 6 if p["y_axis"] else 0.0
     y0 = (value_h + 2 if p["show_values"] else 2) + divider_height(p["dividers"])
-    y1 = height - label_h - 4
+    y1 = height - label_h - 2
     px, pw = ml, w_in - ml
     slot = pw / n
     bar_w = slot * 0.6
@@ -503,10 +550,9 @@ def _chart_bars(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[
         x = px + i * slot + slot * 0.2
         ops.append({"op": "box", "x": x, "y": y1 - bh, "w": bar_w, "h": bh, "fill": fill(i), "role": "bar"})
         if p["show_values"]:
-            ops.append({"op": "text", "x": px + i * slot, "y": y1 - bh - value_h + 2, "w": slot, "h": value_h,
-                        "text": fmt_value(v, unit), "style": "chart_value", "align": "CENTER", "role": "value"})
+            ops.append(value_label(px + (i + 0.5) * slot, y1 - bh - value_h + 2, slot, fmt_value(v, unit), value_h))
         if shown[i]:
-            lw = max(slot, 48.0)
+            lw = max(slot, 56.0)
             ops.append({"op": "text", "x": px + (i + 0.5) * slot - lw / 2, "y": y1 + 3, "w": lw, "h": label_h, "text": str(lab),
                         "style": "chart_label", "align": "CENTER", "role": "label"})
     ops += divider_ops(p["dividers"], [str(lb) for lb in labels], px, y0, slot, y1 - y0)

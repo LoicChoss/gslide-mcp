@@ -239,12 +239,12 @@ def test_table_icons_column_and_delta_columns():
     ops, height = _render("table", {"rows": rows, "icons": ["search", "discover"], "delta_cols": [2], "total_row": True}, w=400)
     (t,) = _of(ops, "table")
     assert t["rows"][0] == ["", "Canal", "Impr.", "vs N-1"] and t["rows"][1][1] == "Recherche Google"
-    assert t["col_w"][0] == 26 and sum(t["col_w"]) == pytest.approx(400)
+    assert t["col_w"][0] == 32 and sum(t["col_w"]) == pytest.approx(400)
     images = _of(ops, "image")
     assert [i["asset"] for i in images] == ["search", "discover"] and images[0]["contain"]
-    assert images[0]["x"] < 26 and t["row_h"] < images[0]["y"] < 2 * t["row_h"]
+    assert images[0]["x"] < 32 and t["row_h"] < images[0]["y"] < 2 * t["row_h"]
     assert t["cell_text_colors"][(1, 3)] == "positive" and t["cell_text_colors"][(2, 3)] == "negative"
     assert (3, 3) not in t["cell_text_colors"]  # the total row keeps its own style
-    assert height == t["row_h"] * 4
+    assert height == sum(t["row_heights"]) >= t["row_h"] * 4
     plain, _ = _render("table", {"rows": rows[:2]})
     assert plain[0]["rows"][0] == ["Canal", "Impr.", "vs N-1"] and not _of(plain, "image")

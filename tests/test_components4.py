@@ -327,8 +327,8 @@ def test_component_sources_declare_charter_sizes():
     for entry in components.catalogue():
         ops, _ = components.render(entry["name"], entry["example"]["props"], PERISCOPE, 400)
         for o in ops:
-            if o["op"] == "table" or o.get("size") is None:
-                continue
+            if o["op"] == "table" or o.get("size") is None or o.get("small_ok"):
+                continue  # small_ok: the block cannot grow, the size may go under the floor
             floor = PERISCOPE.size_floor(o.get("style"))
             assert floor is None or o["size"] >= floor, (entry["name"], o.get("style"), o["size"])
             for para in o.get("runs", []):

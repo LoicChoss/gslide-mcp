@@ -8,8 +8,9 @@ text styles. Nothing here knows about Periscope — see ``themes``.
 Ops:
     box       x y w h [fill] [line{color,weight,dash}] [shape] [+ text keys]
     text      x y w h  text | markdown | runs=[[{text,bold,italic,color,size,font,highlight}],…]
-              [style] [size] [color] [bold] [italic] [font] [align] [valign] [spacing]
-              (markdown: ==texte== surligne avec le rôle ``highlight``)
+              [style] [size] [color] [bold] [italic] [font] [align] [valign] [spacing] [small_ok]
+              (markdown: ==texte== surligne avec le rôle ``highlight`` ; small_ok: la taille
+              demandée passe sous le plancher du thème quand le bloc ne peut pas grandir)
     line      x1 y1 x2 y2 [color] [weight] [dash] [end_arrow] [start_arrow]
     polyline  points=[[x,y],…] [color] [weight] [dash] [end_arrow]   (arrow on the last segment)
     arc       cx cy r a0 a1 weight [color]        (degrees, 0 = east, clockwise)
@@ -167,6 +168,12 @@ class _Canvas:
         if base.get("color") is None and "text" in self.theme.roles:
             base["color"] = "text"
         floor = self.theme.size_floor(op.get("style"))
+        if op.get("small_ok"):
+            # the charter floor is a recommendation: a value that cannot get a wider box
+            # (KPI in a narrow column, value over a thin bar) may go under it
+            floor = None
+            if op.get("size") is not None:
+                base["size"] = op["size"]
 
         runs_ranges: list[tuple[int, int, dict]] = []
         md_styles: list[dict] = []
@@ -428,7 +435,9 @@ class _Canvas:
                 if (i, j) in cell_text_colors:
                     cell_op["color"] = cell_text_colors[(i, j)]
                 if str(value) == "":
-                    continue
+                    # an empty cell keeps Google's 18 pt default paragraph and stretches its row:
+                    # a styled space keeps the row at the table's text size
+                    cell_op["text"] = " "
                 self._text_into(oid, cell_op, cell=(i, j))
 
         for j, w in enumerate(col_w):

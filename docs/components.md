@@ -48,7 +48,7 @@ list props; read `list_components()` for the guidance.
 | `badge` | `text*`, `fill`, `color` | Small uppercase tag; width follows the text. |
 | `steps` | `items*` (markdown), `dark` | Numbered circles + text. |
 | `quote` | `text*` (markdown), `author`, `role`, `dark` | Accent-outlined box, bold italic quote. |
-| `table` | `rows*`, `col_w`, `row_h`, `row_heights`, `header`, `total_row`, `align`, `size`, `icons`, `icon_w`, `delta_cols` | Accent header, bold first column, banded rows, thin horizontal rules, optional accent total row. `icons` (one asset per data row) adds a narrow picto column in front; `delta_cols` colours « vs N-1 » cells by sign. |
+| `table` | `rows*`, `col_w`, `row_h`, `row_heights`, `header`, `total_row`, `align`, `size`, `icons`, `icon_w`, `icon_tint`, `delta_cols` | Accent header, bold first column, banded rows, thin horizontal rules, optional accent total row. `icons` (one asset per data row) adds a narrow picto column in front; `delta_cols` colours « vs N-1 » cells by sign. |
 | `chart_bars` | `labels*`, `values*`, `horizontal`, `unit`, `max`, `show_values`, `color`, `colors`, `y_axis`, `dividers`, `title`, `panel` | Vertical histogram with baseline (optional graduated Y axis with grid, period dividers `[{after, left, right}]`), or horizontal bars on grey tracks. `colors` = one colour per bar (`regie_google`…). Values in French format (`4 000 000 €`). |
 | `chart_line` | `labels*`, `series*` `[{name, values, dash, color}]`, `y_max`, `legend`, `legend_pos`, `markers`, `title`, `panel` | Light grid, axis labels, 1.5 pt lines, small markers (`auto`: shown up to 12 points), dashed series, `null` = gap, legend. |
 | `donut` | `segments*` `[{label, value, color}]`, `thickness`, `center`, `legend`, `legend_pos` (`right` `bottom` `none`), `labels`, `title`, `panel` | Ring with legend and percentages; `labels` puts the percentages on the segments (from 6 %), text light or dark by luminance. |
@@ -116,16 +116,16 @@ Bilan média (reporting régies + GA4; reference: the agency's generated PPTX bi
 | Name | Props | Notes |
 |---|---|---|
 | `chart_grouped` | `labels*`, `series*` `[{name, values, color}]`, `category_colors`, `horizontal`, `unit`, `max`, `y_axis`, `show_values` (`auto`), `legend_pos` (`top`), `bar_h`, `title`, `panel` | Bars side by side per category. With `category_colors` (one per category, e.g. `regie_google`) series k is a lighter tint of its category colour: « foncé = N, clair = N-1 ». |
-| `mini_charts` | `labels*`, `charts*` `[{title, values, unit, max}]`, `colors`, `cols`, `gap`, `y_axis`, `show_values`, `panel` | Small multiples: one mini histogram per indicator (impressions, clics, collecte, ROAS, dépenses), same categories and colours everywhere. |
+| `mini_charts` | `labels*`, `charts*` `[{title, values, unit, max}]`, `colors`, `cols`, `gap`, `y_axis`, `show_values`, `legend`, `panel` | Small multiples: one mini histogram per indicator (impressions, clics, collecte, ROAS, dépenses), same categories and colours everywhere, one shared legend on top (`legend=false` puts the category labels under each chart). |
 | `donut_row` | `items*` `[{title, segments}]`, `colors`, `cols`, `gap`, `labels`, `legend_pos` (`bottom`), `thickness`, `panel` | `donut` repeated with a title each, percentages on the segments, legend below. |
 | `analysis_block` | `title` (« Notre analyse : »), `items` or `text` (markdown), `box`, `size` | Bold title then chevron › points (the `chevrons` component) or a paragraph; `box` = accent outline. |
-| `source_note` | `text*`, `platform`, `logo`, `align` (`END`) | « * Sources : … » in small italic (prefix added when missing), platform logo + name underneath. |
+| `source_note` | `text*`, `platform`, `logo`, `align` (`END`), `tint` | « * Sources : … » in small italic (prefix added when missing), platform logo + name underneath. |
 | `stat_box` | `boxes*` `[{value, label}]`, `operator` (`=`), `box_w`, `box_h` | Accent-outlined figures joined by an operator, centred as a group. |
 | `takeaways` | `items*` (`{title, text}` or text), `highlight`, `gap` | Enseignements / recos: bold (optionally highlighted) title + paragraph per point. |
 | `placeholder` | `text*`, `height`, `dash` | Dashed grey frame with a centred message (export pending, capture to drop). |
 | `ad_scoreboard` | `ads*` `[{name, image, image_url, values}]`, `metrics*`, `image_h`, `row_h`, `first_col_w`, `name_label`, `image_label`, `top_note`, `size` | Transposed results-per-ad table: dark header with the ad names, « Visuel » row with the thumbnails (contain) or dashed frames, one row per metric, accent first column, italic « Top annonce » note. |
 | `gallery` | `images*` (asset, `{asset | url, caption}`, or `null`), `cols`, `gap`, `ratio` (0.62), `captions`, `placeholder_text` | Fixed-ratio image cells with optional captions; `null` draws a dashed « Capture de l'annonce (à déposer) » frame. |
-| `media_plan` | `levers*` `[{name, logos, budget, dates}]`, `objective` `{title, items}`, `heading`, `budget_label`, `dates_label`, `split` | « Rappel du dispositif »: accent dot, uppercase lever name, régie logos, bold budget and dates; accent « Objectif à atteindre » panel with chevrons on the right. |
+| `media_plan` | `levers*` `[{name, logos, budget, dates}]`, `objective` `{title, items}`, `heading`, `budget_label`, `dates_label`, `split`, `tint` | « Rappel du dispositif »: accent dot, uppercase lever name, régie logos, bold budget and dates; accent « Objectif à atteindre » panel with chevrons on the right. |
 | `timeline_arrow` | `events*` `[{date, text, style (filled | outline | dashed), above}]`, `box_w`, `box_h`, `connector`, `alternate` | Thick accent arrow, dated boxes alternating below / above joined by a thin connector. |
 
 Chart style (all charts): grid 0.5 pt in `chart_grid`, baseline 1 pt in
@@ -196,6 +196,9 @@ for labels, captions, badges, legends and chart values (`small_styles`), and
 named style, explicit `size`, runs — so `draw` ops and recipes comply too;
 the built-in components also declare compliant sizes so their computed
 box heights are right.
+
+
+A text op may carry `small_ok: true`: the size it asks for is kept even under the floor. Components use it only where the block cannot grow (a KPI value in a narrow column shrinks to 16 pt instead of wrapping; a value over a thin bar drops to 9 or 8.5 pt); it is the charter's escape hatch, not a default.
 
 ## Themes
 
