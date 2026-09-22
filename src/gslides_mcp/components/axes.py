@@ -285,9 +285,18 @@ def _chart_combo(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list
             bar_top = Y(bvals[i]) if i < len(bvals) else py + ph
             label_y = y - 6 - value_h
             bar_label = (bar_top - value_h + 2, bar_top + 2)  # where the bar's own value sits
-            # above the marker, unless that would run off the top or overlap the bar's value label
-            if label_y < py - value_h or (label_y < bar_label[1] and label_y + value_h > bar_label[0]):
+
+            def clashes(ly: float) -> bool:
+                return ly < bar_label[1] and ly + value_h > bar_label[0]
+
+            # above the marker; if that sits on the bar's value, above that value; if that runs
+            # off the top, under the marker (and under the bar value when the marker is on it)
+            if clashes(label_y):
+                label_y = bar_label[0] - value_h + 4
+            if label_y < py - value_h:
                 label_y = y + 6
+                if clashes(label_y):
+                    label_y = bar_label[1] + 2
             ops.append({"op": "text", "x": x - slot / 2, "y": label_y, "w": slot, "h": value_h, "text": fmt_value(v, unit2),
                         "style": "chart_value", "color": lcol, "align": "CENTER", "role": "point_value"})
     if pos == "bottom":
