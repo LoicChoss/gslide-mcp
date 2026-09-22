@@ -40,18 +40,18 @@ list props; read `list_components()` for the guidance.
 
 | Name | Props | Notes |
 |---|---|---|
-| `kpi` | `value*`, `label*`, `delta`, `dark` | Accent bar, big value, label; `delta` colored by its sign (`+` positive, otherwise negative). |
-| `kpi_grid` | `items*` `[{value, label, delta}]`, `cols`, `row_gap`, `dark` | `kpi` repeated in columns. |
+| `kpi` | `value*`, `label*`, `delta`, `note`, `dark` | Accent bar, big value, label (+ small muted `note`: « Collecte (GA4) »); `delta` colored by its sign (`+` positive, otherwise negative). |
+| `kpi_grid` | `items*` `[{value, label, delta, note}]`, `cols`, `rows`, `row_gap`, `dark` | `kpi` repeated in columns; `rows` adds bold row labels on the left (« Marque » / « Hors marque »), one KPI row each. |
 | `card` | `variant` (`light` `dark` `mint` `acid` `outline` `plain`), `label`, `big`, `num`, `title`, `body` (markdown), `dot`, `icon`, `icon_color` | The flat card pattern; natural height follows the content. `icon` names a PNG of the assets folder (`bolt`, `people`…) drawn in a white disc, tinted with `icon_color` (default `ink`). |
 | `card_grid` | `cards*` (list of `card` props), `cols`, `gap` | Rows of cards with equalised heights — the "three pillars" slide. |
 | `callout` | `type` (`info` `idea` `warn` `alert` `dark`), `title`, `body*` (markdown) | Flat box with an accent bar on the left. |
 | `badge` | `text*`, `fill`, `color` | Small uppercase tag; width follows the text. |
 | `steps` | `items*` (markdown), `dark` | Numbered circles + text. |
 | `quote` | `text*` (markdown), `author`, `role`, `dark` | Accent-outlined box, bold italic quote. |
-| `table` | `rows*`, `col_w`, `row_h`, `header`, `total_row`, `align`, `size` | Accent header, bold first column, banded rows, thin horizontal rules, optional accent total row. |
-| `chart_bars` | `labels*`, `values*`, `horizontal`, `unit`, `max`, `show_values`, `color`, `y_axis`, `dividers` | Vertical histogram with baseline (optional graduated Y axis with grid, period dividers `[{after, left, right}]`), or horizontal bars on grey tracks. Values in French format (`4 000 000 €`). |
-| `chart_line` | `labels*`, `series*` `[{name, values, dash, color}]`, `y_max`, `legend` | Grid, axis labels, markers, dashed series, `null` = gap, legend. |
-| `donut` | `segments*` `[{label, value, color}]`, `thickness`, `center`, `legend` | Ring with legend and percentages. |
+| `table` | `rows*`, `col_w`, `row_h`, `row_heights`, `header`, `total_row`, `align`, `size`, `icons`, `icon_w`, `delta_cols` | Accent header, bold first column, banded rows, thin horizontal rules, optional accent total row. `icons` (one asset per data row) adds a narrow picto column in front; `delta_cols` colours « vs N-1 » cells by sign. |
+| `chart_bars` | `labels*`, `values*`, `horizontal`, `unit`, `max`, `show_values`, `color`, `colors`, `y_axis`, `dividers`, `title`, `panel` | Vertical histogram with baseline (optional graduated Y axis with grid, period dividers `[{after, left, right}]`), or horizontal bars on grey tracks. `colors` = one colour per bar (`regie_google`…). Values in French format (`4 000 000 €`). |
+| `chart_line` | `labels*`, `series*` `[{name, values, dash, color}]`, `y_max`, `legend`, `legend_pos`, `markers`, `title`, `panel` | Light grid, axis labels, 1.5 pt lines, small markers (`auto`: shown up to 12 points), dashed series, `null` = gap, legend. |
+| `donut` | `segments*` `[{label, value, color}]`, `thickness`, `center`, `legend`, `legend_pos` (`right` `bottom` `none`), `labels`, `title`, `panel` | Ring with legend and percentages; `labels` puts the percentages on the segments (from 6 %), text light or dark by luminance. |
 | `pie` | `segments*`, `legend` | Full disc (a donut whose thickness is its radius, drawn as two concentric bands). |
 | `funnel` | `items*` `[{label, value, sub, color}]`, `pct` (`first` `prev` `both` `none`), `unit`, `label_w`, `value_w`, `bar_h`, `min_frac`, `legend` | Centred bars scaled to the first step, values with French thousands separators, rate pills (accent = vs first step, outlined = vs previous) and their legend. |
 | `timeline` | `phases*` `[{date, title, text, color}]` | Horizontal line, one dot per phase, date above, title and text below. |
@@ -106,10 +106,35 @@ Charts and diagrams (lot 4):
 |---|---|---|
 | `gauge` | `value*`, `max`, `label`, `text`, `unit`, `color`, `size`, `thickness`, `value_size` | Half ring on a grey track, value in the middle, label below. |
 | `target` | `rings*` `[{label, value, color}]`, `max`, `thickness`, `gap`, `center`, `legend` | Concentric rings, each filled to its percentage from 12 o'clock (radial bar chart), legend. |
-| `chart_stacked` | `labels*`, `series*` `[{name, values, color}]`, `horizontal`, `max`, `unit`, `show_values`, `legend`, `bar_h`, `gap`, `y_axis`, `dividers` | Stacked bars, horizontal (default) or vertical columns with graduated Y axis and period dividers (« ISF | IFI »), totals, legend. |
-| `chart_combo` | `labels*`, `bars*` `{name, values, color}`, `line*` `{name, values, color}`, `unit`, `unit2`, `y_max`, `y2_max`, `y_axis`, `show_values`, `legend`, `dividers` | Bars on the left axis + line with markers on the right axis, values on every bar and point in each series' colour, two graduated axes, legend. |
+| `chart_stacked` | `labels*`, `series*` `[{name, values, color}]`, `horizontal`, `max`, `unit`, `show_values`, `legend`, `legend_pos`, `bar_h`, `gap`, `y_axis`, `dividers`, `title`, `panel` | Stacked bars, horizontal (default) or vertical columns with graduated Y axis and period dividers (« ISF | IFI »), totals, legend. |
+| `chart_combo` | `labels*`, `bars*` `{name, values, color}`, `line*` `{name, values, color}`, `unit`, `unit2`, `y_max`, `y2_max`, `y_axis`, `show_values` (`auto`), `markers` (`auto`), `legend`, `legend_pos` (`top`), `dividers`, `title`, `panel` | Bars on the left axis + thin line on the right axis, two graduated axes, legend on top. Values and markers are shown automatically up to 12 points (a daily series stays clean); dense category labels are thinned (first and last always shown). |
 | `tree` | `root*`, `children*` `[{label, items, fill, hl}]`, `node_h`, `gap_y`, `gap_x` | Two-level sitemap / org chart: accent root, children on a bus, bulleted sub-items under each. |
 | `flowchart` | `nodes*` `[{id, label, sub, col, row, fill, color, shape, hl, w}]`, `edges` (`[from, to]` or `{from, to, label, dash, color}`), `cols`, `node_w`, `node_h`, `gap_x`, `gap_y` | Nodes on a grid, elbow connectors with arrowheads (forward, vertical, and backward through a lane under the grid), edge labels. |
+
+Bilan média (reporting régies + GA4; reference: the agency's generated PPTX bilans):
+
+| Name | Props | Notes |
+|---|---|---|
+| `chart_grouped` | `labels*`, `series*` `[{name, values, color}]`, `category_colors`, `horizontal`, `unit`, `max`, `y_axis`, `show_values` (`auto`), `legend_pos` (`top`), `bar_h`, `title`, `panel` | Bars side by side per category. With `category_colors` (one per category, e.g. `regie_google`) series k is a lighter tint of its category colour: « foncé = N, clair = N-1 ». |
+| `mini_charts` | `labels*`, `charts*` `[{title, values, unit, max}]`, `colors`, `cols`, `gap`, `y_axis`, `show_values`, `panel` | Small multiples: one mini histogram per indicator (impressions, clics, collecte, ROAS, dépenses), same categories and colours everywhere. |
+| `donut_row` | `items*` `[{title, segments}]`, `colors`, `cols`, `gap`, `labels`, `legend_pos` (`bottom`), `thickness`, `panel` | `donut` repeated with a title each, percentages on the segments, legend below. |
+| `analysis_block` | `title` (« Notre analyse : »), `items` or `text` (markdown), `box`, `size` | Bold title then chevron › points (the `chevrons` component) or a paragraph; `box` = accent outline. |
+| `source_note` | `text*`, `platform`, `logo`, `align` (`END`) | « * Sources : … » in small italic (prefix added when missing), platform logo + name underneath. |
+| `stat_box` | `boxes*` `[{value, label}]`, `operator` (`=`), `box_w`, `box_h` | Accent-outlined figures joined by an operator, centred as a group. |
+| `takeaways` | `items*` (`{title, text}` or text), `highlight`, `gap` | Enseignements / recos: bold (optionally highlighted) title + paragraph per point. |
+| `placeholder` | `text*`, `height`, `dash` | Dashed grey frame with a centred message (export pending, capture to drop). |
+| `ad_scoreboard` | `ads*` `[{name, image, image_url, values}]`, `metrics*`, `image_h`, `row_h`, `first_col_w`, `name_label`, `image_label`, `top_note`, `size` | Transposed results-per-ad table: dark header with the ad names, « Visuel » row with the thumbnails (contain) or dashed frames, one row per metric, accent first column, italic « Top annonce » note. |
+| `gallery` | `images*` (asset, `{asset | url, caption}`, or `null`), `cols`, `gap`, `ratio` (0.62), `captions`, `placeholder_text` | Fixed-ratio image cells with optional captions; `null` draws a dashed « Capture de l'annonce (à déposer) » frame. |
+| `media_plan` | `levers*` `[{name, logos, budget, dates}]`, `objective` `{title, items}`, `heading`, `budget_label`, `dates_label`, `split` | « Rappel du dispositif »: accent dot, uppercase lever name, régie logos, bold budget and dates; accent « Objectif à atteindre » panel with chevrons on the right. |
+| `timeline_arrow` | `events*` `[{date, text, style (filled | outline | dashed), above}]`, `box_w`, `box_h`, `connector`, `alternate` | Thick accent arrow, dated boxes alternating below / above joined by a thin connector. |
+
+Chart style (all charts): grid 0.5 pt in `chart_grid`, baseline 1 pt in
+`chart_axis`, lines 1.5 pt, markers 4 pt, legend swatches 8 pt. `title`
+draws a centred caption above; `panel` wraps the chart in a rounded
+`surface` box (the "chart card" of the PPTX bilans). Régie colours are theme
+roles: `regie_google`, `regie_bing`, `regie_meta` / `regie_facebook`,
+`regie_instagram`, `regie_pinterest`, `regie_linkedin`, `regie_tiktok`,
+`regie_ga4` — pass them as `color`, `colors` or `category_colors`.
 
 `*` = required. Series and segments default to the theme's `series_1…6`
 roles.

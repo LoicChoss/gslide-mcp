@@ -133,7 +133,7 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.2.0.mcpb
 | **QA** | `screenshot` | Capture a slide as an inline image |
 | | `screenshot_range` | Capture a range of slides |
 | | `overlap_check` | Detect overlapping elements on a slide |
-| **Components** | `list_components` | Catalogue of 50 themed components (KPI, cards, callouts, badges, pills, numbered lists, agenda, big numbers, phase cards, compare / before-after panels, quote, table, heatmap, bar / line / stacked / combo charts, pie, donut, gauge, target, funnel, timeline, process, hub & spoke, tree, flowchart, stack, matrices, team and logo grids, Google-result / browser / laptop / phone mockups) plus themes and the assets folder |
+| **Components** | `list_components` | Catalogue of 62 themed components (KPI, cards, callouts, badges, pills, numbered lists, agenda, big numbers, phase cards, compare / before-after panels, quote, table, heatmap, bar / grouped / line / stacked / combo charts, mini charts, pie, donut, donut rows, gauge, target, funnel, timeline, milestone arrow, process, hub & spoke, tree, flowchart, stack, matrices, team and logo grids, media-bilan blocks (analysis, source note, stat boxes, takeaways, ad scoreboard, gallery, media plan), Google-result / browser / laptop / phone mockups) plus themes and the assets folder |
 | | `insert_component` | Render a component at a position — one atomic batch, grouped as one element |
 | | `draw` | Primitive ops (box, text runs with `==highlight==`, arrowed lines, polyline, arc, ring, table, image from URL or assets folder) in one batch |
 | | `save_component` | Freeze a JSON recipe as a reusable component |
@@ -152,7 +152,7 @@ Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`, `idempote
 
 ## Components and themes
 
-Slides has no design system, so this server carries one: a **theme** (palette, roles, font, named text styles — `periscope` and `default` ship, add yours in `~/.gslides-mcp/themes/`) and **components** that only speak in roles and style names, rendered as native shapes in one `batchUpdate`. Charts included — bars, lines and donuts are drawn with shapes, no images and no linked Sheets. Pictos, logos and screenshots (card icons, browser and laptop mockups) come from one shared Drive folder — `GSLIDES_MCP_ASSETS_FOLDER` — where a local file is uploaded once and tinted variants are generated per theme. When no component fits, `draw` gives the primitives, and `save_component` turns a sketch into a reusable JSON recipe. Guide: [docs/components.md](docs/components.md).
+Slides has no design system, so this server carries one: a **theme** (palette, roles, font, named text styles — `periscope` and `default` ship, add yours in `~/.gslides-mcp/themes/`) and **components** that only speak in roles and style names, rendered as native shapes in one `batchUpdate`. Charts included — bars, grouped bars, lines, combos and donuts are drawn with shapes in the quiet style of the agency's PPTX bilans (light grid, thin lines, legend on top), no images and no linked Sheets; régie colours (`regie_google`, `regie_meta`…) are theme roles. Pictos, logos and screenshots (card icons, browser and laptop mockups) come from one shared Drive folder — `GSLIDES_MCP_ASSETS_FOLDER` — where a local file is uploaded once and tinted variants are generated per theme. When no component fits, `draw` gives the primitives, and `save_component` turns a sketch into a reusable JSON recipe. Guide: [docs/components.md](docs/components.md).
 
 ## Claude Code skill: `gslides-prez`
 

@@ -2,6 +2,22 @@
 
 All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/) (0.x: minor bumps may change tool signatures).
 
+## [Unreleased]
+
+### Added
+
+- **Bilan média components** — `chart_grouped` (N / N-1 side by side, one tint per régie via `category_colors`), `mini_charts` (small multiples), `donut_row`, `analysis_block` (« Notre analyse : » + chevrons), `source_note`, `stat_box`, `takeaways`, `placeholder`, `ad_scoreboard` (transposed results-per-ad table with thumbnails or dashed « à déposer » frames), `gallery`, `media_plan` (« Rappel du dispositif » with régie logos and objective panel), `timeline_arrow` (milestones on a thick arrow).
+- **Régie colours** as theme roles (`regie_google`, `regie_bing`, `regie_meta`, `regie_facebook`, `regie_instagram`, `regie_pinterest`, `regie_linkedin`, `regie_tiktok`, `regie_ga4`) in `periscope` and `default`; `Theme.tint(color, amount)` and `Theme.is_dark(color)` helpers; `chart_grid` / `chart_axis` roles.
+- `kpi.note` (small muted precision after the label, « Collecte (GA4) »); `kpi_grid.rows` (bold row labels on the left: « Marque » / « Hors marque »).
+- `table.icons` (picto column in front), `table.delta_cols` (« vs N-1 » cells coloured by sign), `table.row_heights`.
+- `chart_bars.colors` (one colour per bar); `donut.labels` (percentages on the segments) and `donut.legend_pos` (`bottom`); `title` and `panel` props on every chart (centred caption, rounded `surface` panel).
+- `draw`: `box.line.dash` (dashed outlines), `table.row_heights` (per-row heights).
+
+### Changed
+
+- **Chart style aligned on the PPTX bilans**: grid 0.5 pt (`chart_grid`), baseline 1 pt (`chart_axis`, no ink axis), lines 1.5 pt, markers 4 pt, legend swatches 8 pt; `chart_combo` puts its legend on top (`legend_pos`) and shows values and markers automatically up to 12 points (`show_values` / `markers` = `auto`); dense category labels are thinned so a 31-day axis stays readable. `chart_line` and `chart_stacked` gain `legend_pos`.
+- French number formatting keeps up to two decimals (`1,95`, `3,9`) instead of one.
+
 ## [0.2.0] — 2026-09-15
 
 ### Added
