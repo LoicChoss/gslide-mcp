@@ -36,7 +36,7 @@ def test_periscope_theme_ships_with_roles_and_styles():
         assert role in t.roles, role
     for style in ("title", "body", "label", "caption", "kpi_value", "kpi_label", "card_big", "table_header", "table_cell"):
         assert style in t.text_styles, style
-    assert t.color("accent")["green"] == pytest.approx(0.965, abs=0.01)   # #00F6B5
+    assert t.color("accent")["green"] == pytest.approx(0.961, abs=0.01)   # #00F5B5
     assert t.color("ink")["blue"] == pytest.approx(0.235, abs=0.01)       # #002B3C
 
 
@@ -90,6 +90,7 @@ def test_regie_roles_resolve_in_every_theme():
             t.color(role)
     p = themes.load("periscope")
     assert p.color("regie_google") == p.color("#00E5C3")
+    assert "orange" not in p.colors and p.color("negative") == p.color("coral")  # every chart colour is a charter colour
     assert p.color("regie_facebook") == p.color("regie_meta") == p.color("#FA00A6")
 
 
