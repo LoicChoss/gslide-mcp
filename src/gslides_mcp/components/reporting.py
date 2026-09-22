@@ -126,10 +126,10 @@ def _stat_box(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[di
     ops: list[dict] = []
     for i, b in enumerate(boxes):
         ops.append({"op": "box", "x": x, "y": 0, "w": bw, "h": bh, "fill": None, "line": {"color": "accent", "weight": 1.5}, "role": "stat_box"})
-        ops.append({"op": "text", "x": x, "y": bh / 2 - 26, "w": bw, "h": 30, "text": str(b.get("value", "")), "style": "kpi_value",
+        ops.append({"op": "text", "x": x, "y": bh / 2 - 30, "w": bw, "h": 30, "text": str(b.get("value", "")), "style": "kpi_value",
                     "size": 22, "align": "CENTER", "valign": "BOTTOM", "role": "value"})
-        ops.append({"op": "text", "x": x + 4, "y": bh / 2 + 2, "w": bw - 8, "h": bh / 2 - 4, "text": str(b.get("label", "")),
-                    "style": "label", "align": "CENTER", "role": "label"})
+        ops.append({"op": "text", "x": x + 4, "y": bh / 2, "w": bw - 8, "h": bh / 2 - 10, "text": str(b.get("label", "")),
+                    "style": "label", "align": "CENTER", "role": "label"})  # 10 pt of air under the label
         x += bw
         if i < n - 1:
             ops.append({"op": "text", "x": x, "y": bh / 2 - 16, "w": op_w, "h": 32, "text": str(p["operator"]), "style": "label",
@@ -145,7 +145,7 @@ register(Component(
         Prop("boxes", "list", "Boîtes : {value, label}.", required=True),
         Prop("operator", "str", "Signe entre les boîtes (=, →, ×, +).", default="="),
         Prop("box_w", "number", "Largeur d'une boîte.", default=130),
-        Prop("box_h", "number", "Hauteur d'une boîte.", default=72),
+        Prop("box_h", "number", "Hauteur d'une boîte.", default=84),
     ],
     render=_stat_box,
     example={"boxes": [{"value": "63 %", "label": "Acceptation des cookies"}, {"value": "63 %", "label": "Des données sont remontées"}]},
