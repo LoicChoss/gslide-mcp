@@ -346,7 +346,7 @@ def _media_plan(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[
         for label, key in ((p["budget_label"], "budget"), (p["dates_label"], "dates")):
             if lv.get(key):
                 ops.append({"op": "text", "x": 16, "y": y, "w": left_w - 16, "h": 12 + INSETS,
-                            "runs": [[{"text": str(label)}, {"text": str(lv[key]), "bold": True}]], "style": "body", "size": 10.5,
+                            "runs": [[{"text": str(label)}, {"text": str(lv[key]), "bold": True}]], "style": "body",
                             "role": "detail"})
                 y += 16
         y += 12
