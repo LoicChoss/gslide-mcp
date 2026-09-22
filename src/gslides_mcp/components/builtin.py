@@ -30,8 +30,16 @@ def _text_height(text: str, width: float, size: float) -> float:
     return _wrapped_lines(text, width, size) * size * LEADING + INSETS
 
 
+GLYPH_WRAP = 0.485  # wrap estimate, calibrated on Barlow in the editor (11 pt: « % impressions » needs 68 pt)
+
+
 def _wrapped_lines(text: str, width: float, size: float) -> int:
-    """Lines a text will take once wrapped in ``width`` pt (insets excluded)."""
+    """Lines a text will take once wrapped in ``width`` pt (insets excluded).
+
+    Greedy word wrap, like the renderer: a word that does not fit moves whole
+    to the next line, so « % impressions perdues » in a narrow column counts
+    three lines, not two.
+    """
     total = 0
     for raw in str(text).split("\n"):
         line = raw.strip()
@@ -39,8 +47,16 @@ def _wrapped_lines(text: str, width: float, size: float) -> int:
         if line.startswith(("- ", "* ", "• ")):
             line = line[2:]
             avail -= BULLET_INDENT
-        per_line = max(1, int(avail / (size * GLYPH)))
-        total += max(1, -(-len(line) // per_line))
+        per_char = size * GLYPH_WRAP
+        lines, used = 1, 0.0
+        for word in line.split(" "):
+            ww = len(word) * per_char
+            if used and used + per_char + ww > avail:
+                lines += 1
+                used = ww
+            else:
+                used += (per_char if used else 0.0) + ww
+        total += lines
     return max(1, total)
 
 
@@ -63,7 +79,7 @@ def _nice_max(values: list[float]) -> float:
 
 # --- kpi ------------------------------------------------------------------------
 
-KPI_VALUE_SIZE = 28.0
+KPI_VALUE_SIZE = 22.0
 KPI_VALUE_MIN = 16.0
 
 
@@ -73,42 +89,50 @@ def _kpi_value_size(value: str, w: float) -> float:
     return min(KPI_VALUE_SIZE, max(KPI_VALUE_MIN, avail / max(1, len(str(value)) * 0.58)))
 
 
-def _kpi_label_h(p: dict, w: float) -> float:
+def _kpi_label_h(p: dict, w: float, size: float = 11.0) -> float:
     """Height of the label box once wrapped in the column (note included)."""
-    lines = _wrapped_lines(str(p["label"]) + (" " + str(p["note"]) if p.get("note") else ""), w - PAD, 11)
-    return 18.0 + (lines - 1) * 11 * LEADING
+    lines = _wrapped_lines(str(p["label"]) + (" " + str(p["note"]) if p.get("note") else ""), w - PAD, size)
+    return size * 1.2 + 4 + (lines - 1) * size * LEADING
 
 
 def _kpi(p: dict, theme: Theme, w: float, h: float | None, value_size: float | None = None,
-         label_h: float | None = None, delta_row: bool | None = None) -> tuple[list[dict], float]:
+         label_h: float | None = None, delta_row: bool | None = None, text_size: float = 11.0) -> tuple[list[dict], float]:
     """One KPI. ``value_size``, ``label_h`` and ``delta_row`` are set by ``kpi_grid`` so
     every KPI of a grid shares the same geometry: values on one baseline, labels on one
     line, bars of one height, deltas on one line."""
     fg = {"color": "on_dark"} if p["dark"] else {}
     value = str(p["value"])
     size = value_size or _kpi_value_size(value, w)
-    # value, label and delta are stacked tight, and the accent bar spans all three
-    value_h = round(size * 1.25 + INSETS, 1)
-    value_op: dict = {"op": "text", "x": PAD, "y": -3, "w": w - PAD, "h": value_h, "text": value, "style": "kpi_value", "role": "value",
-                      "valign": "BOTTOM", **fg}
-    if size < KPI_VALUE_SIZE:
-        value_op.update({"size": round(size, 1), "small_ok": True})
-    label_h = label_h or _kpi_label_h(p, w)
-    label_y = value_h - 6
-    label: dict = {"op": "text", "x": PAD, "y": label_y, "w": w - PAD, "h": label_h, "style": "kpi_label", "role": "label", **fg}
+    # value, label and delta are stacked tight (the PPTX bilan look), the accent bar spans all three
+    value_h = round(size * 1.2 + INSETS, 1)
+    value_op: dict = {"op": "text", "x": PAD, "y": -4, "w": w - PAD, "h": value_h, "text": value, "style": "kpi_value", "role": "value",
+                      "size": round(size, 1), "valign": "BOTTOM", **fg}
+    if size < 16:
+        value_op["small_ok"] = True
+    label_h = label_h or _kpi_label_h(p, w, text_size)
+    label_y = value_h - 9
+    small = text_size < 11  # kpi_grid with row labels: label and delta may go under the floor, the value stays big
+    label: dict = {"op": "text", "x": PAD, "y": label_y, "w": w - PAD, "h": label_h, "style": "kpi_label", "size": text_size,
+                   "role": "label", **fg}
     if p.get("note"):
-        # « Collecte (GA4) » : the precision in small muted type after the label
-        label["runs"] = [[{"text": str(p["label"])}, {"text": " " + str(p["note"]), "size": 10, "color": "muted"}]]
-    else:
+        # « Collecte GA4 » : the precision in small muted type after the label, same line
+        label["runs"] = [[{"text": str(p["label"])}, {"text": " " + str(p["note"]), "size": round(text_size - 2, 1), "color": "muted"}]]
+        small = True  # the note is two points under the label
+    if small:
+        label["small_ok"] = True
+    if not p.get("note"):
         label["text"] = str(p["label"])
     height = label_y + label_h - 2
     ops: list[dict] = [value_op, label]
     if p["delta"]:
         sign = "positive" if str(p["delta"]).strip().startswith("+") else "negative"
-        ops.append({"op": "text", "x": PAD, "y": height - 4, "w": w - PAD, "h": 16, "text": str(p["delta"]),
-                    "style": "kpi_delta", "color": sign, "role": "delta"})
+        delta: dict = {"op": "text", "x": PAD, "y": height - 4, "w": w - PAD, "h": text_size * 1.2 + INSETS, "text": str(p["delta"]),
+                       "style": "kpi_delta", "size": text_size, "color": sign, "role": "delta"}
+        if small:
+            delta["small_ok"] = True
+        ops.append(delta)
     if p["delta"] or delta_row:
-        height += 14
+        height += text_size * 1.2 + 2
     ops.insert(0, {"op": "box", "x": 0, "y": 0, "w": 5, "h": height, "fill": "accent", "role": "bar"})
     return ops, h or height
 
@@ -127,12 +151,13 @@ register(Component(
 
 
 ROW_LABEL_W = 90.0  # kpi_grid: width of the row-label column
+KPI_MAX_COLS = 4     # more KPIs wrap onto the next row (two rows fill a slide)
 
 
 def _kpi_grid(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     items = p["items"]
     rows = [str(r) for r in (p["rows"] or [])]
-    cols = int(p["cols"] or (-(-len(items) // len(rows)) if rows else len(items)) or 1)
+    cols = min(KPI_MAX_COLS, int(p["cols"] or (-(-len(items) // len(rows)) if rows else len(items)) or 1))
     x0 = ROW_LABEL_W if rows else 0.0
     col_w = (w - x0) / cols
     specs = [{"value": item.get("value", ""), "label": item.get("label", ""), "note": item.get("note"),
@@ -140,9 +165,11 @@ def _kpi_grid(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[di
     # one geometry for the whole grid: the narrowest value sets the size, the longest label
     # the label height, any delta reserves the delta line — so every row aligns KPI to KPI
     size = min((_kpi_value_size(str(sp["value"]), col_w - 12) for sp in specs), default=KPI_VALUE_SIZE)
-    label_h = max((_kpi_label_h(sp, col_w - 12) for sp in specs), default=18.0)
+    text_size = 9.5 if rows else 11.0  # with row labels the columns are narrower: smaller label and delta, same big value
+    label_h = max((_kpi_label_h(sp, col_w - 12, text_size) for sp in specs), default=18.0)
     delta_row = any(sp["delta"] for sp in specs)
-    rendered = [_kpi(sp, theme, col_w - 12, None, value_size=size, label_h=label_h, delta_row=delta_row) for sp in specs]
+    rendered = [_kpi(sp, theme, col_w - 12, None, value_size=size, label_h=label_h, delta_row=delta_row, text_size=text_size)
+                for sp in specs]
     # rows never overlap: the gap grows with the row height (wrapped label + delta)
     row_gap = max(float(p["row_gap"]), max((sh for _, sh in rendered), default=0.0) + 12)
     ops: list[dict] = []
@@ -161,7 +188,7 @@ register(Component(
     name="kpi_grid", description="Grille de KPI (composant kpi répété en colonnes), avec en option un libellé de ligne à gauche (Marque / Hors marque).",
     props=[
         Prop("items", "list", "Liste de {value, label, delta?, note?}.", required=True),
-        Prop("cols", "number", "Nombre de colonnes (défaut : un par item, ou items / rows)."),
+        Prop("cols", "number", "Nombre de colonnes, 4 au plus (défaut : un par item, ou items / rows) ; au-delà, les KPI passent à la ligne, deux lignes par slide."),
         Prop("rows", "list", "Libellés de ligne en gras à gauche, un par rangée ; cols = indicateurs par rangée."),
         Prop("row_gap", "number", "Hauteur d'une rangée en pt.", default=90),
         Prop("dark", "bool", "Texte clair pour fond sombre.", default=False),
@@ -708,10 +735,14 @@ def _donut(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
             pct = round(100 * c["value"] / total)
             if pct >= 6:
                 t = math.radians(a + span / 2)
-                lx, ly = cx + rm * math.cos(t), cy + rm * math.sin(t)
-                ops.append({"op": "text", "x": lx - 20, "y": ly - 9, "w": 40, "h": 18, "text": f"{pct} %", "style": "chart_value",
-                            "size": 10, "color": "on_dark" if theme.is_dark(c["color"]) else "ink", "align": "CENTER",
-                            "valign": "MIDDLE", "role": "segment_label"})
+                text = f"{pct} %"
+                need = len(text) * 10 * 0.55 + 4
+                inside = math.radians(span) * rm >= need and thickness >= 12
+                rl = rm if inside else r + 12
+                lx, ly = cx + rl * math.cos(t), cy + rl * math.sin(t)
+                ops.append({"op": "text", "x": lx - 20, "y": ly - 9, "w": 40, "h": 18, "text": text, "style": "chart_value",
+                            "size": 10, "color": ("on_dark" if theme.is_dark(c["color"]) else "ink") if inside else "ink",
+                            "align": "CENTER", "valign": "MIDDLE", "role": "segment_label"})
             a += span
     if legend and pos == "right":
         lx = d + 16

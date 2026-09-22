@@ -41,13 +41,11 @@ def test_source_note_caption_right_aligned_with_platform_line():
     ops, height = _render("source_note", {"text": "Google Ads du 01/12/2025 au 31/12/2025", "platform": "Google Ads"}, w=300)
     (src,) = _of(ops, "text", "source")
     assert src["text"] == "* Sources : Google Ads du 01/12/2025 au 31/12/2025" and src["align"] == "END" and src["italic"]
-    (plat,) = _of(ops, "text", "platform")
-    assert plat["text"] == "Google Ads" and plat["y"] > src["y"] and plat["color"] == "muted"
-    assert height == pytest.approx(plat["y"] + plat["h"])
-    logo, _ = _render("source_note", {"text": "* Sources : CMP", "logo": "google-ads", "platform": "Google Ads", "align": "START"}, w=300)
-    assert _of(logo, "text", "source")[0]["text"] == "* Sources : CMP"
+    assert len([o for o in ops if o["op"] == "text"]) == 1 and height == src["h"]  # one line only
+    logo, _ = _render("source_note", {"text": "* Sources : CMP", "logo": "google-ads", "platform": "Commanders Act", "align": "START"}, w=300)
+    assert _of(logo, "text", "source")[0]["text"] == "* Sources : CMP · Commanders Act"
     (img,) = _of(logo, "image")
-    assert img["asset"] == "google-ads" and _of(logo, "text", "platform")[0]["x"] > img["x"]
+    assert img["asset"] == "google-ads" and _of(logo, "text", "source")[0]["x"] > img["x"]
 
 
 def test_stat_box_outlined_figures_with_an_operator():

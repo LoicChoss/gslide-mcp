@@ -80,33 +80,30 @@ def _source_note(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list
     if not text.lower().startswith(("*", "source")):
         text = "* Sources : " + text
     align = p["align"]
-    ops: list[dict] = [{"op": "text", "x": 0, "y": 0, "w": w, "h": 12 + INSETS, "text": text, "style": "caption", "size": 10,
-                        "italic": True, "align": align, "role": "source"}]
+    name = str(p["platform"] or "").strip()
+    if name and name.lower() not in text.lower():
+        text += " · " + name  # one line only: the platform joins the source text
     height = 12.0 + INSETS
-    if p["platform"] or p["logo"]:
-        y = height + 2
-        name = str(p["platform"] or "")
-        tw = len(name) * 5.6 + 2 * INSET_X
-        lw = 14.0 if p["logo"] else 0.0
-        total = lw + (4 if p["logo"] else 0) + tw
-        x = (w - total) if align == "END" else (w - total) / 2 if align == "CENTER" else 0.0
-        if p["logo"]:
-            ops.append({"op": "image", "x": x, "y": y + 3, "w": lw, "h": lw, "asset": str(p["logo"]), "contain": True, "role": "logo",
-                        **({"tint": p["tint"]} if p["tint"] else {})})
-            x += lw + 4
-        if name:
-            ops.append({"op": "text", "x": x, "y": y, "w": tw, "h": 12 + INSETS, "text": name, "style": "caption", "size": 10,
-                        "color": "muted", "align": align if not p["logo"] else "START", "role": "platform"})
-        height = y + 12 + INSETS
+    ops: list[dict] = []
+    tx, tw = 0.0, w
+    if p["logo"]:
+        lw = 14.0
+        need = len(text) * 4.4 + 2 * INSET_X
+        lx = max(0.0, w - need - lw - 4) if align == "END" else 0.0
+        ops.append({"op": "image", "x": lx, "y": 3, "w": lw, "h": lw, "asset": str(p["logo"]), "contain": True, "role": "logo",
+                    **({"tint": p["tint"]} if p["tint"] else {})})
+        tx, tw = lx + lw + 4, w - lx - lw - 4
+    ops.append({"op": "text", "x": tx, "y": 0, "w": tw, "h": height, "text": text, "style": "caption", "size": 10,
+                "italic": True, "align": align, "role": "source"})
     return ops, h or height
 
 
 register(Component(
     name="source_note",
-    description="Mention de source en petit italique (« * Sources : Google Ads du … au … »), alignée à droite, avec la plateforme (logo + nom) en dessous.",
+    description="Mention de source sur une ligne en petit italique (« * Sources : Google Ads du … au … »), alignée à droite, logo de la plateforme devant en option.",
     props=[
         Prop("text", "str", "Sources et période ; le préfixe « * Sources : » est ajouté s'il manque.", required=True),
-        Prop("platform", "str", "Nom de la plateforme affiché en dessous (Google Ads, Google Analytics)."),
+        Prop("platform", "str", "Nom de la plateforme, ajouté en fin de ligne s'il n'est pas déjà dans le texte."),
         Prop("logo", "image", "Logo de la plateforme (asset) devant le nom."),
         Prop("align", "choice", "Alignement.", default="END", choices=["START", "CENTER", "END"]),
         Prop("tint", "color", "Teinte du logo (pictos blancs du dossier d'assets)."),

@@ -72,7 +72,7 @@ def test_kpi_bar_value_label_and_signed_delta():
     texts = _of(ops, "text")
     assert [t["style"] for t in texts] == ["kpi_value", "kpi_label", "kpi_delta"]
     assert texts[2]["color"] == "negative"
-    assert height > 60
+    assert height > 45
     ops, _ = _render("kpi", {"value": "12", "label": "x", "delta": "+3 %"})
     assert _of(ops, "text")[2]["color"] == "positive"
 

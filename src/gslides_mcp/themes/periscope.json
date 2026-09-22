@@ -133,7 +133,7 @@
       "color": "muted"
     },
     "kpi_value": {
-      "size": 28,
+      "size": 22,
       "bold": true,
       "color": "ink"
     },

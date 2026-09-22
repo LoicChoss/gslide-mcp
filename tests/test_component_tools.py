@@ -44,7 +44,7 @@ def test_insert_component_offsets_groups_and_reports(fake_slides):
     assert grp["childrenObjectIds"] == out["element_ids"]
     assert out["group_id"] == grp["groupObjectId"]
     assert out["component"] == "kpi" and out["theme"] == "periscope"
-    assert 60 <= out["height_pt"] <= 80 and out["slide_id"] == "slide_1"
+    assert 45 <= out["height_pt"] <= 80 and out["slide_id"] == "slide_1"
     assert out["requests"] == len(batch)
 
 

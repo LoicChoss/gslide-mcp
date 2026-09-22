@@ -73,7 +73,7 @@ def test_text_rules_floor_sizes_except_tables():
     assert t.text_style("caption", size=7)["size"] == 10     # labels never under 10 pt
     assert t.text_style("table_cell", size=9)["size"] == 9   # tables keep their charter size
     assert t.text_style(None, size=8)["size"] == 11
-    assert t.text_style("kpi_value")["size"] == 28           # nothing shrinks
+    assert t.text_style("kpi_value")["size"] == 22           # nothing shrinks
     for name, st in t.text_styles.items():
         floor = t.size_floor(name)
         assert floor is None or st["size"] >= floor, name
