@@ -87,30 +87,29 @@ def _kpi(p: dict, theme: Theme, w: float, h: float | None, value_size: float | N
     fg = {"color": "on_dark"} if p["dark"] else {}
     value = str(p["value"])
     size = value_size or _kpi_value_size(value, w)
-    # the value sits on the bottom of its box whatever its size, so a row shares one baseline
-    value_op: dict = {"op": "text", "x": PAD, "y": -3, "w": w - PAD, "h": 36, "text": value, "style": "kpi_value", "role": "value",
+    # value, label and delta are stacked tight, and the accent bar spans all three
+    value_h = round(size * 1.25 + INSETS, 1)
+    value_op: dict = {"op": "text", "x": PAD, "y": -3, "w": w - PAD, "h": value_h, "text": value, "style": "kpi_value", "role": "value",
                       "valign": "BOTTOM", **fg}
     if size < KPI_VALUE_SIZE:
         value_op.update({"size": round(size, 1), "small_ok": True})
     label_h = label_h or _kpi_label_h(p, w)
-    label: dict = {"op": "text", "x": PAD, "y": 36, "w": w - PAD, "h": label_h, "style": "kpi_label", "role": "label", **fg}
+    label_y = value_h - 6
+    label: dict = {"op": "text", "x": PAD, "y": label_y, "w": w - PAD, "h": label_h, "style": "kpi_label", "role": "label", **fg}
     if p.get("note"):
         # « Collecte (GA4) » : the precision in small muted type after the label
         label["runs"] = [[{"text": str(p["label"])}, {"text": " " + str(p["note"]), "size": 10, "color": "muted"}]]
     else:
         label["text"] = str(p["label"])
-    height = 36.0 + label_h + 7
-    ops: list[dict] = [
-        {"op": "box", "x": 0, "y": 0, "w": 5, "h": height, "fill": "accent", "role": "bar"},
-        value_op,
-        label,
-    ]
+    height = label_y + label_h - 2
+    ops: list[dict] = [value_op, label]
     if p["delta"]:
         sign = "positive" if str(p["delta"]).strip().startswith("+") else "negative"
-        ops.append({"op": "text", "x": PAD, "y": height - 3, "w": w - PAD, "h": 16, "text": str(p["delta"]),
+        ops.append({"op": "text", "x": PAD, "y": height - 4, "w": w - PAD, "h": 16, "text": str(p["delta"]),
                     "style": "kpi_delta", "color": sign, "role": "delta"})
     if p["delta"] or delta_row:
-        height += 15
+        height += 14
+    ops.insert(0, {"op": "box", "x": 0, "y": 0, "w": 5, "h": height, "fill": "accent", "role": "bar"})
     return ops, h or height
 
 

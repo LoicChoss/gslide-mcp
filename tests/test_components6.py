@@ -231,7 +231,7 @@ def test_kpi_grid_rows_add_a_label_column_and_pass_notes():
     assert len(bars) == 6 and bars[0]["x"] >= 90 and bars[3]["y"] > bars[0]["y"]
     assert row_labels[1]["y"] < bars[3]["y"] + 61 and row_labels[1]["y"] + row_labels[1]["h"] > bars[3]["y"]
     notes = [o for o in ops if o["op"] == "text" and "runs" in o]
-    assert len(notes) == 1 and height > 150
+    assert len(notes) == 1 and height > 120
 
 
 def test_table_icons_column_and_delta_columns():

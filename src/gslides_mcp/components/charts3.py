@@ -13,7 +13,7 @@ from ..themes import Theme
 from . import Component, Prop, register, shift, validate, get
 from .axes import (FRAME_PROPS, LEGEND_H, auto, axis_width, baseline_op, fmt_value, inner_width, legend_ops, panelize,
                    thin_labels, value_label, y_axis_ops)
-from .builtin import INSETS, _chart_bars, _donut, _frame_h, _nice_max
+from .builtin import INSET_X, INSETS, _chart_bars, _donut, _frame_h, _nice_max
 
 TINT_STEP = 0.55  # how much whiter each further series gets when categories carry the colour
 
@@ -78,15 +78,15 @@ def _chart_grouped(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
 
     height = (h - _frame_h(p)) if h else 200.0
     ml = axis_width(vmax, unit) + 6 if p["y_axis"] else 0.0
-    top = (value_h + 2 if show_values else 4.0) + (legend_h if pos == "top" else 0.0)
+    top = ((2 * value_h - 7) if (show_values and m > 1) else (value_h + 2) if show_values else 4.0) + (legend_h if pos == "top" else 0.0)
     bottom = 30.0 + (legend_h if pos == "bottom" else 0.0)
     px, pw = ml, w_in - ml
     py, ph = top, height - top - bottom
     slot = pw / max(n, 1)
     inner = slot * 0.72
     bw = (inner - (m - 1) * 2) / m
-    if str(p["show_values"]).lower() == "auto" and bw < 40:
-        show_values = False  # paired values would touch: no value over narrow bars
+    need = max((len(fmt_value(v, unit)) for row in values for v in row), default=1) * 10 * 0.5 + 2 * INSET_X
+    stagger = show_values and m > 1 and bw + 2 < need  # neighbouring values would touch: lift every other series
     if pos == "top":
         ops += legend_ops(entries, px, 0, pw, "top")[0]
     if p["y_axis"]:
@@ -101,7 +101,8 @@ def _chart_grouped(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
             x = gx + k * (bw + 2)
             ops.append({"op": "box", "x": x, "y": py + ph - bh, "w": bw, "h": bh, "fill": fill(k, i), "role": "bar", "series": k})
             if show_values:
-                ops.append(value_label(x + bw / 2, py + ph - bh - value_h + 3, bw + 2, fmt_value(v, unit), value_h))
+                lift = (value_h - 9) * (k % 2) if stagger else 0.0
+                ops.append(value_label(x + bw / 2, py + ph - bh - value_h + 3 - lift, bw + 2, fmt_value(v, unit), value_h))
         if shown[i]:
             lw = max(slot, 56.0)
             ops.append({"op": "text", "x": px + (i + 0.5) * slot - lw / 2, "y": py + ph + 3, "w": lw, "h": 26 + INSETS, "text": lb,
@@ -122,7 +123,7 @@ register(Component(
         Prop("unit", "str", "Unité des valeurs, ex. '€'."),
         Prop("max", "number", "Échelle (défaut : arrondi au-dessus du max)."),
         Prop("y_axis", "bool", "Axe Y gradué avec grille (vertical).", default=True),
-        Prop("show_values", "str", "Valeurs sur les barres : 'auto' (jusqu'à 12 barres), true, false.", default="auto"),
+        Prop("show_values", "str", "Valeurs sur chaque barre (décalées en hauteur quand deux barres voisines sont étroites) : true, false, 'auto' (jusqu'à 12 barres).", default="true"),
         Prop("legend_pos", "choice", "Position de la légende.", default="top", choices=["top", "bottom", "none"]),
         Prop("bar_h", "number", "Hauteur d'une barre (horizontal).", default=12),
         *FRAME_PROPS,
