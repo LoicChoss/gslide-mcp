@@ -67,6 +67,20 @@ Charter values to feed the theme: `#002B3C` navy, `#FFFFFF` white, `#EDEDED` gra
 `#E8FF00` acid, `#00F5B5` mint, `#45DBFF` cyan, `#FF9170` coral, `#FA00A6` magenta,
 `#9E38FF` violet (the `periscope` theme of this server, `themes/periscope.json`).
 
+## Verified live (2026-09-22)
+
+A spreadsheet created with the charter as `spreadsheetTheme` (Barlow, navy text, the
+six accents) and three charts built with the raw Sheets API (doughnut with `pieHole`
+0.55, two-series `COLUMN` with `colorStyle` navy / grey and data labels, `COMBO` bars
++ line on `RIGHT_AXIS`) embedded linked on a slide, listed and refreshed: all good,
+Barlow and colours honoured. Two findings:
+
+- Pie / doughnut slices start at **ACCENT2** of the theme, not ACCENT1 (Google, the
+  first slice, took ACCENT2). Order the theme accents with that in mind, or set the
+  colours per series where the API allows it (basic charts).
+- Slides keeps the chart's aspect ratio inside the box (a 600 × 371 px chart in a
+  200 × 160 pt box renders 200 × 124, centred): size the box to the chart's ratio.
+
 ## Sizing on a 960 × 540 pt Periscope slide
 
 Full-width chart under a title: `x_pt=40, y_pt=110, width_pt=880, height_pt=380`.
