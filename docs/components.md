@@ -128,6 +128,31 @@ Bilan média (reporting régies + GA4; reference: the agency's generated PPTX bi
 | `media_plan` | `levers*` `[{name, logos, budget, dates}]`, `objective` `{title, items}`, `heading`, `budget_label`, `dates_label`, `split`, `tint` | « Rappel du dispositif »: accent dot, uppercase lever name, régie logos, bold budget and dates; accent « Objectif à atteindre » panel with chevrons on the right. |
 | `timeline_arrow` | `events*` `[{date, text, style (filled | outline | dashed), above}]`, `box_w`, `box_h`, `connector`, `alternate` | Thick accent arrow, dated boxes alternating below / above joined by a thin connector. |
 
+Design system (brand, from the Periscope design system v1.0):
+
+| Name | Props | Notes |
+|---|---|---|
+| `button` | `text*`, `ground` (`white` `dark` `cyan` `yellow`), `variant` (`filled` `outline`), `color`, `size` | Pill button that follows its ground: filled dark on white, outlined white (or `color: accent`) on dark, filled dark on cyan / yellow. |
+| `button_row` | `items*` (text or `{text, variant, ground, color}`), `ground`, `variant`, `gap`, `align`, `size` | Primary + secondary CTAs side by side. |
+| `hashtags` | `items*`, `dark`, `color`, `size`, `align` | Plain uppercase hashtags, no chip, no fill; accent on a dark ground. |
+| `eyebrow` | `text*`, `tracking`, `dark`, `color`, `size`, `align` | Tracked uppercase label (thin spaces between letters: Slides has no letter spacing). |
+| `content_card` | `ground`, `eyebrow`, `title*` (markdown), `text` (markdown), `tags`, `cta`, `cta_variant` | Editorial card on one of the grounds: tracked eyebrow, title, text, inline hashtags, pill CTA following the ground. |
+| `content_cards` | `cards*` (content_card props), `cols`, `gap` | Row of content cards, heights equalised, CTAs pinned to the bottom. |
+| `section_header` | `title*` (markdown, `==…==` highlighted), `eyebrow`, `text`, `tags`, `highlight` (`highlight_alt`), `size`, `dark`, `align` | The signature section opener: eyebrow, yellow-highlighted title, paragraph, hashtags. |
+| `client_ticker` | `names*`, `dark`, `separator`, `size`, `pad` | Text-only client band, bold names separated by accent dots on a dark band. |
+| `do_dont` | `pairs*` `[{do, dont, do_note, dont_note}]`, `do_label`, `dont_label`, `gap` | ✓ / ✕ pairs of quoted copy with a note, on `success_bg` / `danger_bg`. |
+
+Pixel icons: `scripts/make_pixel_icons.py` writes the design-system pixel-art set
+(`assets/pixel-icons/px-envelope.png`, `px-heart`, `px-chat`, `px-chart`,
+`px-arrow-out`, `px-play`, `px-leaf`, `px-cursor`, `px-spark`, `px-chevron`,
+`px-submarine`) as white-on-transparent PNGs; once uploaded to the assets folder
+they work like any picto (`card.icon`, `logo_wall`, `draw` image ops, tinted by the
+theme). Keep them decorative and between 48 and 120 pt, as the design system says.
+
+Section rhythm (design-system rule, for `build_from_outline` plans): alternate light,
+accent, light, dark — never two coloured slides in a row; cyan and yellow never share
+a slide.
+
 Chart style (all charts): grid 0.5 pt in `chart_grid`, baseline 1 pt in
 `chart_axis`, lines 1.5 pt, markers 4 pt, legend swatches 8 pt. `title`
 draws a centred caption above; `panel` wraps the chart in a rounded

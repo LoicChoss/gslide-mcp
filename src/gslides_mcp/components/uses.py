@@ -87,4 +87,15 @@ USES: dict[str, str] = {
     "gallery": "Captures d'annonces ou visuels côte à côte à ratio fixe, avec cases « à déposer » tant qu'il n'y a pas d'image ; logos → logo_wall ; capture dans un cadre matériel → phone, laptop, browser.",
     "media_plan": "La slide « Rappel du dispositif et objectifs » d'un bilan : leviers avec logos régies, ordre d'insertion, dates, et panneau objectif ; pour un budget par levier en tableau → table.",
     "timeline_arrow": "Les temps forts d'une campagne sur une flèche (bascules, ajouts, coupures) en boîtes datées alternées ; pour un planning par phases → timeline ; pour des phases détaillées → phase_cards.",
+
+    # --- design system (marque) ---------------------------------------------------------
+    "button": "Un CTA pilule qui suit son fond (plein dark sur blanc, contour blanc ou cyan sur dark, plein dark sur cyan / jaune) ; plusieurs côte à côte → button_row ; une capsule de libellé sans action → pill.",
+    "button_row": "Le duo CTA principal + secondaire d'une slide (Contact / En savoir plus) sur un même fond ; un seul → button.",
+    "hashtags": "Les hashtags de positionnement (#IA #DATA #ÉCO CONCEPTION) en texte nu, capitales, accent sur fond sombre ; jamais en chips → pas badge ni pill.",
+    "eyebrow": "Le sur-titre tracké en capitales (« DIGITALE DEPUIS 1999 », un nom de section) au-dessus d'un titre ; pour un tag coloré → badge.",
+    "content_card": "Une carte éditoriale du site : réalisation, engagement, show reel, avec eyebrow, titre, texte, hashtags et CTA, sur fond blanc, cyan, dark ou jaune ; plusieurs → content_cards ; carte de constat ou de chiffre → card.",
+    "content_cards": "Trois cartes éditoriales sur trois fonds (blanc / cyan / dark), hauteurs égalisées, CTA alignés en bas ; pour des cartes de constats sans CTA → card_grid.",
+    "section_header": "L'en-tête de section signature (eyebrow, titre avec surlignage jaune, paragraphe, hashtags) en ouverture d'une partie ou d'une slide manifeste ; pour un sommaire → agenda.",
+    "client_ticker": "Le bandeau de références clients en texte seul sur fond sombre ; avec logos → logo_wall.",
+    "do_dont": "Ton et vocabulaire : paires ✓ / ✕ de verbatims commentés (on-brand / off-brand) ; idée reçue vs réponse → compare_cards ; listes avant / après → before_after.",
 }
