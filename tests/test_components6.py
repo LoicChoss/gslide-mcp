@@ -135,3 +135,72 @@ def test_donut_segment_labels_and_bottom_legend():
     assert _of(ops, "text", "chart_title")[0]["text"] == "Nb de dons"
     default, _ = _render("donut", {"segments": [{"label": "a", "value": 1}, {"label": "b", "value": 1}]})
     assert not _of(default, "text", "segment_label")
+
+
+# --- chart_grouped / donut_row / mini_charts ------------------------------------------------
+
+def test_chart_grouped_vertical_category_tints_and_legend_top():
+    props = {"labels": ["Google", "Bing", "Facebook"], "unit": "€",
+             "series": [{"name": "Collecte N", "values": [356118, 35079, 60007]}, {"name": "Collecte N-1", "values": [0, 47353, 36090]}],
+             "category_colors": ["regie_google", "regie_bing", "regie_facebook"]}
+    ops, height = _render("chart_grouped", props, w=500, h=220)
+    bars = _of(ops, "box", "bar")
+    assert len(bars) == 6
+    n_series = [b for b in bars if b["series"] == 0]
+    prev = [b for b in bars if b["series"] == 1]
+    assert [b["fill"] for b in n_series] == ["regie_google", "regie_bing", "regie_facebook"]
+    assert all(pv["fill"].startswith("#") for pv in prev)  # lighter tint of the category colour
+    assert n_series[0]["x"] < prev[0]["x"] < n_series[1]["x"]  # side by side inside the category slot
+    assert bars[1]["h"] == 0 and n_series[0]["h"] > n_series[2]["h"]
+    values = [t["text"] for t in _of(ops, "text", "value")]
+    assert values[0] == "356 118 €" and values[1] == "0 €"
+    legend = [o for o in ops if o.get("style") == "legend"]
+    assert [l["text"] for l in legend] == ["Collecte N", "Collecte N-1"] and legend[0]["y"] < n_series[0]["y"]
+    assert _of(ops, "line", "baseline") and _of(ops, "text", "tick") and height == 220
+
+
+def test_chart_grouped_horizontal_and_series_colors():
+    props = {"labels": ["Paid Search", "Email"], "horizontal": True,
+             "series": [{"name": "N", "values": [219545, 155800], "color": "navy"}, {"name": "N-1", "values": [223773, 112738], "color": "cyan"}]}
+    ops, height = _render("chart_grouped", props, w=400)
+    bars = _of(ops, "box", "bar")
+    assert [b["fill"] for b in bars] == ["navy", "cyan", "navy", "cyan"]
+    assert bars[0]["y"] < bars[1]["y"] < bars[2]["y"] and bars[0]["x"] == bars[1]["x"]
+    assert bars[0]["w"] / bars[1]["w"] == pytest.approx(219545 / 223773)
+    labels = [t["text"] for t in _of(ops, "text", "label")]
+    assert labels == ["Paid Search", "Email"] and height > 0
+    assert _of(ops, "text", "value")[0]["x"] > bars[0]["x"] + bars[0]["w"]
+
+
+def test_donut_row_repeats_donuts_with_titles_and_bottom_legends():
+    items = [{"title": "Impressions", "segments": [{"label": "Google", "value": 13}, {"label": "Facebook", "value": 78}]},
+             {"title": "Clics", "segments": [{"label": "Google", "value": 62}, {"label": "Facebook", "value": 28}]},
+             {"title": "Dépenses", "segments": [{"label": "Google", "value": 70}, {"label": "Facebook", "value": 13}]}]
+    ops, height = _render("donut_row", {"items": items, "colors": ["regie_google", "regie_facebook"]}, w=600, h=200)
+    rings = _of(ops, "ring")
+    assert len(rings) == 3 and rings[0]["cx"] < rings[1]["cx"] < rings[2]["cx"]
+    assert [s["color"] for s in rings[0]["segments"]] == ["regie_google", "regie_facebook"]
+    titles = [t["text"] for t in _of(ops, "text", "chart_title")]
+    assert titles == ["Impressions", "Clics", "Dépenses"]
+    assert len(_of(ops, "text", "segment_label")) == 6
+    legend = [o for o in ops if o.get("style") == "legend"]
+    assert len(legend) == 6 and legend[0]["y"] > rings[0]["cy"] + rings[0]["r"]
+    assert height == 200
+
+
+def test_mini_charts_share_categories_and_colours():
+    props = {"labels": ["Google", "Bing"], "colors": ["regie_google", "regie_bing"],
+             "charts": [{"title": "Impressions", "values": [2439153, 150851]}, {"title": "Clics", "values": [62579, 5627]},
+                        {"title": "Collecte GA4", "values": [178175, 18448], "unit": "€"}, {"title": "ROAS GA4", "values": [1.95, 1.32]},
+                        {"title": "Dépenses", "values": [91244, 14014], "unit": "€"}]}
+    ops, height = _render("mini_charts", props, w=800, h=180)
+    bars = _of(ops, "box", "bar")
+    assert len(bars) == 10 and [b["fill"] for b in bars[:2]] == ["regie_google", "regie_bing"]
+    titles = [t["text"] for t in _of(ops, "text", "chart_title")]
+    assert titles == ["Impressions", "Clics", "Collecte GA4", "ROAS GA4", "Dépenses"]
+    xs = sorted({round(b["x"]) for b in bars})
+    assert xs[0] < xs[2] < xs[4] < xs[6] < xs[8]
+    values = [t["text"] for t in _of(ops, "text", "value")]
+    assert "178 175 €" in values and "1,95" in values and "2 439 153" in values
+    assert len(_of(ops, "text", "tick")) == 25  # a graduated axis per mini chart
+    assert height == 180

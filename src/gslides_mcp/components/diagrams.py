@@ -19,7 +19,8 @@ def _fmt_fr(v: float) -> str:
     """12400 → '12 400' (narrow no-break space), decimals with a comma."""
     if float(v).is_integer():
         return f"{int(v):,}".replace(",", "\u202f")
-    return f"{v:,.1f}".replace(",", "\u202f").replace(".", ",")
+    txt = f"{v:,.2f}".rstrip("0")  # 1.95 -> 1,95 ; 3.90 -> 3,9 ; 12.5 -> 12,5
+    return txt.replace(",", "\u202f").replace(".", ",")
 
 
 # --- funnel -------------------------------------------------------------------------
