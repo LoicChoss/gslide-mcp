@@ -91,7 +91,8 @@ def _source_note(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list
         total = lw + (4 if p["logo"] else 0) + tw
         x = (w - total) if align == "END" else (w - total) / 2 if align == "CENTER" else 0.0
         if p["logo"]:
-            ops.append({"op": "image", "x": x, "y": y + 3, "w": lw, "h": lw, "asset": str(p["logo"]), "contain": True, "role": "logo"})
+            ops.append({"op": "image", "x": x, "y": y + 3, "w": lw, "h": lw, "asset": str(p["logo"]), "contain": True, "role": "logo",
+                        **({"tint": p["tint"]} if p["tint"] else {})})
             x += lw + 4
         if name:
             ops.append({"op": "text", "x": x, "y": y, "w": tw, "h": 12 + INSETS, "text": name, "style": "caption", "size": 10,
@@ -108,6 +109,7 @@ register(Component(
         Prop("platform", "str", "Nom de la plateforme affiché en dessous (Google Ads, Google Analytics)."),
         Prop("logo", "image", "Logo de la plateforme (asset) devant le nom."),
         Prop("align", "choice", "Alignement.", default="END", choices=["START", "CENTER", "END"]),
+        Prop("tint", "color", "Teinte du logo (pictos blancs du dossier d'assets)."),
     ],
     render=_source_note,
     example={"text": "Google Ads du 01/12/2025 au 31/12/2025", "platform": "Google Ads"},
@@ -340,7 +342,8 @@ def _media_plan(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[
                     "size": 11, "bold": True, "role": "lever"})
         lx = 16 + INSET_X + len(name) * 11 * 0.62 + 8
         for logo in lv.get("logos") or []:
-            ops.append({"op": "image", "x": lx, "y": y, "w": 18, "h": 18, "asset": str(logo), "contain": True, "role": "logo"})
+            ops.append({"op": "image", "x": lx, "y": y, "w": 18, "h": 18, "asset": str(logo), "contain": True, "role": "logo",
+                        **({"tint": p["tint"]} if p["tint"] else {})})
             lx += 22
         y += 22
         for label, key in ((p["budget_label"], "budget"), (p["dates_label"], "dates")):
@@ -384,6 +387,7 @@ register(Component(
         Prop("budget_label", "str", "Libellé du budget.", default="Ordre d'insertion : "),
         Prop("dates_label", "str", "Libellé des dates.", default="Date : "),
         Prop("split", "number", "Part de la largeur prise par le panneau objectif.", default=0.45),
+        Prop("tint", "color", "Teinte des logos du dossier d'assets (pictos blancs) ; vide = couleurs d'origine."),
     ],
     render=_media_plan,
     example={"levers": [{"name": "Search + Demand Gen", "logos": ["google-ads", "microsoft-ads"], "budget": "16 000 € HT", "dates": "du 09/02/2026 au 08/03/2026"},

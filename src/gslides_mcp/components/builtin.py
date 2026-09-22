@@ -399,7 +399,7 @@ def _table(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
                 break
             if icon:
                 ops.append({"op": "image", "x": (ICON_COL_W - icon_w) / 2 + 2, "y": y + (heights[r] - icon_w) / 2, "w": icon_w, "h": icon_w,
-                            "asset": str(icon), "contain": True, "role": "icon"})
+                            "asset": str(icon), "contain": True, "role": "icon", **({"tint": p["icon_tint"]} if p["icon_tint"] else {})})
             y += heights[r]
     total = p["total_row"] and last > 0
     cell_text_colors: dict = {}
@@ -439,6 +439,7 @@ register(Component(
         Prop("size", "number", "Taille de police (défaut : style table_cell du thème)."),
         Prop("icons", "list", "Un picto (asset) ou null par ligne de données : ajoute une colonne étroite en tête (logos de canaux)."),
         Prop("icon_w", "number", "Taille des pictos.", default=16),
+        Prop("icon_tint", "color", "Teinte des pictos du dossier d'assets (pictos blancs) ; vide = couleurs d'origine."),
         Prop("delta_cols", "list", "Index (0-based, hors colonne picto) des colonnes « vs N-1 » : + en positif, - en négatif."),
     ],
     render=_table,
