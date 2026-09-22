@@ -76,4 +76,15 @@ USES: dict[str, str] = {
     "browser": "Montrer une capture de site ou de dashboard dans un cadre navigateur plat avec URL (dashboards GA4, maquettes desktop, pages concurrentes) ; ambiance matériel → laptop ; mobile → phone ; résultat Google reconstitué → serp.",
     "laptop": "Mettre en scène une capture desktop dans un laptop (références, maquettes, avant/après de site) ; plus neutre et avec URL → browser ; capture mobile → phone.",
     "phone": "Mettre en scène une capture mobile (maquette responsive, appli, parcours mobile) ; capture desktop → laptop ou browser.",
+
+    # --- bilan média ---------------------------------------------------------------------
+    "analysis_block": "Le bloc « Notre analyse : » sous un graphique ou un tableau de bilan : titre gras + points en chevrons (ou un paragraphe avec `text`), `box` pour l'encadrer ; pour une mise en garde ou un message à retenir → callout ; pour une liste sans titre → chevrons.",
+    "source_note": "La mention « * Sources : Google Ads du … au … » en haut à droite d'une slide de données, avec la plateforme en dessous ; pour un texte libre → draw.",
+    "stat_box": "Deux ou trois chiffres encadrés reliés par un opérateur (taux CMP = part de données remontées) ; avant → après → stat_pair ; avec variation → kpi.",
+    "takeaways": "Les slides Enseignements et Recos : titre gras (surligné en option) + paragraphe par point ; pour des points courts sans titre → chevrons ; pour un message unique → callout.",
+    "placeholder": "La place d'un élément qui manque encore (export à venir, capture à déposer) dans un deck généré : cadre pointillé avec message ; pour des cases d'images → gallery.",
+    "ad_scoreboard": "Résultats par publicité (Meta, Pinterest, YouTube) : une colonne par annonce avec vignette et une ligne par métrique ; pour un tableau classique avec une ligne par annonce → table avec `icons`.",
+    "gallery": "Captures d'annonces ou visuels côte à côte à ratio fixe, avec cases « à déposer » tant qu'il n'y a pas d'image ; logos → logo_wall ; capture dans un cadre matériel → phone, laptop, browser.",
+    "media_plan": "La slide « Rappel du dispositif et objectifs » d'un bilan : leviers avec logos régies, ordre d'insertion, dates, et panneau objectif ; pour un budget par levier en tableau → table.",
+    "timeline_arrow": "Les temps forts d'une campagne sur une flèche (bascules, ajouts, coupures) en boîtes datées alternées ; pour un planning par phases → timeline ; pour des phases détaillées → phase_cards.",
 }
