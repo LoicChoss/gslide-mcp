@@ -388,9 +388,10 @@ register(Component(
         Prop("tint", "color", "Teinte des logos du dossier d'assets (pictos blancs) ; vide = couleurs d'origine."),
     ],
     render=_media_plan,
-    example={"levers": [{"name": "Search + Demand Gen", "logos": ["google-ads", "microsoft-ads"], "budget": "16 000 € HT", "dates": "du 09/02/2026 au 08/03/2026"},
-                        {"name": "Social", "logos": ["meta"], "budget": "18 000 € HT", "dates": "du 09/02/2026 au 08/03/2026"}],
-             "objective": {"title": "Objectif à atteindre", "items": ["Développer le nombre de demandes de brochures", "Accroître la notoriété sur le legs"]}},
+    example={"levers": [{"name": "Search + Demand Gen", "logos": ["google", "search"], "budget": "16 000 € HT", "dates": "du 09/02/2026 au 08/03/2026"},
+                        {"name": "Social", "logos": ["share"], "budget": "18 000 € HT", "dates": "du 09/02/2026 au 08/03/2026"}],
+             "objective": {"title": "Objectif à atteindre", "items": ["Développer le nombre de demandes de brochures", "Accroître la notoriété sur le legs"]},
+             "tint": "ink"},
     tags=["cartes"],
 ))
 

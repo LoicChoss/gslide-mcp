@@ -92,7 +92,7 @@ def _kpi_value_size(value: str, w: float) -> float:
 def _kpi_label_h(p: dict, w: float, size: float = 11.0) -> float:
     """Height of the label box once wrapped in the column (note included)."""
     lines = _wrapped_lines(str(p["label"]) + (" " + str(p["note"]) if p.get("note") else ""), w - PAD, size)
-    return size * 1.2 + 4 + (lines - 1) * size * LEADING
+    return size * 1.2 + INSETS + (lines - 1) * size * LEADING
 
 
 def _kpi(p: dict, theme: Theme, w: float, h: float | None, value_size: float | None = None,
@@ -104,13 +104,15 @@ def _kpi(p: dict, theme: Theme, w: float, h: float | None, value_size: float | N
     value = str(p["value"])
     size = value_size or _kpi_value_size(value, w)
     # value, label and delta are stacked tight (the PPTX bilan look), the accent bar spans all three
+    # geometry of the PPTX bilan KPI: value text top at 0, label text top ~8 pt under the value
+    # baseline, delta text right under the label, accent bar over the whole stack
     value_h = round(size * 1.2 + INSETS, 1)
     value_op: dict = {"op": "text", "x": PAD, "y": -4, "w": w - PAD, "h": value_h, "text": value, "style": "kpi_value", "role": "value",
-                      "size": round(size, 1), "valign": "BOTTOM", **fg}
+                      "size": round(size, 1), **fg}
     if size < 16:
         value_op["small_ok"] = True
     label_h = label_h or _kpi_label_h(p, w, text_size)
-    label_y = value_h - 9
+    label_y = round(size * 1.15, 1)  # ≈ 25 for 22 pt
     small = text_size < 11  # kpi_grid with row labels: label and delta may go under the floor, the value stays big
     label: dict = {"op": "text", "x": PAD, "y": label_y, "w": w - PAD, "h": label_h, "style": "kpi_label", "size": text_size,
                    "role": "label", **fg}
@@ -122,17 +124,17 @@ def _kpi(p: dict, theme: Theme, w: float, h: float | None, value_size: float | N
         label["small_ok"] = True
     if not p.get("note"):
         label["text"] = str(p["label"])
-    height = label_y + label_h - 2
+    height = label_y + label_h - 1
     ops: list[dict] = [value_op, label]
     if p["delta"]:
         sign = "positive" if str(p["delta"]).strip().startswith("+") else "negative"
-        delta: dict = {"op": "text", "x": PAD, "y": height - 4, "w": w - PAD, "h": text_size * 1.2 + INSETS, "text": str(p["delta"]),
-                       "style": "kpi_delta", "size": text_size, "color": sign, "role": "delta"}
+        delta: dict = {"op": "text", "x": PAD, "y": height, "w": w - PAD, "h": text_size * 1.2 + INSETS, "text": str(p["delta"]),
+                       "style": "kpi_delta", "size": text_size, "bold": False, "color": sign, "role": "delta"}
         if small:
             delta["small_ok"] = True
         ops.append(delta)
     if p["delta"] or delta_row:
-        height += text_size * 1.2 + 2
+        height += text_size * 1.2 + INSETS - 2
     ops.insert(0, {"op": "box", "x": 0, "y": 0, "w": 5, "h": height, "fill": "accent", "role": "bar"})
     return ops, h or height
 
@@ -165,7 +167,7 @@ def _kpi_grid(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[di
     # one geometry for the whole grid: the narrowest value sets the size, the longest label
     # the label height, any delta reserves the delta line — so every row aligns KPI to KPI
     size = min((_kpi_value_size(str(sp["value"]), col_w - 12) for sp in specs), default=KPI_VALUE_SIZE)
-    text_size = 9.5 if rows else 11.0  # with row labels the columns are narrower: smaller label and delta, same big value
+    text_size = 9.0 if rows else 11.0  # with row labels the columns are narrower: smaller label and delta, same big value
     label_h = max((_kpi_label_h(sp, col_w - 12, text_size) for sp in specs), default=18.0)
     delta_row = any(sp["delta"] for sp in specs)
     rendered = [_kpi(sp, theme, col_w - 12, None, value_size=size, label_h=label_h, delta_row=delta_row, text_size=text_size)
