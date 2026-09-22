@@ -65,10 +65,16 @@ def _nice_max(values: list[float]) -> float:
 
 def _kpi(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     fg = {"color": "on_dark"} if p["dark"] else {}
+    label: dict = {"op": "text", "x": PAD, "y": 36, "w": w - PAD, "h": 18, "style": "kpi_label", "role": "label", **fg}
+    if p.get("note"):
+        # « Collecte (GA4) » : the precision in small muted type after the label
+        label["runs"] = [[{"text": str(p["label"])}, {"text": " " + str(p["note"]), "size": 10, "color": "muted"}]]
+    else:
+        label["text"] = str(p["label"])
     ops: list[dict] = [
-        {"op": "box", "x": 0, "y": 0, "w": 5, "h": 61, "fill": "accent"},
+        {"op": "box", "x": 0, "y": 0, "w": 5, "h": 61, "fill": "accent", "role": "bar"},
         {"op": "text", "x": PAD, "y": -3, "w": w - PAD, "h": 36, "text": str(p["value"]), "style": "kpi_value", **fg},
-        {"op": "text", "x": PAD, "y": 36, "w": w - PAD, "h": 18, "text": str(p["label"]), "style": "kpi_label", **fg},
+        label,
     ]
     height = 61.0
     if p["delta"]:
@@ -85,38 +91,50 @@ register(Component(
         Prop("value", "str", "La valeur affichée en gros, déjà formatée (ex. '1 625 394').", required=True),
         Prop("label", "str", "Libellé sous la valeur.", required=True),
         Prop("delta", "str", "Variation signée, ex. '+12 %' ou '-3,4 pts'. Le signe pilote la couleur."),
+        Prop("note", "str", "Précision en petit après le libellé, ex. '(GA4)' ou '(régie)'."),
         Prop("dark", "bool", "Texte clair pour fond sombre.", default=False),
     ],
-    render=_kpi, example={"value": "1 625 394", "label": "Impressions", "delta": "-66,57 %"}, tags=["chiffres"],
+    render=_kpi, example={"value": "196 623 €", "label": "Collecte", "note": "(GA4)", "delta": "+108,49 %"}, tags=["chiffres"],
 ))
+
+
+ROW_LABEL_W = 90.0  # kpi_grid: width of the row-label column
 
 
 def _kpi_grid(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     items = p["items"]
-    cols = int(p["cols"] or len(items) or 1)
-    col_w = w / cols
+    rows = [str(r) for r in (p["rows"] or [])]
+    cols = int(p["cols"] or (-(-len(items) // len(rows)) if rows else len(items)) or 1)
+    x0 = ROW_LABEL_W if rows else 0.0
+    col_w = (w - x0) / cols
     row_gap = float(p["row_gap"])
     ops: list[dict] = []
     height = 0.0
     for i, item in enumerate(items):
-        sub, sub_h = _kpi({"value": item.get("value", ""), "label": item.get("label", ""),
+        sub, sub_h = _kpi({"value": item.get("value", ""), "label": item.get("label", ""), "note": item.get("note"),
                            "delta": item.get("delta"), "dark": p["dark"]}, theme, col_w - 12, None)
         y = (i // cols) * row_gap
-        ops.extend(shift(sub, (i % cols) * col_w, y))
+        ops.extend(shift(sub, x0 + (i % cols) * col_w, y))
         height = max(height, y + sub_h)
+    for r, label in enumerate(rows):
+        ops.append({"op": "text", "x": 0, "y": r * row_gap + 12, "w": ROW_LABEL_W - 8, "h": 40, "text": label, "style": "label",
+                    "bold": True, "color": "on_dark" if p["dark"] else "ink", "valign": "MIDDLE", "role": "row_label"})
     return ops, h or height
 
 
 register(Component(
-    name="kpi_grid", description="Grille de KPI (composant kpi répété en colonnes).",
+    name="kpi_grid", description="Grille de KPI (composant kpi répété en colonnes), avec en option un libellé de ligne à gauche (Marque / Hors marque).",
     props=[
-        Prop("items", "list", "Liste de {value, label, delta?}.", required=True),
-        Prop("cols", "number", "Nombre de colonnes (défaut : un par item)."),
+        Prop("items", "list", "Liste de {value, label, delta?, note?}.", required=True),
+        Prop("cols", "number", "Nombre de colonnes (défaut : un par item, ou items / rows)."),
+        Prop("rows", "list", "Libellés de ligne en gras à gauche, un par rangée ; cols = indicateurs par rangée."),
         Prop("row_gap", "number", "Hauteur d'une rangée en pt.", default=90),
         Prop("dark", "bool", "Texte clair pour fond sombre.", default=False),
     ],
     render=_kpi_grid,
-    example={"items": [{"value": "12 400", "label": "Sessions", "delta": "+8 %"}, {"value": "3,2 %", "label": "CTR", "delta": "-0,4 pt"}], "cols": 2},
+    example={"items": [{"value": "18 336 040", "label": "Impressions", "delta": "+170,50 %"}, {"value": "101 216", "label": "Clics", "delta": "+109,71 %"},
+                       {"value": "130 311 €", "label": "Investissements", "delta": "+35,29 %"}, {"value": "1,61", "label": "ROAS", "note": "GA4", "delta": "+64,79 %"}],
+             "cols": 4},
     tags=["chiffres"],
 ))
 
@@ -355,34 +373,73 @@ register(Component(
 
 # --- table ------------------------------------------------------------------------
 
+ICON_COL_W = 26.0  # table: width of the leading picto column
+
+
 def _table(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
-    rows = p["rows"]
+    rows = [list(r) for r in p["rows"]]
     row_h = float(p["row_h"])
+    heights = [float(v) if v else row_h for v in (p["row_heights"] or [])] + [row_h] * (len(rows) - len(p["row_heights"] or []))
     last = len(rows) - 1
+    icons = list(p["icons"] or [])
+    col_w = list(p["col_w"] or [])
+    align = list(p["align"] or [])
+    ops: list[dict] = []
+    if icons:
+        # a narrow empty column in front, the pictos drawn over its cells (contain)
+        rows = [[""] + r for r in rows]
+        n_c = max(len(r) for r in rows)
+        col_w = [ICON_COL_W] + (col_w or [(w - ICON_COL_W) / (n_c - 1)] * (n_c - 1))
+        align = [None] + align
+        icon_w = float(p["icon_w"])
+        y = heights[0] if p["header"] else 0.0
+        for i, icon in enumerate(icons):
+            r = i + (1 if p["header"] else 0)
+            if r >= len(rows):
+                break
+            if icon:
+                ops.append({"op": "image", "x": (ICON_COL_W - icon_w) / 2 + 2, "y": y + (heights[r] - icon_w) / 2, "w": icon_w, "h": icon_w,
+                            "asset": str(icon), "contain": True, "role": "icon"})
+            y += heights[r]
+    total = p["total_row"] and last > 0
+    cell_text_colors: dict = {}
+    for j in p["delta_cols"] or []:
+        jj = int(j) + (1 if icons else 0)
+        for i in range(1 if p["header"] else 0, len(rows) - (1 if total else 0)):
+            txt = str(rows[i][jj]).strip() if jj < len(rows[i]) else ""
+            if txt.startswith("+"):
+                cell_text_colors[(i, jj)] = "positive"
+            elif txt.startswith(("-", "−")):
+                cell_text_colors[(i, jj)] = "negative"
     op: dict = {
-        "op": "table", "x": 0, "y": 0, "w": w, "rows": rows, "col_w": p["col_w"], "row_h": row_h,
+        "op": "table", "x": 0, "y": 0, "w": w, "rows": rows, "col_w": col_w or None, "row_h": row_h, "row_heights": heights,
         "header": {"fill": "accent", "color": "on_accent", "bold": True} if p["header"] else None,
         "banding": ["background", "surface"],
         "first_col_bold": True,
         "borders": {"color": "rule", "weight": 1, "position": "INNER_HORIZONTAL"},
-        "align": p["align"],
+        "align": align or None,
         "size": p["size"],
-        "row_fills": {last: "accent"} if p["total_row"] and last > 0 else {},
-        "bold_rows": [last] if p["total_row"] and last > 0 else [],
+        "row_fills": {last: "accent"} if total else {},
+        "bold_rows": [last] if total else [],
+        "cell_text_colors": cell_text_colors,
     }
-    return [op], row_h * len(rows)
+    return [op] + ops, sum(heights)
 
 
 register(Component(
-    name="table", description="Tableau charté : en-tête accent, première colonne en gras, lignes alternées, filets horizontaux fins, ligne de total optionnelle.",
+    name="table", description="Tableau charté : en-tête accent, première colonne en gras, lignes alternées, filets horizontaux fins, ligne de total optionnelle ; pictos par ligne et colonnes de variation colorées par signe en option.",
     props=[
         Prop("rows", "list", "Lignes (la première est l'en-tête), listes de chaînes.", required=True),
         Prop("col_w", "list", "Largeurs de colonnes en pt (défaut : réparties)."),
         Prop("row_h", "number", "Hauteur de ligne en pt.", default=24),
+        Prop("row_heights", "list", "Hauteur par ligne en pt (null = row_h)."),
         Prop("header", "bool", "La première ligne est un en-tête.", default=True),
         Prop("total_row", "bool", "La dernière ligne est un total (fond accent, gras).", default=False),
         Prop("align", "list", "Alignement par colonne : START, CENTER, END ou null."),
         Prop("size", "number", "Taille de police (défaut : style table_cell du thème)."),
+        Prop("icons", "list", "Un picto (asset) ou null par ligne de données : ajoute une colonne étroite en tête (logos de canaux)."),
+        Prop("icon_w", "number", "Taille des pictos.", default=16),
+        Prop("delta_cols", "list", "Index (0-based, hors colonne picto) des colonnes « vs N-1 » : + en positif, - en négatif."),
     ],
     render=_table,
     example={"rows": [["Levier", "Budget", "Part"], ["Google Ads", "18 000 €", "45 %"], ["Meta", "12 000 €", "30 %"], ["Total", "30 000 €", "75 %"]],

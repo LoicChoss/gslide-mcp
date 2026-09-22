@@ -12,7 +12,7 @@ PERISCOPE = themes.load("periscope")
 
 def _render(name, props, w=600, h=None, theme=PERISCOPE):
     ops, height = components.render(name, props, theme, w, h)
-    reqs, ids = draw.ops_to_requests("slide_1", ops, theme, prefix="cmp")
+    reqs, ids = draw.ops_to_requests("slide_1", ops, theme, prefix="cmp", resolve_asset=lambda name, tint=None: ("fid_" + name, (120, 120)))
     assert reqs and ids
     return ops, height
 
@@ -204,3 +204,47 @@ def test_mini_charts_share_categories_and_colours():
     assert "178 175 €" in values and "1,95" in values and "2 439 153" in values
     assert len(_of(ops, "text", "tick")) == 25  # a graduated axis per mini chart
     assert height == 180
+
+
+# --- kpi note / kpi_grid rows / table icons & delta columns ---------------------------------
+
+def test_kpi_note_is_a_small_muted_run_after_the_label():
+    ops, _ = _render("kpi", {"value": "196 623 €", "label": "Collecte", "note": "(GA4)", "delta": "+108,49 %"}, w=150)
+    label = next(o for o in ops if o["op"] == "text" and o.get("role") == "label")
+    (runs,) = label["runs"]
+    assert runs[0]["text"] == "Collecte" and runs[1]["text"].strip() == "(GA4)"
+    assert runs[1]["color"] == "muted" and runs[1]["size"] < 11
+    plain, _ = _render("kpi", {"value": "1", "label": "Clics"}, w=150)
+    assert next(o for o in plain if o.get("role") == "label")["text"] == "Clics"
+
+
+def test_kpi_grid_rows_add_a_label_column_and_pass_notes():
+    props = {"rows": ["Marque", "Hors marque"], "cols": 3,
+             "items": [{"value": "9,7 %", "label": "% impressions perdues"}, {"value": "19,97 %", "label": "CTR"},
+                       {"value": "43 540 €", "label": "Potentiel", "note": "(GA4)"},
+                       {"value": "22,2 %", "label": "% impressions perdues"}, {"value": "6,82 %", "label": "CTR"},
+                       {"value": "13 310 €", "label": "Potentiel"}]}
+    ops, height = _render("kpi_grid", props, w=600)
+    row_labels = _of(ops, "text", "row_label")
+    assert [r["text"] for r in row_labels] == ["Marque", "Hors marque"] and row_labels[0]["bold"]
+    bars = _of(ops, "box", "bar")
+    assert len(bars) == 6 and bars[0]["x"] >= 90 and bars[3]["y"] > bars[0]["y"]
+    assert row_labels[1]["y"] < bars[3]["y"] + 61 and row_labels[1]["y"] + row_labels[1]["h"] > bars[3]["y"]
+    notes = [o for o in ops if o["op"] == "text" and "runs" in o]
+    assert len(notes) == 1 and height > 150
+
+
+def test_table_icons_column_and_delta_columns():
+    rows = [["Canal", "Impr.", "vs N-1"], ["Recherche Google", "86 085", "+12 %"], ["Discover", "1 729 943", "-4 %"], ["Total", "2 211 867", "+3 %"]]
+    ops, height = _render("table", {"rows": rows, "icons": ["search", "discover"], "delta_cols": [2], "total_row": True}, w=400)
+    (t,) = _of(ops, "table")
+    assert t["rows"][0] == ["", "Canal", "Impr.", "vs N-1"] and t["rows"][1][1] == "Recherche Google"
+    assert t["col_w"][0] == 26 and sum(t["col_w"]) == pytest.approx(400)
+    images = _of(ops, "image")
+    assert [i["asset"] for i in images] == ["search", "discover"] and images[0]["contain"]
+    assert images[0]["x"] < 26 and t["row_h"] < images[0]["y"] < 2 * t["row_h"]
+    assert t["cell_text_colors"][(1, 3)] == "positive" and t["cell_text_colors"][(2, 3)] == "negative"
+    assert (3, 3) not in t["cell_text_colors"]  # the total row keeps its own style
+    assert height == t["row_h"] * 4
+    plain, _ = _render("table", {"rows": rows[:2]})
+    assert plain[0]["rows"][0] == ["Canal", "Impr.", "vs N-1"] and not _of(plain, "image")
