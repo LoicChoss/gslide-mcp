@@ -328,3 +328,21 @@ def test_runs_and_overrides_respect_the_theme_size_floor():
     assert sizes == [11, 11]
     reqs, _ = _run([{"op": "text", "x": 0, "y": 0, "w": 100, "h": 20, "size": 6, "text": "t", "color": "mint"}])  # theme without rules
     assert [r["updateTextStyle"]["style"]["fontSize"]["magnitude"] for r in reqs if "updateTextStyle" in r] == [6]
+
+
+def test_box_outline_dash_style():
+    reqs, _ = _run([{"op": "box", "x": 0, "y": 0, "w": 50, "h": 20, "line": {"color": "navy", "weight": 1, "dash": "DASH"}}])
+    (props,) = _of(reqs, "updateShapeProperties")
+    assert props["shapeProperties"]["outline"]["dashStyle"] == "DASH"
+    reqs, _ = _run([{"op": "box", "x": 0, "y": 0, "w": 50, "h": 20, "line": {"color": "navy"}}])
+    assert "dashStyle" not in _of(reqs, "updateShapeProperties")[0]["shapeProperties"]["outline"]
+
+
+def test_table_row_heights_per_row():
+    reqs, _ = _run([{"op": "table", "x": 0, "y": 0, "w": 200, "row_h": 20, "row_heights": [20, 60, 20],
+                     "rows": [["a", "b"], ["c", "d"], ["e", "f"]], "borders": {"color": "navy", "weight": 1}}])
+    (create,) = _of(reqs, "createTable")
+    assert create["elementProperties"]["size"]["height"]["magnitude"] == 100 * PT
+    rows = _of(reqs, "updateTableRowProperties")
+    heights = {tuple(r["rowIndices"]): r["tableRowProperties"]["minRowHeight"]["magnitude"] for r in rows}
+    assert heights == {(0, 2): 20 * PT, (1,): 60 * PT}

@@ -6,7 +6,7 @@ palette tokens or ``#RRGGBB``; text sizes/fonts default to the theme's named
 text styles. Nothing here knows about Periscope — see ``themes``.
 
 Ops:
-    box       x y w h [fill] [line{color,weight}] [shape] [+ text keys]
+    box       x y w h [fill] [line{color,weight,dash}] [shape] [+ text keys]
     text      x y w h  text | markdown | runs=[[{text,bold,italic,color,size,font,highlight}],…]
               [style] [size] [color] [bold] [italic] [font] [align] [valign] [spacing]
               (markdown: ==texte== surligne avec le rôle ``highlight``)
@@ -14,7 +14,7 @@ Ops:
     polyline  points=[[x,y],…] [color] [weight] [dash] [end_arrow]   (arrow on the last segment)
     arc       cx cy r a0 a1 weight [color]        (degrees, 0 = east, clockwise)
     ring      cx cy r thickness segments=[{value,color}] [start=-90] [span=360]
-    table     x y w rows=[[…],…] [col_w] [row_h] [header] [banding] [first_col_bold]
+    table     x y w rows=[[…],…] [col_w] [row_h] [row_heights=[…]] [header] [banding] [first_col_bold]
               [align=[…]] [borders{color,weight}|None] [size] [style]
               [row_fills{i:color}] [bold_rows] [cell_fills{(i,j):color}] [cell_text_colors]
     image     x y w h  drive_file_id | url | asset [tint] [cover] [contain]   (asset = name in the
@@ -261,6 +261,8 @@ class _Canvas:
                 "outlineFill": {"solidFill": {"color": self.rgb(line.get("color", "ink"))}},
                 "weight": {"magnitude": line.get("weight", 1), "unit": "PT"},
             }
+            if line.get("dash"):
+                props["outline"]["dashStyle"] = str(line["dash"]).upper()
         else:
             props["outline"] = {"propertyState": "NOT_RENDERED"}
         self.reqs.append({"updateShapeProperties": {"objectId": oid, "shapeProperties": props, "fields": "shapeBackgroundFill,outline"}})
@@ -365,11 +367,13 @@ class _Canvas:
         rows = op["rows"]
         n_r, n_c = len(rows), max(len(r) for r in rows)
         row_h = op.get("row_h", 20)
+        row_heights = list(op.get("row_heights") or [])
+        row_heights = [float(row_heights[i]) if i < len(row_heights) and row_heights[i] else float(row_h) for i in range(n_r)]
         col_w = op.get("col_w") or [op["w"] / n_c] * n_c
         oid = self.new_id()
         self.reqs.append({"createTable": {
             "objectId": oid, "rows": n_r, "columns": n_c,
-            "elementProperties": _elem_props(self.page, op["x"] + self.ox, op["y"] + self.oy, op["w"], row_h * n_r),
+            "elementProperties": _elem_props(self.page, op["x"] + self.ox, op["y"] + self.oy, op["w"], sum(row_heights)),
         }})
         self.ids.append(oid)
         header = op.get("header")
@@ -433,11 +437,12 @@ class _Canvas:
                 "tableColumnProperties": {"columnWidth": {"magnitude": _emu(w), "unit": "EMU"}},
                 "fields": "columnWidth",
             }})
-        self.reqs.append({"updateTableRowProperties": {
-            "objectId": oid, "rowIndices": list(range(n_r)),
-            "tableRowProperties": {"minRowHeight": {"magnitude": _emu(row_h), "unit": "EMU"}},
-            "fields": "minRowHeight",
-        }})
+        for height in sorted(set(row_heights), key=row_heights.index):
+            self.reqs.append({"updateTableRowProperties": {
+                "objectId": oid, "rowIndices": [i for i, rh in enumerate(row_heights) if rh == height],
+                "tableRowProperties": {"minRowHeight": {"magnitude": _emu(height), "unit": "EMU"}},
+                "fields": "minRowHeight",
+            }})
         borders = op.get("borders", {"color": "rule", "weight": 1})
         if borders is None:  # no "none" in the API: paint them in the background color
             borders = {"color": "background", "weight": 0.5}
