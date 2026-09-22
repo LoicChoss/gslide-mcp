@@ -66,6 +66,27 @@ class Theme:
         r, g, b = hex_to_rgb01(v)
         return {"red": r, "green": g, "blue": b}
 
+    def tint(self, value, amount: float) -> str:
+        """``value`` mixed with white by ``amount`` (0 = unchanged, 1 = white), as '#RRGGBB'.
+
+        The lighter N-1 series next to an N series, the pale track behind a
+        bar: derived from a theme colour, so a brand change carries over.
+        """
+        c = self.color(value)
+        a = max(0.0, min(1.0, float(amount)))
+        parts = (round((c[k] + (1 - c[k]) * a) * 255) for k in ("red", "green", "blue"))
+        return "#{:02X}{:02X}{:02X}".format(*parts)
+
+    def is_dark(self, value) -> bool:
+        """True when text on ``value`` should be light (relative luminance under 0.45)."""
+        c = self.color(value)
+
+        def lin(ch: float) -> float:
+            return ch / 12.92 if ch <= 0.04045 else ((ch + 0.055) / 1.055) ** 2.4
+
+        lum = 0.2126 * lin(c["red"]) + 0.7152 * lin(c["green"]) + 0.0722 * lin(c["blue"])
+        return lum < 0.45
+
     def text_style(self, name: str | None, **overrides) -> dict:
         """Named text style merged with non-None overrides; always carries a font."""
         style: dict = {"font": self.font}

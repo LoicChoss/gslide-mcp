@@ -77,7 +77,18 @@
     "chip": "blue",
     "on_chip": "white",
     "divider": "line",
-    "photo_bg": "gray_light"
+    "photo_bg": "gray_light",
+    "regie_google": "series_1",
+    "regie_bing": "series_5",
+    "regie_meta": "series_2",
+    "regie_facebook": "series_2",
+    "regie_instagram": "series_3",
+    "regie_pinterest": "series_6",
+    "regie_linkedin": "blue_dark",
+    "regie_tiktok": "dark",
+    "regie_ga4": "orange",
+    "chart_grid": "line",
+    "chart_axis": "line"
   },
   "text_styles": {
     "title": {

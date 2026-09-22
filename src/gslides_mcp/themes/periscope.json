@@ -28,7 +28,13 @@
     "warn_ink": "#8A5A00",
     "alert_bg": "#FFE9E9",
     "alert_ink": "#B30000",
-    "white": "#FFFFFF"
+    "white": "#FFFFFF",
+    "google": "#00E5C3",
+    "bing": "#C383FF",
+    "meta": "#FA00A6",
+    "pinterest": "#E8FF00",
+    "linkedin": "#0A66C2",
+    "tiktok": "#111418"
   },
   "roles": {
     "background": "white",
@@ -91,7 +97,18 @@
     "chip": "accent_alt",
     "on_chip": "ink",
     "divider": "gray_2",
-    "photo_bg": "surface"
+    "photo_bg": "surface",
+    "regie_google": "google",
+    "regie_bing": "bing",
+    "regie_meta": "meta",
+    "regie_facebook": "meta",
+    "regie_instagram": "orange",
+    "regie_pinterest": "pinterest",
+    "regie_linkedin": "linkedin",
+    "regie_tiktok": "tiktok",
+    "regie_ga4": "orange",
+    "chart_grid": "row_line",
+    "chart_axis": "gray_2"
   },
   "text_styles": {
     "title": {

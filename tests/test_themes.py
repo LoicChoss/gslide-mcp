@@ -79,3 +79,27 @@ def test_text_rules_floor_sizes_except_tables():
         assert floor is None or st["size"] >= floor, name
     bare = themes.Theme(name="bare", font="Arial")
     assert bare.size_floor("body") is None and bare.text_style("x" if False else None, size=6)["size"] == 6
+
+
+def test_regie_roles_resolve_in_every_theme():
+    for name in ("periscope", "default"):
+        t = themes.load(name)
+        for role in ("regie_google", "regie_bing", "regie_meta", "regie_facebook", "regie_instagram",
+                     "regie_pinterest", "regie_linkedin", "regie_tiktok", "regie_ga4", "chart_grid", "chart_axis"):
+            assert role in t.roles, (name, role)
+            t.color(role)
+    p = themes.load("periscope")
+    assert p.color("regie_google") == p.color("#00E5C3")
+    assert p.color("regie_facebook") == p.color("regie_meta") == p.color("#FA00A6")
+
+
+def test_tint_mixes_with_white_and_is_dark_reads_luminance():
+    t = themes.load("periscope")
+    assert t.tint("#000000", 0.5) == "#808080"
+    assert t.tint("regie_meta", 0) == "#FA00A6"
+    lighter = t.tint("regie_meta", 0.55)
+    assert lighter.startswith("#") and len(lighter) == 7 and lighter != "#FA00A6"
+    assert t.color(lighter)["green"] > t.color("regie_meta")["green"]
+    assert t.is_dark("navy") and t.is_dark("#000000")
+    assert not t.is_dark("mint") and not t.is_dark("#FFFFFF")
+    assert t.is_dark("surface_dark") and not t.is_dark("acid")
