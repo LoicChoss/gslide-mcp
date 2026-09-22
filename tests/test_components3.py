@@ -64,7 +64,7 @@ def test_serp_without_frame_rating_or_site():
 def test_browser_frame_with_screenshot_asset():
     ops, height = _render("browser", {"url": "periscope.digital", "image": "laptop-demo"}, w=300)
     frame = _of(ops, "box", "frame")[0]
-    assert frame["shape"] == "ROUND_RECTANGLE" and frame["line"]["color"] == "rule"
+    assert "shape" not in frame and "line" not in frame and frame["fill"] == "background"  # square, no grey outline
     dots = [o for o in ops if o["op"] == "box" and o.get("shape") == "ELLIPSE"]
     assert [d["fill"] for d in dots] == ["ink", "accent", "accent_alt"]
     assert "periscope.digital" in _texts(ops)

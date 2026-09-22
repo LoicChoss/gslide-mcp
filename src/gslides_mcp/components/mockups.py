@@ -110,8 +110,8 @@ def _browser(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
             content.append({"op": "text", "x": pad, "y": cy, "w": inner, "h": ch, "text": str(p["screen_text"]),
                             "style": "label", "size": 12, "bold": True, "color": "accent", "align": "CENTER", "valign": "MIDDLE"})
     ops: list[dict] = [
-        {"op": "box", "x": 0, "y": 0, "w": w, "h": height, "shape": "ROUND_RECTANGLE", "fill": "background",
-         "line": {"color": "rule", "weight": 1.5}, "role": "frame"},
+        # square frame, no outline: the grey bar and the content draw the browser, nothing rounded around it
+        {"op": "box", "x": 0, "y": 0, "w": w, "h": height, "fill": "background", "role": "frame"},
         {"op": "box", "x": pad, "y": pad, "w": inner, "h": bar_h, "fill": "surface"},
     ]
     for k, col in enumerate(("ink", "accent", "accent_alt")):
