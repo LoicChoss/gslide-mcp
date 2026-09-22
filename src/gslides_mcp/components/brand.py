@@ -287,7 +287,7 @@ def _section_header(p: dict, theme: Theme, w: float, h: float | None) -> tuple[l
         ops.append({"op": "text", "x": 0, "y": y, "w": w, "h": 12 + INSETS, "text": _tracked(p["eyebrow"]), "style": "card_label", "size": 10,
                     "bold": True, "color": "accent" if dark else "ink", "align": p["align"], "role": "eyebrow"})
         y += 22
-    th = _text_height(p["title"], w, size * 1.08)
+    th = _text_height(p["title"], w, size)  # bold Barlow titles run narrower than the estimate
     ops.append({"op": "text", "x": 0, "y": y, "w": w, "h": th, "markdown": str(p["title"]), "style": "title", "size": size, "color": color,
                 "highlight": p["highlight"], "align": p["align"], "role": "title"})
     y += th + 4
