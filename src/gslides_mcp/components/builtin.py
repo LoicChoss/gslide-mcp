@@ -393,59 +393,71 @@ register(Component(
 
 # --- charts -----------------------------------------------------------------------
 
+def _frame_h(p: dict) -> float:
+    """Height the optional title / panel frame adds around a chart."""
+    from .axes import PANEL_PAD, TITLE_H
+    return (TITLE_H + 2 if p.get("title") else 0.0) + (2 * PANEL_PAD if p.get("panel") else 0.0)
+
+
 def _chart_bars(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
+    from .axes import (axis_width, baseline_op, divider_height, divider_ops, fmt_value, inner_width, panelize,
+                       thin_labels, y_axis_ops)
+
+    w_in = inner_width(w, p)
     labels, values = list(p["labels"]), [float(v) for v in p["values"]]
     n = max(1, len(values))
     vmax = float(p["max"]) if p["max"] else _nice_max(values)
     unit = p["unit"] or ""
-    color = p["color"]
+    colors = list(p["colors"] or [])
+    fill = lambda i: colors[i] if i < len(colors) and colors[i] else p["color"]  # noqa: E731
     ops: list[dict] = []
     if p["horizontal"]:
         row_h, gap = 22.0, 6.0
-        label_w = w * 0.3
+        label_w = w_in * 0.3
         value_w = 52.0
         track_x = label_w + 6
-        track_w = w - track_x - value_w - 6
+        track_w = w_in - track_x - value_w - 6
         for i, (lab, v) in enumerate(zip(labels, values)):
             y = i * (row_h + gap)
             ops.append({"op": "text", "x": 0, "y": y, "w": label_w, "h": row_h, "text": str(lab),
                         "style": "chart_label", "align": "END", "valign": "MIDDLE"})
             ops.append({"op": "box", "x": track_x, "y": y + 5, "w": track_w, "h": row_h - 10, "fill": "surface", "role": "track"})
-            ops.append({"op": "box", "x": track_x, "y": y + 5, "w": track_w * v / vmax, "h": row_h - 10, "fill": color, "role": "bar"})
+            ops.append({"op": "box", "x": track_x, "y": y + 5, "w": track_w * v / vmax, "h": row_h - 10, "fill": fill(i), "role": "bar"})
             if p["show_values"]:
-                from .axes import fmt_value
                 ops.append({"op": "text", "x": track_x + track_w + 6, "y": y, "w": value_w, "h": row_h,
                             "text": fmt_value(v, unit), "style": "chart_value", "valign": "MIDDLE"})
-        return ops, h or (n * row_h + (n - 1) * gap)
+        return panelize(ops, n * row_h + (n - 1) * gap, w, p) if (p.get("title") or p.get("panel")) \
+            else (ops, h or (n * row_h + (n - 1) * gap))
 
-    from .axes import axis_width, divider_height, divider_ops, fmt_value, y_axis_ops
-
-    height = h or 150
+    height = (h - _frame_h(p)) if h else 150.0
     label_h, value_h = 14.0 + INSETS, 14.0 + INSETS
     ml = axis_width(vmax, unit) + 6 if p["y_axis"] else 0.0
     y0 = (value_h + 2 if p["show_values"] else 2) + divider_height(p["dividers"])
     y1 = height - label_h - 4
-    px, pw = ml, w - ml
+    px, pw = ml, w_in - ml
     slot = pw / n
     bar_w = slot * 0.6
     if p["y_axis"]:
         ops += y_axis_ops(px, y0, pw, y1 - y0, vmax, unit, side="left", label_w=ml - 6)
+    shown = thin_labels(labels, slot)
     for i, (lab, v) in enumerate(zip(labels, values)):
         bh = (y1 - y0) * v / vmax
         x = px + i * slot + slot * 0.2
-        ops.append({"op": "box", "x": x, "y": y1 - bh, "w": bar_w, "h": bh, "fill": color, "role": "bar"})
+        ops.append({"op": "box", "x": x, "y": y1 - bh, "w": bar_w, "h": bh, "fill": fill(i), "role": "bar"})
         if p["show_values"]:
             ops.append({"op": "text", "x": px + i * slot, "y": y1 - bh - value_h + 2, "w": slot, "h": value_h,
                         "text": fmt_value(v, unit), "style": "chart_value", "align": "CENTER", "role": "value"})
-        ops.append({"op": "text", "x": px + i * slot, "y": y1 + 3, "w": slot, "h": label_h, "text": str(lab),
-                    "style": "chart_label", "align": "CENTER"})
+        if shown[i]:
+            lw = max(slot, 48.0)
+            ops.append({"op": "text", "x": px + (i + 0.5) * slot - lw / 2, "y": y1 + 3, "w": lw, "h": label_h, "text": str(lab),
+                        "style": "chart_label", "align": "CENTER", "role": "label"})
     ops += divider_ops(p["dividers"], [str(lb) for lb in labels], px, y0, slot, y1 - y0)
-    ops.append({"op": "line", "x1": px, "y1": y1, "x2": w, "y2": y1, "color": "ink", "weight": 1.5})
-    return ops, height
+    ops.append(baseline_op(px, y1, pw))
+    return panelize(ops, height, w, p)
 
 
 register(Component(
-    name="chart_bars", description="Histogramme vertical (barres + valeurs + libellés, axe Y gradué et séparateurs de périodes en option) ou barres horizontales sur piste grise.",
+    name="chart_bars", description="Histogramme vertical (barres + valeurs + libellés, axe Y gradué et séparateurs de périodes en option, une couleur par barre possible) ou barres horizontales sur piste grise ; titre et panneau optionnels.",
     props=[
         Prop("labels", "list", "Libellés des barres.", required=True),
         Prop("values", "list", "Valeurs numériques, même longueur que labels.", required=True),
@@ -454,25 +466,36 @@ register(Component(
         Prop("max", "number", "Maximum de l'échelle (défaut : arrondi au-dessus du max)."),
         Prop("show_values", "bool", "Afficher les valeurs.", default=True),
         Prop("color", "color", "Couleur des barres.", default="accent"),
+        Prop("colors", "list", "Une couleur par barre (rôles du thème, ex. regie_google), prime sur color."),
         Prop("y_axis", "bool", "Axe Y gradué avec grille (vertical).", default=False),
         Prop("dividers", "list", "Séparateurs de périodes (vertical) : {after: libellé, left?, right?, color?, dash?}.", default=[]),
+        Prop("title", "str", "Titre du graphique, en petit et centré au-dessus."),
+        Prop("panel", "bool", "Fond gris clair arrondi autour du graphique (style bilan).", default=False),
     ],
-    render=_chart_bars, example={"labels": ["Google", "Bing", "Meta"], "values": [62, 8, 30], "unit": "%"},
+    render=_chart_bars,
+    example={"labels": ["Google", "Bing", "Facebook", "Instagram"], "values": [3.9, 2.5, 3.45, 1.5],
+             "colors": ["regie_google", "regie_bing", "regie_facebook", "regie_instagram"], "y_axis": True, "title": "ROAS par régie"},
     tags=["graphiques"],
 ))
 
 
 def _chart_line(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
-    height = h or 180
+    from .axes import AXIS_W, GRID_W, LEGEND_H, LINE_W, MARKER, auto, inner_width, legend_ops, panelize, thin_labels
+
+    w_in = inner_width(w, p)
+    height = (h - _frame_h(p)) if h else 180.0
     labels = list(p["labels"])
     series = list(p["series"])
-    legend = p["legend"] and len(series) > 1
-    ml, mr, mt = 50.0, 10.0, 8.0
-    mb = 22.0 + (18.0 if legend else 0)
-    px, py, pw, ph = ml, mt, w - ml - mr, height - mt - mb
+    pos = p["legend_pos"] if (p["legend"] and len(series) > 1) else "none"
+    legend_h = LEGEND_H + 4 if pos in ("top", "bottom") else 0.0
+    ml, mr = 50.0, 10.0
+    mt = 8.0 + (legend_h if pos == "top" else 0.0)
+    mb = 22.0 + (legend_h if pos == "bottom" else 0.0)
+    px, py, pw, ph = ml, mt, w_in - ml - mr, height - mt - mb
     allv = [float(v) for s in series for v in s.get("values", []) if v is not None]
     vmax = float(p["y_max"]) if p["y_max"] else _nice_max(allv)
     n = max(1, len(labels))
+    markers_on = auto(p["markers"], n)
 
     def X(i: int) -> float:
         return px + (pw * i / (n - 1) if n > 1 else pw / 2)
@@ -481,12 +504,16 @@ def _chart_line(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[
         return py + ph - ph * v / vmax
 
     ops: list[dict] = []
+    entries = [{"name": s.get("name", f"série {k + 1}"), "color": s.get("color") or f"series_{k + 1}", "kind": "line"}
+               for k, s in enumerate(series)]
+    if pos == "top":
+        ops += legend_ops(entries, px, 0, pw, "top")[0]
     for k in range(5):
         t = vmax * k / 4
         ops.append({"op": "line", "x1": px, "y1": Y(t), "x2": px + pw, "y2": Y(t),
-                    "color": "ink" if k == 0 else "grid", "weight": 1.5 if k == 0 else 0.75})
+                    "color": "chart_axis" if k == 0 else "chart_grid", "weight": AXIS_W if k == 0 else GRID_W,
+                    "role": "baseline" if k == 0 else "grid"})
         ops.append({"op": "text", "x": 0, "y": Y(t) - 7, "w": ml - 6, "h": 14, "text": _fmt(t), "style": "axis", "align": "END"})
-    ops.append({"op": "line", "x1": px, "y1": py - 3, "x2": px, "y2": py + ph, "color": "ink", "weight": 1.5})
     markers: list[dict] = []
     for k, s in enumerate(series):
         color = s.get("color") or f"series_{k + 1}"
@@ -501,36 +528,36 @@ def _chart_line(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[
                 continue
             pt = [X(i), Y(float(v))]
             run.append(pt)
-            markers.append({"op": "box", "x": pt[0] - 2.5, "y": pt[1] - 2.5, "w": 5, "h": 5, "shape": "ELLIPSE", "fill": color})
+            if markers_on:
+                markers.append({"op": "box", "x": pt[0] - MARKER / 2, "y": pt[1] - MARKER / 2, "w": MARKER, "h": MARKER,
+                                "shape": "ELLIPSE", "fill": color, "role": "marker"})
         if run:
             runs.append(run)
         for r in runs:
             if len(r) >= 2:
-                ops.append({"op": "polyline", "points": r, "color": color, "weight": 2.5, "dash": dash})
+                ops.append({"op": "polyline", "points": r, "color": color, "weight": LINE_W, "dash": dash, "role": "line"})
     ops.extend(markers)
+    shown = thin_labels(labels, pw / max(n - 1, 1))
     for i, lab in enumerate(labels):
-        ops.append({"op": "text", "x": X(i) - 24, "y": py + ph + 3, "w": 48, "h": 12, "text": str(lab),
-                    "style": "chart_label", "align": "CENTER"})
-    if legend:
-        lx, ly = px, height - 14
-        for k, s in enumerate(series):
-            color = s.get("color") or f"series_{k + 1}"
-            ops.append({"op": "line", "x1": lx, "y1": ly + 6, "x2": lx + 14, "y2": ly + 6, "color": color, "weight": 2.5,
-                        "dash": "DASH" if s.get("dash") else None})
-            name = str(s.get("name", f"série {k + 1}"))
-            tw = len(name) * 6.5 + 16
-            ops.append({"op": "text", "x": lx + 18, "y": ly - 4, "w": tw, "h": 14 + INSETS, "text": name, "style": "legend"})
-            lx += 18 + tw + 10
-    return ops, height
+        if shown[i]:
+            ops.append({"op": "text", "x": X(i) - 24, "y": py + ph + 3, "w": 48, "h": 12, "text": str(lab),
+                        "style": "chart_label", "align": "CENTER", "role": "label"})
+    if pos == "bottom":
+        ops += legend_ops(entries, px, height - LEGEND_H, pw, "bottom")[0]
+    return panelize(ops, height, w, p)
 
 
 register(Component(
-    name="chart_line", description="Courbes multi-séries sur grille : axe, libellés, marqueurs, série pointillée, trous (null), légende.",
+    name="chart_line", description="Courbes fines multi-séries sur grille légère : axe, libellés, petits marqueurs, série pointillée, trous (null), légende.",
     props=[
         Prop("labels", "list", "Libellés de l'axe horizontal.", required=True),
         Prop("series", "list", "Séries : {name, values (null = trou), dash?, color?}.", required=True),
         Prop("y_max", "number", "Maximum de l'échelle."),
-        Prop("legend", "bool", "Légende sous le graphique (si plusieurs séries).", default=True),
+        Prop("legend", "bool", "Légende (si plusieurs séries).", default=True),
+        Prop("legend_pos", "choice", "Position de la légende.", default="bottom", choices=["top", "bottom", "none"]),
+        Prop("markers", "str", "Marqueurs sur les points : 'auto' (jusqu'à 12 points), true, false.", default="auto"),
+        Prop("title", "str", "Titre du graphique, en petit et centré au-dessus."),
+        Prop("panel", "bool", "Fond gris clair arrondi autour du graphique (style bilan).", default=False),
     ],
     render=_chart_line,
     example={"labels": ["Jan", "Fév", "Mar", "Avr"], "series": [{"name": "2025", "values": [120, 140, 135, 160]}, {"name": "2026", "values": [130, 150, None, 190], "dash": True}]},
@@ -539,23 +566,54 @@ register(Component(
 
 
 def _donut(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
-    height = h or 160
+    import math
+
+    from .axes import LEGEND_H, inner_width, legend_ops, panelize
+
+    w_in = inner_width(w, p)
+    height = (h - _frame_h(p)) if h else 160.0
     segs = list(p["segments"])
     total = sum(float(s.get("value", 0)) for s in segs) or 1.0
-    legend = p["legend"]
-    d = min(height, w * 0.5 if legend else w)
-    r = d / 2
-    cx, cy = r, height / 2
-    thickness = float(p["thickness"]) if p["thickness"] else r * 0.36
+    pos = p.get("legend_pos") or "right"
+    legend = p["legend"] and pos != "none"
     colored = [{"value": float(s.get("value", 0)), "color": s.get("color") or f"series_{i + 1}"} for i, s in enumerate(segs)]
+    bottom_h = 0.0
+    if legend and pos == "bottom":
+        # legend lines wrap under the ring: estimate the rows the entries need
+        per = [len(str(s.get("label", ""))) * 5.6 + 2 * INSET_X + 32 for s in segs]
+        rows_n, line_w = 1, 0.0
+        for width in per:
+            if line_w + width > w_in and line_w:
+                rows_n += 1
+                line_w = 0.0
+            line_w += width
+        bottom_h = rows_n * LEGEND_H + 4
+    d = min(height - bottom_h, w_in * 0.5 if (legend and pos == "right") else w_in)
+    r = d / 2
+    cx = r if (legend and pos == "right") else w_in / 2
+    cy = d / 2 if pos == "bottom" else height / 2
+    thickness = float(p["thickness"]) if p["thickness"] else r * 0.36
     ops: list[dict] = [{"op": "ring", "cx": cx, "cy": cy, "r": r, "thickness": thickness, "segments": colored}]
     if p["center"]:
         ops.append({"op": "text", "x": cx - r * 0.6, "y": cy - 10, "w": r * 1.2, "h": 20, "text": str(p["center"]),
                     "style": "chart_value", "size": 14, "align": "CENTER", "valign": "MIDDLE"})
-    if legend:
+    if p.get("labels"):
+        a = -90.0
+        rm = r - thickness / 2
+        for c in colored:
+            span = 360 * c["value"] / total
+            pct = round(100 * c["value"] / total)
+            if pct >= 6:
+                t = math.radians(a + span / 2)
+                lx, ly = cx + rm * math.cos(t), cy + rm * math.sin(t)
+                ops.append({"op": "text", "x": lx - 20, "y": ly - 9, "w": 40, "h": 18, "text": f"{pct} %", "style": "chart_value",
+                            "size": 10, "color": "on_dark" if theme.is_dark(c["color"]) else "ink", "align": "CENTER",
+                            "valign": "MIDDLE", "role": "segment_label"})
+            a += span
+    if legend and pos == "right":
         lx = d + 16
-        lw = w - lx
-        row = 21.0
+        lw = w_in - lx
+        row = LEGEND_H
         ly = cy - row * len(segs) / 2
         for s, c in zip(segs, colored):
             pct = round(100 * c["value"] / total)
@@ -565,18 +623,38 @@ def _donut(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
             ops.append({"op": "text", "x": lx + lw - 44, "y": ly, "w": 44, "h": row, "text": f"{pct} %",
                         "style": "chart_value", "align": "END", "valign": "MIDDLE"})
             ly += row
-    return ops, height
+    elif legend and pos == "bottom":
+        entries = [{"name": str(s.get("label", "")), "color": c["color"]} for s, c in zip(segs, colored)]
+        ly = d + 4
+        line: list[dict] = []
+        line_w = 0.0
+        for e, width in zip(entries, per):
+            if line_w + width > w_in and line:
+                ops += legend_ops(line, 0, ly, w_in, "top")[0]
+                ly += LEGEND_H
+                line, line_w = [], 0.0
+            line.append(e)
+            line_w += width
+        if line:
+            ops += legend_ops(line, 0, ly, w_in, "top")[0]
+    return panelize(ops, height, w, p)
 
 
 register(Component(
-    name="donut", description="Anneau de répartition (parts en % avec légende), texte central optionnel.",
+    name="donut", description="Anneau de répartition : parts en % dans la légende (à droite ou dessous) et, en option, posées sur les parts ; texte central, titre et panneau optionnels.",
     props=[
-        Prop("segments", "list", "Parts : {label, value, color?}.", required=True),
+        Prop("segments", "list", "Parts : {label, value, color?} (couleurs : rôles du thème, ex. regie_google).", required=True),
         Prop("thickness", "number", "Épaisseur de l'anneau en pt (défaut : 36 % du rayon)."),
         Prop("center", "str", "Texte au centre."),
-        Prop("legend", "bool", "Légende à droite avec pourcentages.", default=True),
+        Prop("legend", "bool", "Légende avec pourcentages.", default=True),
+        Prop("legend_pos", "choice", "Légende à droite de l'anneau ou en dessous.", default="right", choices=["right", "bottom", "none"]),
+        Prop("labels", "bool", "Pourcentages posés sur les parts (à partir de 6 %).", default=False),
+        Prop("title", "str", "Titre du graphique, en petit et centré au-dessus."),
+        Prop("panel", "bool", "Fond gris clair arrondi autour du graphique (style bilan).", default=False),
     ],
     render=_donut,
-    example={"segments": [{"label": "Google", "value": 62}, {"label": "Meta", "value": 25}, {"label": "Bing", "value": 13}], "center": "100 %"},
+    example={"segments": [{"label": "Google", "value": 62, "color": "regie_google"}, {"label": "Meta", "value": 25, "color": "regie_meta"},
+                          {"label": "Bing", "value": 13, "color": "regie_bing"}], "labels": True, "legend_pos": "bottom",
+             "title": "Répartition des dépenses"},
     tags=["graphiques"],
 ))

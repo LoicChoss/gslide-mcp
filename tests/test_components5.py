@@ -77,9 +77,8 @@ def test_chart_combo_bars_left_axis_line_right_axis_values_and_legend():
     markers = _of(ops, "box", "marker")
     assert len(line["points"]) == 2 and len(markers) == 2  # None = gap, no marker
     base = _of(ops, "line", "baseline")[0]["y1"]
-    top = base - (base - markers[0]["y"] - 4.5)
-    assert markers[0]["y"] + 4.5 == pytest.approx(base - (base - _of(ops, "line", "grid")[3]["y1"]) * 780 / 800)
-    assert markers[0]["x"] + 4.5 == pytest.approx(bars[0]["x"] + bars[0]["w"] / 2)  # centred on the bar
+    assert markers[0]["y"] + axes.MARKER / 2 == pytest.approx(base - (base - _of(ops, "line", "grid")[3]["y1"]) * 780 / 800)
+    assert markers[0]["x"] + axes.MARKER / 2 == pytest.approx(bars[0]["x"] + bars[0]["w"] / 2)  # centred on the bar
     assert [t["text"] for t in _of(ops, "text", "bar_value")][0] == "1 152 729 €"
     assert [t["text"] for t in _of(ops, "text", "point_value")] == ["780", "404"]
     assert all(t["color"] == "series_6" for t in _of(ops, "text", "point_value"))

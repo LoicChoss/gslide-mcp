@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from ..themes import Theme
 from . import Component, Prop, register
-from .axes import axis_width, divider_height, divider_ops, fmt_value, y_axis_ops
-from .builtin import INSETS, LEADING, _nice_max
+from .axes import (LEGEND_H, axis_width, baseline_op, divider_height, divider_ops, fmt_value, inner_width, legend_ops,
+                   panelize, thin_labels, y_axis_ops)
+from .builtin import INSETS, LEADING, _frame_h, _nice_max
 
 
 # --- gauge ------------------------------------------------------------------------------
@@ -116,6 +117,7 @@ register(Component(
 # --- chart_stacked ----------------------------------------------------------------------
 
 def _chart_stacked(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
+    w_in = inner_width(w, p)
     labels = [str(lb) for lb in p["labels"]]
     series = list(p["series"])
     n = len(labels)
@@ -124,14 +126,19 @@ def _chart_stacked(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
     vmax = float(p["max"]) if p["max"] else _nice_max(totals)
     unit = p["unit"] or ""
     ops: list[dict] = []
-    legend_h = 21.0 if p["legend"] else 0.0
+    pos = p["legend_pos"] if p["legend"] else "none"
+    legend_h = LEGEND_H + 4 if pos in ("top", "bottom") else 0.0
+    entries = [{"name": str(s.get("name", "")), "color": c} for s, c in zip(series, colors)]
+    top_legend = legend_h if pos == "top" else 0.0
     if p["horizontal"]:
         bar_h, gap = float(p["bar_h"]), float(p["gap"])
-        label_w = min(w * 0.35, max(len(lb) for lb in labels) * 6.0 + 14) if labels else 0
+        label_w = min(w_in * 0.35, max(len(lb) for lb in labels) * 6.0 + 14) if labels else 0
         x0 = label_w + 6
-        bw = w - x0 - (44 if p["show_values"] else 0)
+        bw = w_in - x0 - (44 if p["show_values"] else 0)
+        if pos == "top":
+            ops += legend_ops(entries, x0, 0, bw, "top")[0]
         for i, lb in enumerate(labels):
-            y = i * (bar_h + gap)
+            y = top_legend + i * (bar_h + gap)
             ops.append({"op": "text", "x": 0, "y": y - 2, "w": label_w, "h": bar_h + 4, "text": lb, "style": "chart_label",
                         "align": "END", "valign": "MIDDLE", "role": "label"})
             x = x0
@@ -144,17 +151,20 @@ def _chart_stacked(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
             if p["show_values"]:
                 ops.append({"op": "text", "x": x + 4, "y": y - 2, "w": 64, "h": bar_h + 4, "text": fmt_value(totals[i], unit),
                             "style": "chart_value", "valign": "MIDDLE", "role": "total"})
-        height = n * (bar_h + gap) - gap
+        height = top_legend + n * (bar_h + gap) - gap
         ly = height + 8
     else:
-        plot_h = (h or 180) - legend_h - 22
+        plot_h = ((h - _frame_h(p)) if h else 180.0) - (legend_h if pos == "bottom" else 0.0) - 22
         ml = axis_width(vmax, unit) + 6 if p["y_axis"] else 0.0
-        top = (14 + INSETS + 2 if p["show_values"] else 0.0) + divider_height(p["dividers"])
-        px, pw = ml, w - ml
+        top = (14 + INSETS + 2 if p["show_values"] else 0.0) + divider_height(p["dividers"]) + top_legend
+        px, pw = ml, w_in - ml
         col_w = pw / max(n, 1)
         bar_w = col_w * 0.6
+        if pos == "top":
+            ops += legend_ops(entries, px, 0, pw, "top")[0]
         if p["y_axis"]:
             ops += y_axis_ops(px, top, pw, plot_h - top, vmax, unit, side="left", label_w=ml - 6)
+        shown = thin_labels(labels, col_w)
         for i, lb in enumerate(labels):
             x = px + i * col_w + (col_w - bar_w) / 2
             y = plot_h
@@ -167,22 +177,18 @@ def _chart_stacked(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
             if p["show_values"]:
                 ops.append({"op": "text", "x": px + i * col_w, "y": y - 14 - INSETS + 2, "w": col_w, "h": 14 + INSETS,
                             "text": fmt_value(totals[i], unit), "style": "chart_value", "align": "CENTER", "role": "total"})
-            ops.append({"op": "text", "x": px + i * col_w, "y": plot_h + 2, "w": col_w, "h": 14 + INSETS, "text": lb, "style": "chart_label",
-                        "align": "CENTER", "role": "label"})
+            if shown[i]:
+                lw = max(col_w, 48.0)
+                ops.append({"op": "text", "x": px + (i + 0.5) * col_w - lw / 2, "y": plot_h + 2, "w": lw, "h": 14 + INSETS, "text": lb,
+                            "style": "chart_label", "align": "CENTER", "role": "label"})
         ops += divider_ops(p["dividers"], labels, px, top, col_w, plot_h - top)
-        ops.insert(0, {"op": "line", "x1": px, "y1": plot_h, "x2": w, "y2": plot_h, "color": "ink", "weight": 1.5})
+        ops.insert(0, baseline_op(px, plot_h, pw))
         height = plot_h + 22
         ly = height
-    if p["legend"]:
-        lx = 0.0
-        for s, color in zip(series, colors):
-            name = str(s.get("name", ""))
-            ops.append({"op": "box", "x": lx, "y": ly + 5, "w": 8, "h": 8, "fill": color, "role": "swatch"})
-            tw = len(name) * 10 * 0.55 + 22
-            ops.append({"op": "text", "x": lx + 11, "y": ly, "w": tw, "h": 21, "text": name, "style": "legend", "valign": "MIDDLE"})
-            lx += tw + 14
+    if pos == "bottom":
+        ops += legend_ops(entries, 0.0, ly, w_in, "bottom")[0]
         height = ly + legend_h
-    return ops, h or height
+    return panelize(ops, height, w, p)
 
 
 register(Component(
@@ -195,10 +201,13 @@ register(Component(
         Prop("unit", "str", "Unité des totaux.", default=""),
         Prop("show_values", "bool", "Afficher le total de chaque barre.", default=False),
         Prop("legend", "bool", "Légende des séries.", default=True),
+        Prop("legend_pos", "choice", "Position de la légende.", default="bottom", choices=["top", "bottom", "none"]),
         Prop("bar_h", "number", "Hauteur des barres (horizontal).", default=16),
         Prop("gap", "number", "Espace entre barres (horizontal).", default=8),
         Prop("y_axis", "bool", "Axe Y gradué avec grille (vertical).", default=False),
         Prop("dividers", "list", "Séparateurs de périodes (vertical) : {after: libellé, left?, right?, color?, dash?}.", default=[]),
+        Prop("title", "str", "Titre du graphique, en petit et centré au-dessus."),
+        Prop("panel", "bool", "Fond gris clair arrondi autour du graphique (style bilan).", default=False),
     ],
     render=_chart_stacked,
     example={"labels": ["2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022"],
