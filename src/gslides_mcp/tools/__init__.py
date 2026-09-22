@@ -6,5 +6,5 @@ fire and register tool handlers.
 
 from . import (  # noqa: F401
     assets, comments, components, content, cross_deck, deck, images, layout, library, notes, qa, raw,
-    semantic, shapes, slides, tables,
+    semantic, sheets_charts, shapes, slides, tables,
 )

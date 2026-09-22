@@ -116,6 +116,9 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.2.0.mcpb
 | **Shape** | `create_shape` | Insert a shape |
 | | `insert_image` | Insert an image by URL or Drive file ID |
 | | `insert_image_local` | Insert a local PNG/JPEG/GIF (temporary Drive upload, cleaned up) |
+| **Sheets charts** | `insert_sheets_chart` | Embed a chart built in a Google Sheets spreadsheet, linked (follows the sheet) or as a snapshot |
+| | `list_sheets_charts` | The linked charts of a deck or a slide: element, spreadsheet, chart id, geometry |
+| | `refresh_sheets_charts` | Refresh linked charts (deck, slide or given elements) after the spreadsheet changed |
 | | `set_fill` | Set the fill color of a shape |
 | | `set_outline` | Set the outline of a shape |
 | **Table** | `create_table` | Create a table (≤ 20×20), optionally pre-filled, in one batch |
@@ -212,6 +215,7 @@ gslide-mcp/
 │   ├── appscript-setup.md          Apps Script deployment guide
 │   ├── layouts.md                  Building slides on the theme's layouts
 │   ├── components.md               Components, themes, draw ops, recipes
+│   ├── sheets-charts.md            Native Sheets charts on slides (flow with a Sheets MCP, charter contract)
 │   └── template-library.md         Template library workflow
 ├── examples/
 │   └── template_library_workflow.md  Worked example
@@ -231,6 +235,7 @@ gslide-mcp/
         ├── notes.py                speaker notes
         ├── shapes.py
         ├── images.py               insert_image_local
+        ├── sheets_charts.py        insert / list / refresh linked Google Sheets charts
         ├── tables.py
         ├── content.py
         ├── qa.py

@@ -47,6 +47,7 @@ _CREATE_REPLIES = {
     "createShape": "gen_shape",
     "createTable": "gen_table",
     "createImage": "gen_image",
+    "createSheetsChart": "gen_chart",
     "duplicateObject": "gen_dup",
 }
 

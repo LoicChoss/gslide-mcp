@@ -122,6 +122,8 @@ def _summarize_element(el: dict, parent_tx: float = 0, parent_ty: float = 0,
         kind = "image"
     elif "table" in el:
         kind = "table"
+    elif "sheetsChart" in el:
+        kind = "chart"
     elif "elementGroup" in el:
         kind = "group"
     elif "shape" in el:
