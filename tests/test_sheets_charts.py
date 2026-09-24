@@ -75,8 +75,12 @@ def test_transform_element_moves_and_resizes_a_linked_chart(fake_slides, pres):
     assert t["translateX"] == 100 * 12700 and t["translateY"] == 120 * 12700
     assert t["scaleX"] == pytest.approx(0.5) and t["scaleY"] == pytest.approx(0.5)  # 640 × 300 base → 320 × 150
     assert out["scale_x"] == pytest.approx(0.5)
-    only = transform_element("PRES1", "chart_el_1", width_pt=160)  # resize in place, height kept
+    only = transform_element("PRES1", "chart_el_1", width_pt=160)  # resize in place, aspect kept
     t = fake_slides.batches[-1][0]["updatePageElementTransform"]["transform"]
-    assert t["translateX"] == 40 * 12700 and t["scaleX"] == pytest.approx(0.25) and t["scaleY"] == 1
+    assert t["translateX"] == 40 * 12700 and t["scaleX"] == pytest.approx(0.25) and t["scaleY"] == pytest.approx(0.25)
+    pres["slides"][0]["pageElements"][-1]["transform"].update({"scaleX": 2, "scaleY": 2})  # a pre-scaled element
+    transform_element("PRES1", "chart_el_1", height_pt=150)  # 600 displayed → 150: both scales ÷ 4
+    t = fake_slides.batches[-1][0]["updatePageElementTransform"]["transform"]
+    assert t["scaleX"] == pytest.approx(0.5) and t["scaleY"] == pytest.approx(0.5)
     with pytest.raises(ValueError, match="coordinates"):
         transform_element("PRES1", "chart_el_1")

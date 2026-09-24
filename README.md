@@ -129,7 +129,7 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.3.0.mcpb
 | | `set_text` | Set plain text on a shape |
 | | `style_text` | Apply text styles (font, size, color) to a range |
 | | `replace_text` | Find-and-replace text across a slide or deck |
-| **Element** | `transform_element` | Move (absolute or relative pt) and / or resize (`width_pt`, `height_pt`) any element, linked Sheets charts included |
+| **Element** | `transform_element` | Move (absolute or relative pt) and / or resize (`width_pt`, `height_pt`; one alone keeps the aspect) any element, linked Sheets charts included |
 | | `zorder` | Change element stacking order |
 | | `duplicate_element` | Duplicate an element within a slide |
 | | `delete_elements` | Delete one or more elements |

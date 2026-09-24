@@ -44,8 +44,9 @@ def transform_element(
     """Move and / or resize an element (shape, image, table, group, linked Sheets chart).
 
     Move: absolute (x_pt, y_pt) or relative (dx_pt, dy_pt). Resize: width_pt and / or
-    height_pt, the displayed size in points; the other dimension keeps its current
-    size (pass both to change the aspect). Resizing alone keeps the position.
+    height_pt, the displayed size in points. One dimension alone scales the element
+    uniformly (the aspect is kept: a chart or an image is never squashed); pass both
+    to set the aspect. Resizing alone keeps the position.
 
     Without a resize the element's existing scaleX/scaleY are preserved (critical —
     naive `applyMode: ABSOLUTE` with `scale: 1` silently resizes elements that had
@@ -87,10 +88,15 @@ def transform_element(
         base_h = size.get("height", {}).get("magnitude")
         if not base_w or not base_h:
             raise ValueError(f"element {element!r} has no size to scale (a line?)")
-        if width_pt is not None:
+        if width_pt is not None and height_pt is not None:
             cur_sx = width_pt * PT_TO_EMU / base_w
-        if height_pt is not None:
             cur_sy = height_pt * PT_TO_EMU / base_h
+        elif width_pt is not None:  # keep the aspect: both scales move by the same factor
+            k = (width_pt * PT_TO_EMU / base_w) / (cur_sx or 1)
+            cur_sx, cur_sy = cur_sx * k, cur_sy * k
+        else:
+            k = (height_pt * PT_TO_EMU / base_h) / (cur_sy or 1)
+            cur_sx, cur_sy = cur_sx * k, cur_sy * k
 
     svc.presentations().batchUpdate(
         presentationId=pid,
