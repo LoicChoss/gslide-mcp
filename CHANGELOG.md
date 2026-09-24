@@ -2,6 +2,12 @@
 
 All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/) (0.x: minor bumps may change tool signatures).
 
+## [0.3.1] — 2026-09-24
+
+### Fixed
+
+- `transform_element`: a single `width_pt` or `height_pt` now scales the element uniformly (the aspect is kept: a linked chart or an image is no longer squashed); both together set the aspect.
+
 ## [0.3.0] — 2026-09-24
 
 ### Added
