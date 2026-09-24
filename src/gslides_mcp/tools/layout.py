@@ -38,11 +38,17 @@ def transform_element(
     y_pt: float | None = None,
     dx_pt: float | None = None,
     dy_pt: float | None = None,
+    width_pt: float | None = None,
+    height_pt: float | None = None,
 ) -> dict:
-    """Move an element. Either absolute (x_pt, y_pt) or relative (dx_pt, dy_pt).
+    """Move and / or resize an element (shape, image, table, group, linked Sheets chart).
 
-    Preserves the element's existing scaleX/scaleY (critical — naive
-    `applyMode: ABSOLUTE` with `scale: 1` silently resizes elements that had
+    Move: absolute (x_pt, y_pt) or relative (dx_pt, dy_pt). Resize: width_pt and / or
+    height_pt, the displayed size in points; the other dimension keeps its current
+    size (pass both to change the aspect). Resizing alone keeps the position.
+
+    Without a resize the element's existing scaleX/scaleY are preserved (critical —
+    naive `applyMode: ABSOLUTE` with `scale: 1` silently resizes elements that had
     custom scales applied at create time).
     """
     pid = parse_pres_id(presentation)
@@ -70,8 +76,21 @@ def transform_element(
     elif dx_pt is not None:
         new_tx = int(cur_tx + dx_pt * PT_TO_EMU)
         new_ty = int(cur_ty + dy_pt * PT_TO_EMU)
+    elif width_pt is None and height_pt is None:
+        raise ValueError("provide absolute or relative coordinates, or width_pt / height_pt")
     else:
-        raise ValueError("provide absolute or relative coordinates")
+        new_tx, new_ty = int(cur_tx), int(cur_ty)  # resize in place
+    if width_pt is not None or height_pt is not None:
+        # displayed size = base size × scale: change the scale, never the base size
+        size = el.get("size", {})
+        base_w = size.get("width", {}).get("magnitude")
+        base_h = size.get("height", {}).get("magnitude")
+        if not base_w or not base_h:
+            raise ValueError(f"element {element!r} has no size to scale (a line?)")
+        if width_pt is not None:
+            cur_sx = width_pt * PT_TO_EMU / base_w
+        if height_pt is not None:
+            cur_sy = height_pt * PT_TO_EMU / base_h
 
     svc.presentations().batchUpdate(
         presentationId=pid,
@@ -85,7 +104,7 @@ def transform_element(
             },
         }}]},
     ).execute()
-    return {"element": element, "x_emu": new_tx, "y_emu": new_ty}
+    return {"element": element, "x_emu": new_tx, "y_emu": new_ty, "scale_x": cur_sx, "scale_y": cur_sy}
 
 
 @mcp.tool(annotations=ADDITIVE)

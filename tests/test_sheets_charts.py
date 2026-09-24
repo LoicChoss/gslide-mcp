@@ -62,3 +62,21 @@ def test_inspect_slide_reports_sheets_charts_as_charts(fake_slides, pres):
     pres["slides"][0]["pageElements"].append(_chart_element())
     el = next(e for e in inspect_slide("PRES1", "1")["elements"] if e["id"] == "chart_el_1")
     assert el["type"] == "chart" and el["x"] == 40.0 and el["w"] == 640.0
+
+
+def test_transform_element_moves_and_resizes_a_linked_chart(fake_slides, pres):
+    from gslides_mcp.tools.layout import transform_element
+
+    pres["slides"][0]["pageElements"].append(_chart_element())
+    out = transform_element("PRES1", "chart_el_1", x_pt=100, y_pt=120, width_pt=320, height_pt=150)
+    (req,) = fake_slides.batches[-1]
+    t = req["updatePageElementTransform"]["transform"]
+    assert req["updatePageElementTransform"]["applyMode"] == "ABSOLUTE"
+    assert t["translateX"] == 100 * 12700 and t["translateY"] == 120 * 12700
+    assert t["scaleX"] == pytest.approx(0.5) and t["scaleY"] == pytest.approx(0.5)  # 640 × 300 base → 320 × 150
+    assert out["scale_x"] == pytest.approx(0.5)
+    only = transform_element("PRES1", "chart_el_1", width_pt=160)  # resize in place, height kept
+    t = fake_slides.batches[-1][0]["updatePageElementTransform"]["transform"]
+    assert t["translateX"] == 40 * 12700 and t["scaleX"] == pytest.approx(0.25) and t["scaleY"] == 1
+    with pytest.raises(ValueError, match="coordinates"):
+        transform_element("PRES1", "chart_el_1")

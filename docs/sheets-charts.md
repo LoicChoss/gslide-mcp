@@ -16,7 +16,8 @@ The model orchestrates the two; the servers never talk to each other.
 4. **Slide.** gslide-mcp `insert_sheets_chart(deck, slide, spreadsheet, chart_id, x, y, w, h)`
    (`linked=True` by default). Position it like a component: under the title, full
    content width.
-5. **Later.** Data changes in the spreadsheet → `refresh_sheets_charts(deck)`; the
+5. **Adjust.** The chart is an ordinary element: `transform_element(deck, element_id, x_pt, y_pt, width_pt, height_pt)` moves and resizes it, `zorder`, `duplicate_element` and `delete_elements` apply; its id comes from `insert_sheets_chart`, `list_sheets_charts` or `inspect_slide` (type `chart`).
+6. **Later.** Data changes in the spreadsheet → `refresh_sheets_charts(deck)`; the
    slide follows. `list_sheets_charts(deck)` says what is linked to what.
 
 Tables are not linkable: Slides only links charts. Compute the table in Sheets
