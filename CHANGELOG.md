@@ -2,7 +2,7 @@
 
 All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/) (0.x: minor bumps may change tool signatures).
 
-## [Unreleased]
+## [0.3.0] — 2026-09-24
 
 ### Added
 
