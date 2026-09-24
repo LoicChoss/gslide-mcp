@@ -82,6 +82,21 @@ Barlow and colours honoured. Two findings:
 - Slides keeps the chart's aspect ratio inside the box (a 600 × 371 px chart in a
   200 × 160 pt box renders 200 × 124, centred): size the box to the chart's ratio.
 
+## Verified end to end with the two MCPs (2026-09-24)
+
+Sheets MCP `create_spreadsheet` → `set_theme periscope` → `write_values` (formulas
+included) → `manage_chart add` ×3 with `style: periscope` (`doughnut` + `pie_hole`,
+`column` + `series_colors` + `data_labels`, `combo` + `series_types` + `series_axes`)
+→ Slides MCP `insert_sheets_chart` ×3 → a cell changed in the sheet →
+`refresh_sheets_charts` (the bar moved) → `transform_element` on the doughnut (moved
+and resized, link kept). Barlow, charter colours and legends rendered as in Sheets.
+
+Geometry: Google fits the chart in the requested box and **recentres it** at the
+chart's aspect (a 430 × 160 pt box holds a 600 × 371 px chart as 258.8 × 160 centred,
+so `list_sheets_charts` reports x 335.6, not 250). A linked chart's base size is tiny
+(30 000 EMU) with a large scale: `transform_element` works on the displayed size, so
+the scale values it reports look big; that is normal.
+
 ## Sizing on a 960 × 540 pt Periscope slide
 
 Full-width chart under a title: `x_pt=40, y_pt=110, width_pt=880, height_pt=380`.
