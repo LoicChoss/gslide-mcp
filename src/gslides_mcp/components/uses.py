@@ -33,7 +33,7 @@ USES: dict[str, str] = {
     "agenda": "La slide sommaire : sections numérotées avec chip acide (dark=True sur le layout sombre) ; pour des étapes avec picto et sous-texte → numbered_list ; pour une liste simple → chevrons.",
     "numbered_list": "Leviers, priorités, sources, piliers en liste verticale numérotée avec titre + sous-texte (disque picto « #1 » ou chip carrée), cartes et connecteur optionnels ; pour de courtes étapes markdown sans titre → steps ; pour des phases de mission détaillées → phase_cards ; pour 3 principes en colonnes → big_numbers.",
     "steps": "Une courte suite d'étapes ou d'actions en markdown (audit, plan, netlinking) avec pastilles numérotées ; avec titre, sous-texte et picto → numbered_list ; en blocs fléchés horizontaux → process.",
-    "checklist": "Ce qui est fait / à faire, livrables cochés, pré-requis, périmètre couvert ou non ; pour une liste sans notion d'état → chevrons ou arrows ; pour des critères comparés entre solutions → table.",
+    "checklist": "Ce qui est fait / à faire, livrables cochés, pré-requis, périmètre couvert ou non ; avec `groups`, une checklist de publication ou d'audit en sections numérotées sur deux colonnes ; pour une liste sans notion d'état → chevrons ou arrows ; pour des critères comparés entre solutions → table.",
     "chevrons": "Liste à puces charte (›) pour 3 à 6 points courts : constats, objectifs, bénéfices ; pour des enchaînements ou conséquences → arrows ; pour cocher → checklist.",
     "arrows": "Liste → pour des enchaînements, conséquences, recommandations (« → sécuriser », « → prioriser ») ; pour des points simples → chevrons ; pour un flux réel entre étapes → process ou flowchart.",
     "palette": "Slides identité et accessibilité : nuancier de la charte, contrastes RGAA avec ratio (« Aa » fond/texte) ; pour un tableau de critères → table.",
@@ -65,7 +65,11 @@ USES: dict[str, str] = {
     "process": "Chaîne linéaire de 3 à 5 blocs enchaînés par des flèches (brief → production → validation) ; avec branches, retours ou plusieurs lignes → flowchart ; avec livrables détaillés → phase_cards.",
     "flowchart": "Schéma de flux non linéaire : pipeline de contenu, boucle d'itération, dispositif avec branches, nœud mis en avant ; strictement linéaire → process ; hiérarchique → tree ; central + satellites → hub_spoke.",
     "hub_spoke": "Un élément central et ses satellites (site de marque et ses canaux, écosystème d'un outil, sources d'un LLM) ; hiérarchie parent → enfants → tree ; flux orienté → flowchart.",
-    "tree": "Arborescence de site, organigramme, plan de rubriques à deux niveaux avec sous-rubriques listées ; pour des flux entre nœuds → flowchart ; pour un centre et ses satellites → hub_spoke.",
+    "tree": "Arborescence de site, organigramme, plan de rubriques à deux niveaux avec sous-rubriques listées, ou univers de mots-clés à trois niveaux (racine, univers, expressions en boîtes) ; pour des flux entre nœuds → flowchart ; pour un centre et ses satellites → hub_spoke ; pour une page cible et ses pages filles → cocon.",
+    "cocon": "Cocon sémantique ou silo : la page cible au centre, ses pages filles autour, les pages d'action (dons, contact) en navy ; pour un écosystème sans notion de page → hub_spoke ; pour une arborescence à niveaux → tree.",
+    "cycle": "Boucle sans fin (cycle de recherche off market → pre purchase → purchase → usage, cycle de vie, boucle d'amélioration) ; pour une suite linéaire → process ; pour un graphe orienté → flowchart.",
+    "formula": "Raisonnement en équation : deux à cinq facteurs additionnés (ou multipliés) donnent un résultat (personnalisation + géolocalisation + recherche universelle = ranking moins fiable) ; pour des chiffres qui se composent → stat_box.",
+    "persona_card": "Fiche persona d'une reco UX ou SEO : identité, contexte, jauges, appareils, attentes et freins ; pour une vraie personne (équipe, interlocuteur) → person_card.",
     "stack": "Pyramide ou pile de niveaux (pyramide SEO, socle → contenus → notoriété, priorités par couche) ; avec volumes et taux → funnel.",
 
     # --- personnes ---------------------------------------------------------------------

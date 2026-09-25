@@ -110,31 +110,67 @@ register(Component(
 
 # --- checklist / chevrons / arrows ------------------------------------------------------------
 
+def _check_items(items, x: float, y: float, w: float, gap: float, color: str, size: float, box: float) -> tuple[list[dict], float]:
+    """Check boxes and their texts from (x, y); returns the ops and the bottom."""
+    ops: list[dict] = []
+    bottom = y
+    for it in items:
+        text, done = (it.get("text", ""), bool(it.get("done"))) if isinstance(it, dict) else (str(it), False)
+        ops.append({"op": "box", "x": x, "y": y + 2, "w": box, "h": box, "fill": color if done else None,
+                    "line": {"color": "ink", "weight": 2 if box >= 15 else 1.5}, "role": "check"})
+        if done:
+            k = box / 15
+            ops.append({"op": "polyline", "points": [[x + 3.2 * k, y + 2 + 9 * k], [x + 6.1 * k, y + 2 + 12.6 * k], [x + 11.9 * k, y + 2 + 4.3 * k]],
+                        "color": "ink", "weight": 2.25 * k})
+        tx = x + box + 11
+        th = max(gap - 6, _text_height(text, w - (tx - x), size))
+        ops.append({"op": "text", "x": tx, "y": y - 2, "w": w - (tx - x), "h": th, "markdown": str(text), "style": "list", "size": size,
+                    "small_ok": size < 11})
+        bottom = max(bottom, y + box + 2, y - 2 + th)
+        y += max(gap, th + 2)
+    return ops, bottom
+
+
 def _checklist(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     gap = float(p["gap"])
     color = p["color"]
+    groups = list(p["groups"] or [])
+    if not groups:
+        ops, bottom = _check_items(p["items"] or [], 0, 0, w, gap, color, 12, 15)
+        return ops, h or bottom
+    # numbered sections in columns: ① title, then compact items; groups fill the columns in order
+    cols = max(1, int(p["cols"]))
+    col_gap = 24.0
+    col_w = (w - (cols - 1) * col_gap) / cols
+    per_col = -(-len(groups) // cols)
     ops: list[dict] = []
-    y = 0.0
     bottom = 0.0
-    for it in p["items"]:
-        text, done = (it.get("text", ""), bool(it.get("done"))) if isinstance(it, dict) else (str(it), False)
-        ops.append({"op": "box", "x": 0, "y": y + 2, "w": 15, "h": 15, "fill": color if done else None,
-                    "line": {"color": "ink", "weight": 2}, "role": "check"})
-        if done:
-            ops.append({"op": "polyline", "points": [[3.2, y + 11], [6.1, y + 14.6], [11.9, y + 6.3]], "color": "ink", "weight": 2.25})
-        th = max(gap - 6, _text_height(text, w - 26, 12))
-        ops.append({"op": "text", "x": 26, "y": y - 2, "w": w - 26, "h": th, "markdown": str(text), "style": "list", "size": 12})
-        bottom = max(bottom, y + 17, y - 2 + th)
-        y += max(gap, th + 2)
+    for c in range(cols):
+        x = c * (col_w + col_gap)
+        y = 0.0
+        for k, g in enumerate(groups[c * per_col:(c + 1) * per_col]):
+            n = c * per_col + k + 1
+            ops.append({"op": "box", "x": x, "y": y, "w": 18, "h": 18, "shape": "ELLIPSE", "fill": color, "role": "group_num",
+                        "text": str(n), "style": "badge", "size": 9, "small_ok": True, "bold": True, "color": "ink", "align": "CENTER", "valign": "MIDDLE"})
+            ops.append({"op": "text", "x": x + 24, "y": y - 1, "w": col_w - 24, "h": 14 + INSETS, "text": str(g.get("title", "")).upper(),
+                        "style": "card_label", "size": 10, "bold": True, "color": "ink", "role": "group_title"})
+            y += 24
+            item_ops, y = _check_items(g.get("items") or [], x + 2, y, col_w - 2, float(p["group_gap"]), color, 9.5, 11)
+            ops.extend(item_ops)
+            y += 14
+        bottom = max(bottom, y - 14)
     return ops, h or bottom
 
 
 register(Component(
-    name="checklist", description="Liste à cases carrées ; les cases cochées sont pleines (accent) avec une coche.",
+    name="checklist", description="Liste à cases carrées ; les cases cochées sont pleines (accent) avec une coche. Avec `groups`, des sections numérotées ① ② ③ en une ou deux colonnes, cases et textes compacts (checklist de publication).",
     props=[
-        Prop("items", "list", "Éléments : texte, ou {text, done}.", required=True),
+        Prop("items", "list", "Éléments : texte, ou {text, done} (ignoré quand groups est donné)."),
         Prop("gap", "number", "Pas vertical.", default=32),
-        Prop("color", "color", "Couleur des cases cochées.", default="accent"),
+        Prop("color", "color", "Couleur des cases cochées et des numéros de section.", default="accent"),
+        Prop("groups", "list", "Sections : {title, items: [texte ou {text, done}]}.", default=[]),
+        Prop("cols", "number", "Colonnes pour les sections.", default=1),
+        Prop("group_gap", "number", "Pas vertical dans une section.", default=20),
     ],
     render=_checklist, example={"items": [{"text": "Sitemap XML soumis", "done": True}, "Balises canoniques", {"text": "Core Web Vitals", "done": False}]},
     tags=["texte"],

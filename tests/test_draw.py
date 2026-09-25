@@ -346,3 +346,18 @@ def test_table_row_heights_per_row():
     rows = _of(reqs, "updateTableRowProperties")
     heights = {tuple(r["rowIndices"]): r["tableRowProperties"]["minRowHeight"]["magnitude"] for r in rows}
     assert heights == {(0, 2): 20 * PT, (1,): 60 * PT}
+
+
+def test_small_box_text_goes_into_a_centred_overlay():
+    """A numbered 18 pt disc: the shape carries no text, a 48 × 30 text box centred on it does."""
+    reqs, ids = _run([{"op": "box", "x": 10, "y": 20, "w": 18, "h": 18, "shape": "ELLIPSE", "fill": "mint",
+                       "text": "3", "size": 9, "bold": True, "align": "CENTER", "valign": "MIDDLE"}])
+    shapes = [r["createShape"] for r in reqs if "createShape" in r]
+    assert [s["shapeType"] for s in shapes] == ["ELLIPSE", "TEXT_BOX"]
+    box = shapes[1]["elementProperties"]
+    assert box["size"]["width"]["magnitude"] == 48 * 12700 and box["size"]["height"]["magnitude"] == 30 * 12700
+    assert box["transform"]["translateX"] == round((10 - 15) * 12700) and box["transform"]["translateY"] == round((20 - 6) * 12700)
+    inserts = [r["insertText"] for r in reqs if "insertText" in r]
+    assert len(inserts) == 1 and inserts[0]["objectId"] == shapes[1]["objectId"] and inserts[0]["text"] == "3"
+    big, _ = _run([{"op": "box", "x": 0, "y": 0, "w": 120, "h": 40, "text": "wide"}])
+    assert [r["createShape"]["shapeType"] for r in big if "createShape" in r] == ["RECTANGLE"]

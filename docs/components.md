@@ -56,12 +56,16 @@ list props; read `list_components()` for the guidance.
 | `funnel` | `items*` `[{label, value, sub, color}]`, `pct` (`first` `prev` `both` `none`), `unit`, `label_w`, `value_w`, `bar_h`, `min_frac`, `legend` | Centred bars scaled to the first step, values with French thousands separators, rate pills (accent = vs first step, outlined = vs previous) and their legend. |
 | `timeline` | `phases*` `[{date, title, text, color}]` | Horizontal line, one dot per phase, date above, title and text below. |
 | `process` | `steps*` `[{label, sub, fill, color, w}]`, `arrow_w` | Rounded boxes (light grounds, `fill: accent` for the highlighted step) separated by → arrows. |
+| `cocon` | `center*`, `pages*`, `actions`, `layout` (`arc` `ring`), `radius`, `page_d`, `center_d`, `action_d`, `center_fill` | Semantic cocoon: target page in a cyan disc, child pages in mint discs on the left arc (or all around), navy « action » nodes on the right, thin links. |
+| `cycle` | `steps*` `[{title, text}]`, `box_w`, `gap` | Loop of steps: light boxes with a mint bar, mint arrows; 2 × 2 clockwise for four steps, a ring otherwise. |
+| `formula` | `items*` `[{num, title, text}]` (2–5), `result*`, `operator`, `result_w` | Concept equation: numbered boxes joined by an operator, then « = » and the result (navy header). |
+| `persona_card` | `name*`, `age`, `location`, `photo`, `context`, `brands`, `gauges`, `devices`, `expectations`, `brakes`, `tag`, labels | Persona sheet on a white rounded card: identity, context, brand logos, gauges, devices, expectations / brakes, cyan tag. |
 | `hub_spoke` | `center*`, `sats*` `[{label, hl}]`, `hub_w`, `hub_h`, `sat_d` | Accent hub linked to round satellites laid out on an ellipse (`hl` = accent outline). |
 | `stack` | `items*` `[{label, sub, fill, color, width}]`, `item_h`, `gap`, `min_ratio` | Centred layers of decreasing width (pyramid / simple funnel). |
 | `bigstat` | `value*`, `label*`, `sub`, `color` | One 54 pt figure, centred. |
 | `stats` | `items*` `[{value, label, sub}]`, `color` | Row of centred figures, optional caption under each. |
 | `pill` | `text*`, `color`, `outline`, `size`, `count` | Capsule, filled or outlined (uppercase), width follows the text; `count` ≥ 2 appends « ×n ». |
-| `checklist` | `items*` (text or `{text, done}`), `gap`, `color` | Square boxes; done items are filled with a tick. |
+| `checklist` | `items` (text or `{text, done}`), `gap`, `color`, `groups` `[{title, items}]`, `cols`, `group_gap` | Square boxes; done items are filled with a tick. `groups` makes numbered sections in columns with compact boxes. |
 | `chevrons` / `arrows` | `items*`, `size`, `spacing` | One text box, one paragraph per item, › (accent) or → prefix. |
 | `compare_bars` | `bars*` `[{label, frac, color}]`, `gap` | Full-width grey tracks with a filled fraction. |
 | `effort_matrix` | `bubbles*` `[{n, label, x, y, d, fill, color, above}]`, `x_label`, `y_label` | Two axes, numbered bubbles at fractional positions (y = 1 is top). |

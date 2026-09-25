@@ -2,6 +2,14 @@
 
 All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/) (0.x: minor bumps may change tool signatures).
 
+## [0.7.0] — 2026-09-25
+
+### Added
+
+- **Training and audit diagrams** (from the SEO training deck): `cocon` (semantic cocoon: target page, child pages, action nodes; arc or ring), `cycle` (loop of steps, 2 × 2 or ring), `formula` (2 to 5 concept boxes joined by an operator, then the result), `persona_card` (identity, context, brands, gauges, devices, expectations / brakes, tag).
+- `draw`: a box narrower than 48 pt or lower than 30 pt (numbered discs, tiny tiles) gets its text in a centred transparent overlay, so Google's fixed 7.2 pt insets no longer push the number off centre; theme role `cyan`.
+- `checklist.groups` + `cols`: numbered sections ① ② ③ in columns, compact boxes (publication checklist); `tree` third level (`children[].children`: boxes stacked under each child) for keyword universes with 3 to 5 branches.
+
 ## [0.6.0] — 2026-09-25
 
 ### Added

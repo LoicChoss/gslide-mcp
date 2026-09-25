@@ -93,7 +93,8 @@
     "accent_dark": "blue_dark",
     "coral": "orange",
     "acid": "amber",
-    "gray_2": "line"
+    "gray_2": "line",
+    "cyan": "#45DBFF"
   },
   "text_styles": {
     "title": {

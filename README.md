@@ -80,7 +80,7 @@ To build the bundle locally (requires Node.js):
 
 ```sh
 npx @anthropic-ai/mcpb validate manifest.json
-npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.6.0.mcpb
+npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.7.0.mcpb
 ```
 
 `.mcpbignore` keeps docs, examples, virtualenvs and any local `credentials.json` / `token.json` out of the archive.
@@ -138,7 +138,7 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.6.0.mcpb
 | **QA** | `screenshot` | Capture a slide as an inline image |
 | | `screenshot_range` | Capture a range of slides |
 | | `overlap_check` | Detect overlapping elements on a slide |
-| **Components** | `list_components` | Catalogue of 81 themed components (KPI, cards, callouts, badges, pills, numbered lists, agenda, big numbers, phase cards, compare / before-after panels, quote, table, heatmap, bar / grouped / line / stacked / combo charts, mini charts, pie, donut, donut rows, gauge, target, funnel, timeline, milestone arrow, process, hub & spoke, tree, flowchart, stack, matrices, team and logo grids, media-bilan blocks (analysis, source note, stat boxes, takeaways, ad scoreboard, gallery, media plan), design-system brand blocks (pill buttons by ground, content cards on three grounds, hashtags, eyebrow, section header, client ticker, do / don't), workshop and restitution blocks (score matrix, ranked bars, chip cloud, quadrant matrix, next steps, board columns, session plan, attention points, commented bar list), Google-result / browser / laptop / phone mockups) plus themes and the assets folder |
+| **Components** | `list_components` | Catalogue of 85 themed components (KPI, cards, callouts, badges, pills, numbered lists, agenda, big numbers, phase cards, compare / before-after panels, quote, table, heatmap, bar / grouped / line / stacked / combo charts, mini charts, pie, donut, donut rows, gauge, target, funnel, timeline, milestone arrow, process, hub & spoke, semantic cocoon, tree, flowchart, cycle, formula, persona card, stack, matrices, team and logo grids, media-bilan blocks (analysis, source note, stat boxes, takeaways, ad scoreboard, gallery, media plan), design-system brand blocks (pill buttons by ground, content cards on three grounds, hashtags, eyebrow, section header, client ticker, do / don't), workshop and restitution blocks (score matrix, ranked bars, chip cloud, quadrant matrix, next steps, board columns, session plan, attention points, commented bar list), Google-result / browser / laptop / phone mockups) plus themes and the assets folder |
 | | `insert_component` | Render a component at a position — one atomic batch, grouped as one element |
 | | `draw` | Primitive ops (box, text runs with `==highlight==`, arrowed lines, polyline, arc, ring, table, image from URL or assets folder) in one batch |
 | | `save_component` | Freeze a JSON recipe as a reusable component |

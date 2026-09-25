@@ -40,6 +40,7 @@ PT = 12700
 INSET_X = 7.2  # Google's fixed text-box insets, in pt
 INSET_Y = 3.6
 HL_OPEN, HL_CLOSE = "\ue000", "\ue001"  # private-use sentinels carrying ==highlight== through the markdown writer
+SMALL_BOX_W, SMALL_BOX_H = 48.0, 30.0  # below this, a box's text is drawn in a centred overlay (see box())
 _ARROWS = {"none": "NONE", "arrow": "FILL_ARROW", "open": "OPEN_ARROW", "dot": "FILL_CIRCLE", "stealth": "STEALTH_ARROW"}
 _ALIGN = {"START": "START", "LEFT": "START", "CENTER": "CENTER", "END": "END", "RIGHT": "END", "JUSTIFIED": "JUSTIFIED"}
 _VALIGN = {"TOP": "TOP", "MIDDLE": "MIDDLE", "BOTTOM": "BOTTOM"}
@@ -275,7 +276,15 @@ class _Canvas:
         self.reqs.append({"updateShapeProperties": {"objectId": oid, "shapeProperties": props, "fields": "shapeBackgroundFill,outline"}})
         self.ids.append(oid)
         if any(k in op for k in ("text", "runs", "markdown")):
-            self._text_into(oid, op)
+            if op["w"] < SMALL_BOX_W or op["h"] < SMALL_BOX_H:
+                # Google keeps 7.2 pt side insets and 3.6 pt top / bottom insets inside every shape: in a
+                # numbered disc or a tiny tile that pushes the text off centre. The text goes into a
+                # larger transparent box centred on the shape instead, so the insets cancel out.
+                tw, th = max(op["w"], SMALL_BOX_W), max(op["h"], SMALL_BOX_H)
+                self.text({**op, "x": op["x"] + (op["w"] - tw) / 2, "y": op["y"] + (op["h"] - th) / 2, "w": tw, "h": th,
+                           "align": op.get("align", "CENTER"), "valign": op.get("valign", "MIDDLE")})
+            else:
+                self._text_into(oid, op)
 
     def text(self, op: dict) -> None:
         oid = self.new_id()

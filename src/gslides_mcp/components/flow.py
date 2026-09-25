@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from ..themes import Theme
 from . import Component, Prop, register
-from .builtin import INSETS, LEADING, _text_height
+from .builtin import INSETS, LEADING, _text_height, fit_text_size
 
 _DARK = {"surface_dark", "surface_dark_2", "ink", "text", "device_frame"}
 
@@ -47,7 +47,22 @@ def _tree(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict],
                     "text": str(c.get("label", "")), "style": "card_title", "size": 11, "color": _fg(fill),
                     "align": "CENTER", "valign": "MIDDLE"})
         items = c.get("items") or []
-        if items:
+        leaves = c.get("children") or []
+        if leaves:  # third level: stacked boxes under the child, each hung on a short line
+            ly = y1 + node_h + 12
+            for leaf in leaves:
+                leaf = leaf if isinstance(leaf, dict) else {"label": str(leaf)}
+                text = str(leaf.get("label", ""))
+                size = fit_text_size(text, cw - 12, 10, max_lines=3, floor=8.5)
+                lh = max(24.0, _text_height(text, cw - 12, size) + 4)
+                lines.append({"op": "line", "x1": cx, "y1": ly - 12, "x2": cx, "y2": ly, "color": "ink", "weight": 1})
+                lfill = leaf.get("fill") or "surface"
+                ops.append({"op": "box", "x": x, "y": ly, "w": cw, "h": lh, "shape": "ROUND_RECTANGLE", "fill": lfill, "role": "leaf",
+                            "line": {"color": "accent", "weight": 1.5} if leaf.get("hl") else None,
+                            "text": text, "style": "caption", "size": size, "small_ok": size < 10, "color": _fg(lfill), "align": "CENTER", "valign": "MIDDLE"})
+                ly += lh + 12
+            bottom = max(bottom, ly - 12)
+        elif items:
             md = "\n".join(f"- {it}" for it in items)
             th = _text_height(md, cw, 10)
             ops.append({"op": "text", "x": x, "y": y1 + node_h + 4, "w": cw, "h": th, "markdown": md, "style": "caption",
@@ -57,10 +72,10 @@ def _tree(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict],
 
 
 register(Component(
-    name="tree", description="Arborescence / organigramme à deux niveaux : racine accent, enfants en rangée reliés par un bus, sous-rubriques listées sous chaque enfant.",
+    name="tree", description="Arborescence / organigramme à deux ou trois niveaux : racine accent, 2 à 5 enfants en rangée reliés par un bus, puis sous-rubriques listées (items) ou petites-filles en boîtes empilées (children) sous chaque enfant.",
     props=[
         Prop("root", "str", "Racine (texte, ou {label, fill?}).", required=True),
-        Prop("children", "list", "Enfants : {label, items?: [..], fill?, hl?} ou texte.", required=True),
+        Prop("children", "list", "Enfants : {label, items?: [..], children?: [texte ou {label, fill?, hl?}], fill?, hl?} ou texte.", required=True),
         Prop("node_h", "number", "Hauteur des nœuds.", default=30),
         Prop("gap_y", "number", "Espace vertical racine → enfants.", default=30),
         Prop("gap_x", "number", "Espace entre enfants.", default=10),

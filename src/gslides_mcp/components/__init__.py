@@ -168,7 +168,7 @@ def shift(ops: list[dict], dx: float, dy: float) -> list[dict]:
     return out
 
 
-from . import axes, blocks, brand, builtin, charts2, charts3, diagrams, flow, lists, mockups, people, reporting, workshop  # noqa: E402,F401  — registers the built-in components
+from . import axes, blocks, brand, builtin, charts2, charts3, diagrams, flow, lists, mockups, people, reporting, training, workshop  # noqa: E402,F401  — registers the built-in components
 from .uses import USES  # noqa: E402
 from .variants import VARIANTS  # noqa: E402
 

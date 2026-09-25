@@ -108,7 +108,8 @@
     "regie_ga4": "cyan",
     "chart_grid": "row_line",
     "chart_axis": "gray_2",
-    "accent_dark": "navy"
+    "accent_dark": "navy",
+    "cyan": "cyan"
   },
   "text_styles": {
     "title": {
