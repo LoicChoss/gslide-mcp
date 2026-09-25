@@ -82,6 +82,8 @@ def _pill(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict],
     color = p["color"]
     outline = bool(p["outline"])
     text = str(p["text"]).upper() if outline else str(p["text"])
+    if p["count"] and int(p["count"]) > 1:
+        text += f"  ×{int(p['count'])}"
     pw = min(w, len(text) * 6.8 + 36)
     ph = h or 29
     box: dict = {"op": "box", "x": 0, "y": 0, "w": pw, "h": ph, "shape": "ROUND_RECTANGLE", "text": text,
@@ -100,6 +102,7 @@ register(Component(
         Prop("color", "color", "Couleur de fond (ou du contour).", default="accent"),
         Prop("outline", "bool", "Contour seul, texte en capitales.", default=False),
         Prop("size", "number", "Taille de police.", default=11),
+        Prop("count", "number", "Compteur « ×n » ajouté au texte quand il vaut 2 ou plus."),
     ],
     render=_pill, example={"text": "Google Ads", "outline": True}, tags=["texte"],
 ))

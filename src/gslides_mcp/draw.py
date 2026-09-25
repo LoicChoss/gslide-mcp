@@ -17,7 +17,7 @@ Ops:
     ring      cx cy r thickness segments=[{value,color}] [start=-90] [span=360]
     table     x y w rows=[[…],…] [col_w] [row_h] [row_heights=[…]] [header] [banding] [first_col_bold]
               [align=[…]] [borders{color,weight}|None] [size] [style]
-              [row_fills{i:color}] [bold_rows] [cell_fills{(i,j):color}] [cell_text_colors]
+              [row_fills{i:color}] [bold_rows] [cell_fills{(i,j):color}] [cell_text_colors] [cell_runs{(i,j):runs}]
     image     x y w h  drive_file_id | url | asset [tint] [cover] [contain]   (asset = name in the
               Drive assets folder; cover crops the source to the box like object-fit: cover,
               contain shrinks and centres the box to the source's aspect)
@@ -412,6 +412,7 @@ class _Canvas:
                 "fields": "tableCellBackgroundFill.solidFill.color",
             }})
         cell_text_colors = {(int(a), int(b)): c for (a, b), c in (op.get("cell_text_colors") or {}).items()}
+        cell_runs = {(int(a), int(b)): r for (a, b), r in (op.get("cell_runs") or {}).items()}
         bold_rows = {int(i) for i in op.get("bold_rows") or []}
 
         for i, row in enumerate(rows):
@@ -434,7 +435,11 @@ class _Canvas:
                     cell_op["align"] = aligns[j]
                 if (i, j) in cell_text_colors:
                     cell_op["color"] = cell_text_colors[(i, j)]
-                if str(value) == "":
+                if (i, j) in cell_runs:  # styled runs (name + muted sub-line) instead of plain text
+                    cell_op.pop("text", None)
+                    cell_op["runs"] = cell_runs[(i, j)]
+                    cell_op["bold"] = None
+                elif str(value) == "":
                     # an empty cell keeps Google's 18 pt default paragraph and stretches its row:
                     # a styled space keeps the row at the table's text size
                     cell_op["text"] = " "

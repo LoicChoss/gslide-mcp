@@ -88,7 +88,11 @@
     "regie_tiktok": "dark",
     "regie_ga4": "teal",
     "chart_grid": "line",
-    "chart_axis": "line"
+    "chart_axis": "line",
+    "accent_dark": "blue_dark",
+    "coral": "orange",
+    "acid": "amber",
+    "gray_2": "line"
   },
   "text_styles": {
     "title": {

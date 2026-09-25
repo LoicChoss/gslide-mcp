@@ -106,7 +106,8 @@
     "regie_tiktok": "tiktok",
     "regie_ga4": "cyan",
     "chart_grid": "row_line",
-    "chart_axis": "gray_2"
+    "chart_axis": "gray_2",
+    "accent_dark": "navy"
   },
   "text_styles": {
     "title": {

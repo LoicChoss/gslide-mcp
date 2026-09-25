@@ -98,4 +98,15 @@ USES: dict[str, str] = {
     "section_header": "L'en-tête de section signature (eyebrow, titre avec surlignage jaune, paragraphe, hashtags) en ouverture d'une partie ou d'une slide manifeste ; pour un sommaire → agenda.",
     "client_ticker": "Le bandeau de références clients en texte seul sur fond sombre ; avec logos → logo_wall.",
     "do_dont": "Ton et vocabulaire : paires ✓ / ✕ de verbatims commentés (on-brand / off-brand) ; idée reçue vs réponse → compare_cards ; listes avant / après → before_after.",
+
+    # --- ateliers et restitutions ---------------------------------------------------------
+    "score_matrix": "Notes par famille et par critère (mini audit, satisfaction, maturité) en tuiles colorées par seuil avec le nombre de réponses ; matrice chiffrée sans notes → heatmap ; un seul score → gauge.",
+    "ranked_bars": "Résultat d'un vote ou d'un classement de priorités (« 3 choix par personne ») avec le compte à droite et le haut du classement mis en avant ; parts atteintes → compare_bars ; barres commentées avec sous-textes → bar_list.",
+    "chip_cloud": "Les sujets ou chantiers cités en atelier, en chips avec compteur ×n ; un seul tag → pill ou badge ; hashtags de marque → hashtags.",
+    "quadrant_matrix": "Quatre cadrans titrés (impact × urgence, effort × valeur) à remplir en séance ou déjà remplis d'items ; pour positionner des bulles chiffrées → effort_matrix ou bubbles.",
+    "next_steps": "Les prochaines étapes en 3 ou 4 colonnes datées avec l'étape en cours marquée ; frise datée → timeline ; phases détaillées avec livrables → phase_cards.",
+    "board_columns": "Le tableau d'un atelier (forces, irritants, chantiers) avec cartes numérotées et colonnes vides assumées ; cartes de constats sans colonnes → card_grid.",
+    "session_plan": "Le déroulé d'une réunion ou d'un atelier : sections et bandeau horaire proportionnel ; sommaire simple → agenda.",
+    "attention_points": "Alertes et points de vigilance calculés (tracking, budget, structure, qualité) avec niveau critique / vigilance / favorable et chiffres surlignés ; un seul message → callout.",
+    "bar_list": "Barres horizontales commentées : pages, canaux ou natures de conversion avec libellé, sous-texte, valeur et état coloré, hachures pour un signal faible ; simple part atteinte → compare_bars ; classement de votes → ranked_bars ; histogramme → chart_bars.",
 }

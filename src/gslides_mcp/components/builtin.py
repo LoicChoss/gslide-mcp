@@ -358,6 +358,9 @@ def _badge(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
     bh = h or 16
     ops = [{"op": "box", "x": 0, "y": 0, "w": bw, "h": bh, "fill": p["fill"], "text": text,
             "style": "badge", "color": p["color"], "align": "CENTER", "valign": "MIDDLE"}]
+    if p["mono"]:  # « signal doux » : code-like tag, lowercase, rounded, grey
+        ops[0].update({"text": str(p["text"]), "font": "Roboto Mono", "bold": False, "shape": "ROUND_RECTANGLE",
+                       "w": min(w, len(str(p["text"])) * 6.4 + 16)})
     return ops, bh
 
 
@@ -367,6 +370,7 @@ register(Component(
         Prop("text", "str", "Texte de la pastille.", required=True),
         Prop("fill", "color", "Fond (rôle ou token du thème).", default="accent"),
         Prop("color", "color", "Couleur du texte.", default="on_accent"),
+        Prop("mono", "bool", "Étiquette en police mono, sans capitales, coins arrondis (« signal doux »).", default=False),
     ],
     render=_badge, example={"text": "Priorité haute"}, tags=["texte"],
 ))
@@ -447,62 +451,118 @@ def rendered_row_h(row_h: float, size: float) -> float:
 
 
 def _table(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
+    from .workshop import _num, threshold_color
+
     rows = [list(r) for r in p["rows"]]
     row_h = float(p["row_h"])
     heights = [float(v) if v else row_h for v in (p["row_heights"] or [])] + [row_h] * (len(rows) - len(p["row_heights"] or []))
     size = float(p["size"] or theme.text_styles.get("table_cell", {}).get("size", 10.5))
     heights = [rendered_row_h(rh, size) for rh in heights]  # where the pictos land, and the height reported
+    first = 1 if p["header"] else 0
     last = len(rows) - 1
+    total = p["total_row"] and last > 0
+    subs = list(p["subs"] or [])
+    if subs:  # a second, muted line under the first column: those rows are taller
+        for i, sub in enumerate(subs):
+            r = i + first
+            if r < len(rows) and sub:
+                heights[r] = max(heights[r], size * 1.2 * 2 + 2 * CELL_INSET_Y + 2)
     icons = list(p["icons"] or [])
+    dots = list(p["dots"] or [])
     col_w = list(p["col_w"] or [])
     align = list(p["align"] or [])
     ops: list[dict] = []
-    if icons:
-        # a narrow empty column in front, the pictos drawn over its cells (contain)
+    lead = 1 if (icons or dots) else 0
+    if lead:
+        # a narrow empty column in front, the pictos / dots drawn over its cells
         rows = [[""] + r for r in rows]
         n_c = max(len(r) for r in rows)
         if not col_w:
-            # the label column gets a double share so channel names do not wrap and push the pictos off their rows
+            # the label column gets a double share so names do not wrap and push the pictos off their rows
             unit = (w - ICON_COL_W) / (n_c - 1 + 1)
             col_w = [ICON_COL_W, 2 * unit] + [unit] * (n_c - 2)
         align = [None] + align
         icon_w = float(p["icon_w"])
         y = heights[0] if p["header"] else 0.0
-        for i, icon in enumerate(icons):
-            r = i + (1 if p["header"] else 0)
-            if r >= len(rows):
-                break
+        for i in range(first, len(rows)):
+            k = i - first
+            icon = icons[k] if k < len(icons) else None
+            dot = dots[k] if k < len(dots) else None
             if icon:
-                ops.append({"op": "image", "x": (ICON_COL_W - icon_w) / 2 + 2, "y": y + (heights[r] - icon_w) / 2, "w": icon_w, "h": icon_w,
+                ops.append({"op": "image", "x": (ICON_COL_W - icon_w) / 2 + 2, "y": y + (heights[i] - icon_w) / 2, "w": icon_w, "h": icon_w,
                             "asset": str(icon), "contain": True, "role": "icon", **({"tint": p["icon_tint"]} if p["icon_tint"] else {})})
-            y += heights[r]
-    total = p["total_row"] and last > 0
+            elif dot:
+                ops.append({"op": "box", "x": ICON_COL_W / 2 - 1, "y": y + (heights[i] - 8) / 2, "w": 8, "h": 8, "shape": "ELLIPSE", "fill": dot,
+                            "role": "dot"})
+            y += heights[i]
+    n_c = max(len(r) for r in rows)
+    widths = col_w or [w / n_c] * n_c
     cell_text_colors: dict = {}
+    cell_runs: dict = {}
     for j in p["delta_cols"] or []:
-        jj = int(j) + (1 if icons else 0)
-        for i in range(1 if p["header"] else 0, len(rows) - (1 if total else 0)):
+        jj = int(j) + lead
+        for i in range(first, len(rows) - (1 if total else 0)):
             txt = str(rows[i][jj]).strip() if jj < len(rows[i]) else ""
             if txt.startswith("+"):
                 cell_text_colors[(i, jj)] = "positive"
             elif txt.startswith(("-", "−")):
                 cell_text_colors[(i, jj)] = "negative"
+    for j in p["zero_cols"] or []:
+        jj = int(j) + lead
+        for i in range(first, len(rows) - (1 if total else 0)):
+            if jj < len(rows[i]) and _num(rows[i][jj]) == 0:
+                cell_text_colors[(i, jj)] = "negative"
+    if p["na_text"]:  # "" leaves empty cells alone
+        for i in range(first, len(rows)):
+            for jj in range(lead, len(rows[i])):
+                if rows[i][jj] is None or str(rows[i][jj]).strip() in ("", "-", "n/a", "NA"):
+                    rows[i][jj] = str(p["na_text"])
+                    cell_text_colors[(i, jj)] = "muted"
+    for i, sub in enumerate(subs):
+        r = i + first
+        if r < len(rows) and sub:
+            name = str(rows[r][lead])
+            cell_runs[(r, lead)] = [[{"text": name, "bold": True}], [{"text": str(sub), "size": 9, "color": "muted"}]]
+    # pills: the value of some columns sits in a rounded tag coloured by threshold
+    pill_ops: list[dict] = []
+    for j, thresholds in (p["pill_cols"] or {}).items():
+        jj = int(j) + lead
+        x0 = sum(widths[:jj])
+        for i in range(first, len(rows) - (1 if total else 0)):
+            if jj >= len(rows[i]):
+                continue
+            txt = str(rows[i][jj])
+            v = _num(txt)
+            if v is None:
+                continue
+            color = threshold_color(v, list(thresholds), "surface")
+            y0 = sum(heights[:i])
+            pw = min(widths[jj] - 8, len(txt) * size * 0.6 + 2 * INSET_X + 4)
+            pill_ops.append({"op": "box", "x": x0 + (widths[jj] - pw) / 2, "y": y0 + (heights[i] - 18) / 2, "w": pw, "h": 18,
+                             "shape": "ROUND_RECTANGLE", "fill": color, "text": txt, "style": "table_cell", "size": size, "bold": True,
+                             "color": "on_dark" if theme.is_dark(color) else "ink", "align": "CENTER", "valign": "MIDDLE", "role": "pill"})
+            rows[i][jj] = ""
+    header_fill = p["header_fill"]
+    header = {"fill": header_fill, "color": "on_dark" if theme.is_dark(header_fill) else "on_accent", "bold": True} if p["header"] else None
+    total_fill = p["total_fill"]
     op: dict = {
         "op": "table", "x": 0, "y": 0, "w": w, "rows": rows, "col_w": col_w or None, "row_h": row_h, "row_heights": heights,
-        "header": {"fill": "accent", "color": "on_accent", "bold": True} if p["header"] else None,
+        "header": header,
         "banding": ["background", "surface"],
         "first_col_bold": True,
         "borders": {"color": "rule", "weight": 1, "position": "INNER_HORIZONTAL"},
         "align": align or None,
         "size": p["size"],
-        "row_fills": {last: "accent"} if total else {},
+        "row_fills": {last: total_fill} if total else {},
         "bold_rows": [last] if total else [],
         "cell_text_colors": cell_text_colors,
+        "cell_runs": cell_runs,
     }
-    return [op] + ops, sum(heights)
+    return [op] + ops + pill_ops, sum(heights)
 
 
 register(Component(
-    name="table", description="Tableau charté : en-tête accent, première colonne en gras, lignes alternées, filets horizontaux fins, ligne de total optionnelle ; pictos par ligne et colonnes de variation colorées par signe en option.",
+    name="table", description="Tableau charté : en-tête accent ou sombre, première colonne en gras (avec sous-ligne grise et pastille de couleur en option), lignes alternées, filets fins, ligne de total ; pictos par ligne, colonnes de variation colorées par signe, zéros en alerte, valeurs en pilule colorée par seuil.",
     props=[
         Prop("rows", "list", "Lignes (la première est l'en-tête), listes de chaînes.", required=True),
         Prop("col_w", "list", "Largeurs de colonnes en pt (défaut : réparties)."),
@@ -516,10 +576,22 @@ register(Component(
         Prop("icon_w", "number", "Taille des pictos.", default=16),
         Prop("icon_tint", "color", "Teinte des pictos du dossier d'assets (pictos blancs) ; vide = couleurs d'origine."),
         Prop("delta_cols", "list", "Index (0-based, hors colonne picto) des colonnes « vs N-1 » : + en positif, - en négatif."),
+        Prop("header_fill", "color", "Fond de l'en-tête : accent (menthe) ou ink (navy, texte blanc).", default="accent"),
+        Prop("total_fill", "color", "Fond de la ligne de total : accent ou surface (gris).", default="accent"),
+        Prop("subs", "list", "Sous-ligne grise sous le nom de chaque ligne de données (null = aucune)."),
+        Prop("dots", "list", "Pastille de couleur par ligne de données (rôle du thème, ex. regie_google), dans une colonne étroite en tête."),
+        Prop("zero_cols", "list", "Colonnes dont les zéros s'affichent en alerte (négatif)."),
+        Prop("na_text", "str", "Texte des cellules vides ou « - » (en gris) ; '' = laisser tel quel.", default="–"),
+        Prop("pill_cols", "dict", "Colonnes en pilule colorée par seuil : {\"7\": [{\"max\": 17, \"color\": \"accent\"}, {\"max\": 30, \"color\": \"accent_alt\"}, {\"color\": \"coral\"}]}."),
     ],
     render=_table,
-    example={"rows": [["Levier", "Budget", "Part"], ["Google Ads", "18 000 €", "45 %"], ["Meta", "12 000 €", "30 %"], ["Total", "30 000 €", "75 %"]],
-             "align": [None, "END", "END"], "total_row": True},
+    example={"rows": [["Ligne", "Coût", "Clics", "CTR", "Contacts", "CPL"], ["Display", "499,39 €", "1 270", "0,17 %", "2", "249,69 €"],
+                      ["Search hors marque", "445,37 €", "220", "10,43 %", "1", "445,37 €"], ["Demand Gen Vidéo", "252,01 €", "290", "1,66 %", "0", "-"],
+                      ["Search marque", "44,55 €", "24", "31,17 %", "3", "14,85 €"], ["Total", "1 241,32 €", "1 804", "0,35 %", "6", "178,25 €"]],
+             "subs": ["Google · Display Native", "Google · générique + longue traîne", "Google · YouTube", "Google"],
+             "dots": ["regie_google", "regie_google", "regie_google", "regie_google"],
+             "align": [None, "END", "END", "END", "END", "END"], "header_fill": "ink", "total_fill": "surface", "total_row": True,
+             "zero_cols": [4], "pill_cols": {"5": [{"max": 30, "color": "accent"}, {"max": 300, "color": "accent_alt"}, {"color": "coral"}]}},
     tags=["données"],
 ))
 
