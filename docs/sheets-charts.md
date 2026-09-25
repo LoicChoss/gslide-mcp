@@ -46,6 +46,10 @@ graphiques natifs », one sheet per chart):
   read back after setting them by hand shows nothing, and an `updateChartSpec`
   (any `manage_chart update`) replaces the spec and drops them. Set them by hand
   as the last step, or keep the drawn `donut` when the shares must be read on the chart;
+- pie / doughnut slices take the workbook theme's accents from `accent2` in row
+  order and the API has no per-slice colour: `set_theme` with the accents in the
+  régies' order (Google #00e5c3, Meta #fa00a6, Bing #c383ff, Instagram #ff9170, GA4
+  #45dbff) gives régie colours — for every pie of the workbook, so keep one order;
 - a table has no live link in Slides: read the range formatted (`read_range`
   `formatted: true, format: json`) and render it with the `table` component.
 

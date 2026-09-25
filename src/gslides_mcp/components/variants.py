@@ -374,17 +374,21 @@ VARIANTS["chart_combo"].append(_native_chart(
     {"chart_type": "combo", "domain": "A1:A7", "series": ["B1:B7", "C1:C7"], "series_types": ["column", "line"], "series_axes": ["left", "right"],
      "series_colors": ["#00f5b5", "#fa00a6"], "line_width": [0, 2], "title": "Collecte et nombre de dons", "legend": "top", "data_labels": True}))
 
-VARIANTS["donut"].append(_native_chart(
+VARIANTS["donut"].append({**_native_chart(
     "natif Sheets, relié (doughnut)",
-    "Répartition reliée au classeur : doughnut avec pie_hole 0,55, légende à droite, 400 × 400 px. Limites de l'API Sheets : les pourcentages sur les parts ne se règlent qu'à la main dans Sheets (Personnaliser → Libellé de secteur → Pourcentage ; l'API ne l'expose pas et un manage_chart update remet ce réglage à zéro) — garder le donut dessiné quand les % doivent se lire sans intervention ; couleurs des parts prises dans le thème du classeur à partir d'accent2 (menthe, cyan, corail…) et non par régie ; pie_labels (légende sur les parts) ne s'affiche pas une fois embarqué dans Slides. Plusieurs répartitions = plusieurs graphiques côte à côte (l'équivalent de donut_row).",
+    "Répartition reliée au classeur : doughnut pie_hole 0,55, légende à droite, 400 × 400 px. Couleurs des parts = accents du thème à partir d'accent2 : set_theme avec les accents dans l'ordre des régies (valable pour tout le classeur). Les % sur les parts ne se posent qu'à la main dans Sheets (Libellé de secteur → Pourcentage ; un update les efface) : donut dessiné si les % doivent se lire sans intervention.",
     {"segments": [{"label": "Google", "value": 62, "color": "regie_google"}, {"label": "Meta", "value": 25, "color": "regie_meta"}, {"label": "Bing", "value": 13, "color": "regie_bing"}],
      "labels": True, "legend_pos": "bottom", "title": "Répartition des dépenses"},
     [["Régie", "Dépenses"], ["Google", 62], ["Meta", 25], ["Bing", 13]],
-    {"chart_type": "doughnut", "domain": "A1:A4", "series": ["B1:B4"], "pie_hole": 0.55, "legend": "right", "title": "Répartition des dépenses", "width": 400, "height": 400}))
+    {"chart_type": "doughnut", "domain": "A1:A4", "series": ["B1:B4"], "pie_hole": 0.55, "legend": "right", "title": "Répartition des dépenses", "width": 400, "height": 400}),
+    "native_extra": None})
+VARIANTS["donut"][-1]["native"]["sheets"]["set_theme"] = {"colors": {"accent2": "#00e5c3", "accent3": "#fa00a6", "accent4": "#c383ff", "accent5": "#ff9170", "accent6": "#45dbff"},
+                                                         "note": "les parts prennent accent2, accent3… dans l'ordre des lignes : ranger les accents comme les régies (Google, Meta, Bing, Instagram, GA4) ; un seul thème par classeur, donc un seul ordre pour tous les camemberts"}
+del VARIANTS["donut"][-1]["native_extra"]
 
 VARIANTS["pie"] = VARIANTS.get("pie", []) + [_native_chart(
     "natif Sheets, relié (pie)",
-    "Camembert relié au classeur : pie plein, légende à droite ; mêmes limites que le doughnut (% sur les parts seulement à la main dans Sheets, couleurs du thème à partir d'accent2, pie_labels invisible dans Slides).",
+    "Camembert relié au classeur : pie plein, légende à droite ; mêmes règles que le doughnut (couleurs par l'ordre des accents du thème, % sur les parts à la main seulement, pie_labels invisible dans Slides).",
     {"segments": [{"label": "Mobile", "value": 68}, {"label": "Desktop", "value": 27}, {"label": "Tablette", "value": 5}]},
     [["Appareil", "Sessions"], ["Mobile", 68], ["Desktop", 27], ["Tablette", 5]],
     {"chart_type": "pie", "domain": "A1:A4", "series": ["B1:B4"], "legend": "right", "title": "Sessions par appareil", "width": 400, "height": 400})]
