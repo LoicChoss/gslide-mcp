@@ -80,7 +80,7 @@ To build the bundle locally (requires Node.js):
 
 ```sh
 npx @anthropic-ai/mcpb validate manifest.json
-npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.4.1.mcpb
+npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.5.0.mcpb
 ```
 
 `.mcpbignore` keeps docs, examples, virtualenvs and any local `credentials.json` / `token.json` out of the archive.

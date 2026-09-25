@@ -14,7 +14,8 @@
     "purple": "#9334E6",
     "teal": "#12B5CB",
     "orange": "#E8710A",
-    "white": "#FFFFFF"
+    "white": "#FFFFFF",
+    "mint_pale": "#D2E3FC"
   },
   "roles": {
     "background": "white",

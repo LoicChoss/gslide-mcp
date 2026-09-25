@@ -261,8 +261,8 @@ register(Component(
 
 _KIND = {
     # kind: (fill, mark, label color, title color, text color)
-    "bad": ("danger_bg", "✗  ", "danger_ink", "ink", "text"),
-    "good": ("surface_dark", "✓  ", "accent", "on_dark", "on_dark"),
+    "bad": ("surface", "✗  ", "coral", "ink", "text"),
+    "good": ("accent", "✓  ", "ink", "ink", "ink"),
     "neutral": ("surface", "", "muted", "ink", "text"),
 }
 
@@ -286,7 +286,7 @@ def _compare_card(c: dict, w: float, h: float | None) -> tuple[list[dict], float
                       "style": "body", "size": 11, "color": text_col})
         y += th + 2
     height = h or (y + PAD)
-    return [{"op": "box", "x": 0, "y": 0, "w": w, "h": height, "fill": fill, "role": "card"}] + texts, height
+    return [{"op": "box", "x": 0, "y": 0, "w": w, "h": height, "shape": "ROUND_RECTANGLE", "fill": fill, "role": "card"}] + texts, height
 
 
 def _compare_cards(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
@@ -309,7 +309,7 @@ def _compare_cards(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
 
 
 register(Component(
-    name="compare_cards", description="Idée reçue / réponse : cartes ✗ (fond rouge pâle), ✓ (fond sombre, accent) ou neutres, hauteurs égalisées.",
+    name="compare_cards", description="Idée reçue / réponse : cartes arrondies ✗ (gris, libellé corail), ✓ (menthe) ou neutres (gris), hauteurs égalisées.",
     props=[
         Prop("cards", "list", "Cartes : {kind: bad|good|neutral, label?, title, text?}.", required=True),
         Prop("cols", "number", "Cartes par rangée (défaut : toutes)."),
@@ -327,7 +327,7 @@ register(Component(
 # --- before_after -----------------------------------------------------------------------
 
 def _panel(side: dict, w: float, h: float | None, good: bool) -> tuple[list[dict], float]:
-    fill, ink, mark = ("success_bg", "success_ink", "✓  ") if good else ("danger_bg", "danger_ink", "✗  ")
+    fill, ink, mark = ("accent", "ink", "✓  ") if good else ("surface", "coral", "✗  ")
     inner = w - 2 * 12
     texts: list[dict] = []
     y = 8.0
@@ -346,8 +346,7 @@ def _panel(side: dict, w: float, h: float | None, good: bool) -> tuple[list[dict
                       "size": 10, "italic": True, "color": ink, "role": "note"})
         y += nh + 4
     height = h or (y + 8)
-    box = {"op": "box", "x": 0, "y": 0, "w": w, "h": height, "shape": "ROUND_RECTANGLE", "fill": fill,
-           "line": {"color": ink, "weight": 0.75}, "role": "panel"}
+    box = {"op": "box", "x": 0, "y": 0, "w": w, "h": height, "shape": "ROUND_RECTANGLE", "fill": fill, "role": "panel"}
     return [box] + rules + texts, height
 
 
@@ -366,7 +365,7 @@ def _before_after(p: dict, theme: Theme, w: float, h: float | None) -> tuple[lis
 
 
 register(Component(
-    name="before_after", description="Avant / après : panneau ✗ rouge pâle et panneau ✓ vert pâle (titre caps, lignes séparées par des filets, note en italique), flèche entre les deux.",
+    name="before_after", description="Avant / après : panneau ✗ gris (titre corail) et panneau ✓ menthe (titre caps, lignes séparées par des filets, note en italique), flèche entre les deux.",
     props=[
         Prop("before", "dict", "{title, items: [markdown…], note?} — l'existant.", required=True),
         Prop("after", "dict", "{title, items: [markdown…], note?} — la cible.", required=True),

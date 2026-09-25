@@ -272,7 +272,8 @@ def _card(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict],
                       "style": "card_body", "color": body_col})
         y += body_h
     height = h or (y + PAD)
-    ops: list[dict] = [{"op": "box", "x": 0, "y": 0, "w": w, "h": height, "fill": fill, "line": line, "role": "card"}]
+    ops: list[dict] = [{"op": "box", "x": 0, "y": 0, "w": w, "h": height, "shape": "ROUND_RECTANGLE" if p["variant"] != "plain" else "RECTANGLE",
+                        "fill": fill, "line": line, "role": "card"}]
     return ops + icon_ops + dot + texts, height
 
 
@@ -608,6 +609,26 @@ register(Component(
              "dots": ["regie_google", "regie_google", "regie_google", "regie_google"],
              "align": [None, "END", "END", "END", "END", "END"], "header_fill": "ink", "total_fill": "surface", "total_row": True,
              "zero_cols": [4], "pill_cols": {"5": [{"max": 30, "color": "accent"}, {"max": 300, "color": "accent_alt"}, {"color": "coral"}]}},
+    variants=[
+        {"title": "simple : en-tête accent, titres seuls, total accent",
+         "props": {"rows": [["Levier", "Budget", "Part"], ["Google Ads", "18 000 €", "45 %"], ["Meta", "12 000 €", "30 %"], ["Pinterest", "3 000 €", "8 %"], ["Total", "33 000 €", "83 %"]],
+                   "align": [None, "END", "END"], "total_row": True}},
+        {"title": "pictos de canaux, en-tête sombre, total gris",
+         "props": {"rows": [["Canal", "Impr.", "Clics", "Conv.", "Coût"], ["Recherche Google", "86 085", "4 530", "147", "18 024 €"], ["Discover", "1 729 943", "31 683", "50", "3 445 €"],
+                            ["YouTube", "115 432", "811", "5", "442 €"], ["Gmail", "21 147", "586", "1", "74 €"], ["Total", "1 952 607", "37 610", "203", "21 985 €"]],
+                   "icons": ["search", "star", "video", "share"], "icon_tint": "ink", "header_fill": "ink", "total_fill": "surface", "total_row": True,
+                   "align": [None, "END", "END", "END", "END"]}},
+        {"title": "colonne « vs N-1 » colorée par signe, sans total",
+         "props": {"rows": [["Famille", "Dépenses", "vs N-1", "Collecte GA4", "vs N-1", "ROAS"], ["Search Marque", "46 811 €", "+52,18 %", "179 083 €", "+172,10 %", "3,83"],
+                            ["Search Hors marque", "36 152 €", "+25,59 %", "7 100 €", "-70,94 %", "0,20"], ["PMax", "22 296 €", "+138,61 %", "10 440 €", "+156,83 %", "0,47"]],
+                   "delta_cols": [2, 4], "align": [None, "END", "END", "END", "END", "END"]}},
+        {"title": "CPA en pilules par seuil, cumul en menthe",
+         "props": {"rows": [["Mois", "Impr.", "Clics", "CTR", "Coût", "Conv.", "CPA"], ["Janvier", "8 981", "946", "10,53 %", "694,28 €", "20", "34,71 €"],
+                            ["Février", "9 820", "1 296", "13,20 %", "825,58 €", "48", "17,20 €"], ["Mars", "10 717", "1 443", "13,46 %", "893,63 €", "56", "15,96 €"],
+                            ["Avril", "10 077", "1 161", "11,52 %", "817,64 €", "59", "13,86 €"], ["Cumul", "39 595", "4 846", "12,24 %", "3 231,13 €", "183", "17,66 €"]],
+                   "header_fill": "ink", "total_row": True, "align": [None, "END", "END", "END", "END", "END", "CENTER"],
+                   "pill_cols": {"6": [{"max": 17, "color": "accent"}, {"max": 30, "color": "accent_alt"}, {"color": "coral"}]}}},
+    ],
     tags=["données"],
 ))
 

@@ -235,7 +235,7 @@ def _ad_scoreboard(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
         "op": "table", "x": 0, "y": 0, "w": w, "rows": rows, "col_w": [first_w] + [cw] * len(ads), "row_h": row_h, "row_heights": heights,
         "header": {"fill": "ink", "color": "on_dark", "bold": True}, "banding": ["background", "surface"], "first_col_bold": True,
         "borders": {"color": "rule", "weight": 1}, "align": [None] + ["CENTER"] * len(ads), "size": p["size"],
-        "cell_fills": {(i, 0): "accent" for i in range(1, len(rows))},
+        "cell_fills": {(i, 0): "surface" for i in range(1, len(rows))},
     }
     ops: list[dict] = [table]
     y = heights[0] + 4
@@ -257,7 +257,7 @@ def _ad_scoreboard(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
 
 register(Component(
     name="ad_scoreboard",
-    description="Résultats par publicité : tableau transposé, une colonne par annonce (nom en en-tête sombre, vignette ou cadre « à déposer »), une ligne par métrique, première colonne accent ; note « Top annonce » en italique.",
+    description="Résultats par publicité : tableau transposé, une colonne par annonce (nom en en-tête sombre, vignette ou cadre « à déposer »), une ligne par métrique, première colonne grise en gras ; note « Top annonce » en italique.",
     props=[
         Prop("ads", "list", "Annonces : {name, image? (asset), image_url?, values: {métrique: valeur formatée}}.", required=True),
         Prop("metrics", "list", "Métriques affichées, dans l'ordre des lignes (Dépenses, CTR, Dons, CPA).", required=True),
@@ -358,29 +358,31 @@ def _media_plan(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[
     pw = w * split
     items = list(obj.get("items") or [])
     oy = 24.0
-    obj_ops: list[dict] = [{"op": "box", "x": px + INSET_X + 10, "y": oy + 3, "w": 10, "h": 10, "shape": "ELLIPSE", "fill": "background",
-                            "role": "objective_dot"},
-                           {"op": "text", "x": px + INSET_X + 24, "y": oy - 3, "w": pw - 40, "h": 14 + INSETS, "text": str(obj.get("title", "")),
-                            "style": "card_title", "size": 11, "bold": True, "color": "ink", "role": "objective_title"}]
-    oy += 22
+    pad = 16.0
+    obj_ops: list[dict] = [{"op": "text", "x": px + pad, "y": pad, "w": pw - 2 * pad, "h": 12 + INSETS, "text": "\u2009".join(str(p["objective_eyebrow"]).upper()),
+                            "style": "card_label", "size": 9.5, "small_ok": True, "bold": True, "color": "ink", "role": "objective_eyebrow"},
+                           {"op": "text", "x": px + pad, "y": pad + 18, "w": pw - 2 * pad, "h": _text_height(str(obj.get("title", "")), pw - 2 * pad, 15),
+                            "style": "card_title", "size": 15, "bold": True, "color": "ink", "text": str(obj.get("title", "")), "role": "objective_title"}]
+    oy = pad + 18 + obj_ops[1]["h"] + 2
     if items:
-        chev, ch = _chevrons(items, pw - 40, 11)
-        chev.update({"x": px + INSET_X + 24, "y": oy, "color": "ink", "role": "objective_items"})
+        chev, ch = _chevrons(items, pw - 2 * pad, 11)
+        chev.update({"x": px + pad, "y": oy, "color": "ink", "role": "objective_items"})
         chev["runs"] = [[{**r[0], "color": "ink"}, r[1]] for r in chev["runs"]]
         obj_ops.append(chev)
         oy += ch
-    height = h or max(left_h, oy + 16, 120.0)
-    ops.append({"op": "box", "x": px, "y": 0, "w": pw, "h": height, "fill": "accent", "role": "objective"})
+    height = h or max(left_h, oy + pad, 120.0)
+    ops.append({"op": "box", "x": px, "y": 0, "w": pw, "h": height, "shape": "ROUND_RECTANGLE", "fill": "accent", "role": "objective"})
     ops.extend(obj_ops)
     return ops, height
 
 
 register(Component(
     name="media_plan",
-    description="Rappel du dispositif : leviers déployés (pastille, nom en capitales, logos régies, ordre d'insertion, dates) et panneau accent « Objectif à atteindre » avec ses points.",
+    description="Rappel du dispositif : leviers déployés (pastille, nom en capitales, logos régies, ordre d'insertion, dates) et carte menthe arrondie « Objectif » avec ses points, dans le style content_card.",
     props=[
         Prop("levers", "list", "Leviers : {name, logos?: [asset], budget?, dates?}.", required=True),
-        Prop("objective", "dict", "Panneau de droite : {title, items}."),
+        Prop("objective", "dict", "Panneau de droite (carte menthe) : {title, items}."),
+        Prop("objective_eyebrow", "str", "Sur-titre tracké du panneau.", default="Objectif"),
         Prop("heading", "str", "Titre de la liste.", default="Leviers déployés"),
         Prop("budget_label", "str", "Libellé du budget.", default="Ordre d'insertion : "),
         Prop("dates_label", "str", "Libellé des dates.", default="Date : "),
@@ -390,7 +392,7 @@ register(Component(
     render=_media_plan,
     example={"levers": [{"name": "Search + Demand Gen", "logos": ["google", "search"], "budget": "16 000 € HT", "dates": "du 09/02/2026 au 08/03/2026"},
                         {"name": "Social", "logos": ["share"], "budget": "18 000 € HT", "dates": "du 09/02/2026 au 08/03/2026"}],
-             "objective": {"title": "Objectif à atteindre", "items": ["Développer le nombre de demandes de brochures", "Accroître la notoriété sur le legs"]},
+             "objective": {"title": "Générer des demandes de brochures qualifiées", "items": ["Développer le nombre de demandes de brochures", "Accroître la notoriété sur le legs"]},
              "tint": "ink"},
     tags=["cartes"],
 ))

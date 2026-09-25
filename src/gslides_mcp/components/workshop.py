@@ -89,7 +89,6 @@ def _score_matrix(p: dict, theme: Theme, w: float, h: float | None) -> tuple[lis
         for j in range(len(cols)):
             v = _num(values[j]) if j < len(values) else None
             fill = threshold_color(v, thresholds)
-            fill = "#BFF5E6" if fill == "mint_pale" else fill
             x = label_w + j * (tile_w + gap)
             ops.append({"op": "box", "x": x, "y": y, "w": tile_w, "h": tile_h, "shape": "ROUND_RECTANGLE", "fill": fill, "role": "tile"})
             text = "–" if v is None else f"{v:.1f}".replace(".", ",")
@@ -104,7 +103,7 @@ def _score_matrix(p: dict, theme: Theme, w: float, h: float | None) -> tuple[lis
         lx = 0.0
         prev = None
         for t in thresholds:
-            color = "#BFF5E6" if t.get("color") == "mint_pale" else t.get("color") or "surface"
+            color = t.get("color") or "surface"
             if t.get("max") is None:
                 name = f"{fmt_value(prev, '')} et plus" if prev is not None else "reste"
             elif prev is None:

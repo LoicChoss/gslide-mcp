@@ -63,7 +63,7 @@ def test_score_matrix_tiles_by_threshold_with_counts_and_legend():
                                                         {"label": "CRM", "values": [3.7, None]}]}
     ops, h = _render("score_matrix", props, w=600)
     tiles = _of(ops, "box", "tile")
-    assert len(tiles) == 4 and tiles[0]["fill"] == "#BFF5E6" and tiles[1]["fill"] == "coral" and tiles[2]["fill"] == "accent" and tiles[3]["fill"] == "surface"
+    assert len(tiles) == 4 and tiles[0]["fill"] == "mint_pale" and tiles[1]["fill"] == "coral" and tiles[2]["fill"] == "accent" and tiles[3]["fill"] == "surface"
     assert [s["text"] for s in _of(ops, "text", "score")] == ["2,5", "1,5", "3,7", "–"]
     assert [c["text"] for c in _of(ops, "text", "count")] == ["2 rép.", "2 rép."]
     assert [e["text"] for e in _of(ops, "text", "eyebrow")][0].replace(" ", "") == "FAMILLE DE MISSIONS"
@@ -173,3 +173,52 @@ def test_fit_text_size_and_fit_labels():
     ops, _ = _render("chart_bars", {"labels": ["Search Hors marque", "PMax", "Search Marque"], "values": [1, 2, 3]}, w=200)
     labels = _of(ops, "text", "label")
     assert len(labels) == 3 and labels[0]["size"] < 10
+
+
+# --- charter restyle (0.5.0): rounded cards, light grounds, table variants -----------------
+
+def test_table_declares_catalogue_variants_with_valid_props():
+    from gslides_mcp import components
+    comp = components.get("table")
+    assert len(comp.variants) >= 4 and all(v["title"] and v["props"]["rows"] for v in comp.variants)
+    assert "variants" in comp.schema() and len(comp.schema()["variants"]) == len(comp.variants)
+    for v in comp.variants:
+        ops, h = _render("table", v["props"], w=600)
+        assert h > 0 and any(o["op"] == "table" for o in ops)
+
+
+def test_rounded_charter_frames():
+    ops, _ = _render("card", {"title": "T", "body": "x"}, w=300)
+    assert _of(ops, "box", "card")[0]["shape"] == "ROUND_RECTANGLE"
+    ops, _ = _render("card", {"title": "T", "body": "x", "variant": "plain"}, w=300)
+    assert _of(ops, "box", "card")[0]["shape"] == "RECTANGLE"
+    ops, _ = _render("compare_cards", {"cards": [{"kind": "bad", "title": "a"}, {"kind": "good", "title": "b"}]}, w=400)
+    assert all(c["shape"] == "ROUND_RECTANGLE" for c in _of(ops, "box", "card"))
+    ops, _ = _render("process", {"steps": [{"title": "a"}, {"title": "b"}]}, w=400)
+    assert all(s["shape"] == "ROUND_RECTANGLE" for s in _of(ops, "box", "step"))
+    ops, _ = _render("before_after", {"before": {"title": "Avant", "items": ["a"]}, "after": {"title": "Après", "items": ["b"]}}, w=500)
+    assert all("line" not in pnl for pnl in _of(ops, "box", "panel"))
+
+
+def test_media_plan_objective_is_a_content_card():
+    props = {"levers": [{"name": "Search", "budget": "1 000 €"}], "objective": {"title": "Objectif", "items": ["a", "b"]}}
+    ops, h = _render("media_plan", props, w=660)
+    (panel,) = _of(ops, "box", "objective")
+    assert panel["shape"] == "ROUND_RECTANGLE" and panel["fill"] == "accent" and panel["h"] == h
+    (eyebrow,) = _of(ops, "text", "objective_eyebrow")
+    assert "\u2009" in eyebrow["text"] and eyebrow["text"].replace("\u2009", "") == "OBJECTIF"
+    assert not _of(ops, "box", "objective_dot")
+
+
+def test_heatmap_and_scoreboard_use_dark_header_and_grey_label_column():
+    ops, _ = _render("heatmap", {"rows": [["", "A"], ["x", "1"], ["y", "4"]]}, w=300)
+    (t,) = [o for o in ops if o["op"] == "table"]
+    assert t["header"]["fill"] == "ink"
+    ops, _ = _render("ad_scoreboard", {"ads": [{"name": "A", "values": {"Clics": "1"}}, {"name": "B", "values": {"Clics": "2"}}], "metrics": ["Clics"]}, w=400)
+    (t,) = [o for o in ops if o["op"] == "table"]
+    assert t["cell_fills"][(1, 0)] == "surface"
+
+
+def test_theme_defines_pale_mint_and_heat_scale():
+    assert PERISCOPE.colors["mint_pale"].upper() == "#BFF5E6"
+    assert PERISCOPE.color("heat_2") == PERISCOPE.color("mint_pale") and PERISCOPE.color("heat_4") == PERISCOPE.color("navy")

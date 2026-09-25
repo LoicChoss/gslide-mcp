@@ -42,20 +42,20 @@ list props; read `list_components()` for the guidance.
 |---|---|---|
 | `kpi` | `value*`, `label*`, `delta`, `note`, `dark` | Accent bar, big value, label (+ small muted `note`: « Collecte (GA4) »); `delta` colored by its sign (`+` positive, otherwise negative). |
 | `kpi_grid` | `items*` `[{value, label, delta, note}]`, `cols`, `rows`, `row_gap`, `dark` | `kpi` repeated in columns; `rows` adds bold row labels on the left (« Marque » / « Hors marque »), one KPI row each. |
-| `card` | `variant` (`light` `dark` `mint` `acid` `outline` `plain`), `label`, `big`, `num`, `title`, `body` (markdown), `dot`, `icon`, `icon_color` | The flat card pattern; natural height follows the content. `icon` names a PNG of the assets folder (`bolt`, `people`…) drawn in a white disc, tinted with `icon_color` (default `ink`). |
+| `card` | `variant` (`light` `dark` `mint` `acid` `outline` `plain`), `label`, `big`, `num`, `title`, `body` (markdown), `dot`, `icon`, `icon_color` | The flat card pattern, rounded corners (square for `plain`); natural height follows the content. `icon` names a PNG of the assets folder (`bolt`, `people`…) drawn in a white disc, tinted with `icon_color` (default `ink`). |
 | `card_grid` | `cards*` (list of `card` props), `cols`, `gap` | Rows of cards with equalised heights — the "three pillars" slide. |
 | `callout` | `type` (`info` `idea` `warn` `alert` `dark`), `title`, `body*` (markdown) | Flat box with an accent bar on the left. |
 | `badge` | `text*`, `fill`, `color`, `mono` | Small uppercase tag; width follows the text. `mono` = lowercase code-like tag in Roboto Mono, rounded (« signal doux »). |
 | `steps` | `items*` (markdown), `dark` | Numbered circles + text. |
 | `quote` | `text*` (markdown), `author`, `role`, `dark` | Accent-outlined box, bold italic quote. |
-| `table` | `rows*`, `col_w`, `row_h`, `row_heights`, `header`, `total_row`, `align`, `size`, `icons`, `icon_w`, `icon_tint`, `delta_cols`, `header_fill` (`accent` `ink`), `total_fill`, `subs`, `dots`, `zero_cols`, `na_text`, `pill_cols` | Accent or navy header, bold first column (optional muted sub-line via `subs`, colour dot via `dots`), banded rows, thin rules, accent or grey total row. `icons` adds a picto column in front; `delta_cols` colours « vs N-1 » cells by sign; `zero_cols` shows zeros in coral; empty / `-` cells become a muted `–`; `pill_cols` puts a column's values in rounded tags coloured by threshold (`{"7": [{max, color}, …, {color}]}`). |
+| `table` | `rows*`, `col_w`, `row_h`, `row_heights`, `header`, `total_row`, `align`, `size`, `icons`, `icon_w`, `icon_tint`, `delta_cols`, `header_fill` (`accent` `ink`), `total_fill`, `subs`, `dots`, `zero_cols`, `na_text`, `pill_cols` | Accent or navy header, bold first column (optional muted sub-line via `subs`, colour dot via `dots`), banded rows, thin rules, accent or grey total row. `icons` adds a picto column in front; `delta_cols` colours « vs N-1 » cells by sign; `zero_cols` shows zeros in coral; empty / `-` cells become a muted `–`; `pill_cols` puts a column's values in rounded tags coloured by threshold (`{"7": [{max, color}, …, {color}]}`). The catalogue entry carries `variants` (simple / icons / delta columns / pills) rendered as extra slides of the component deck. |
 | `chart_bars` | `labels*`, `values*`, `horizontal`, `unit`, `max`, `show_values`, `color`, `colors`, `y_axis`, `dividers`, `title`, `panel` | Vertical histogram with baseline (optional graduated Y axis with grid, period dividers `[{after, left, right}]`), or horizontal bars on grey tracks. `colors` = one colour per bar (`regie_google`…). Values in French format (`4 000 000 €`). |
 | `chart_line` | `labels*`, `series*` `[{name, values, dash, color}]`, `y_max`, `legend`, `legend_pos`, `markers`, `title`, `panel` | Light grid, axis labels, 1.5 pt lines, small markers (`auto`: shown up to 12 points), dashed series, `null` = gap, legend. |
 | `donut` | `segments*` `[{label, value, color}]`, `thickness`, `center`, `legend`, `legend_pos` (`right` `bottom` `none`), `labels`, `title`, `panel` | Ring with legend and percentages; `labels` puts the percentages on the segments (from 6 %), text light or dark by luminance. |
 | `pie` | `segments*`, `legend` | Full disc (a donut whose thickness is its radius, drawn as two concentric bands). |
 | `funnel` | `items*` `[{label, value, sub, color}]`, `pct` (`first` `prev` `both` `none`), `unit`, `label_w`, `value_w`, `bar_h`, `min_frac`, `legend` | Centred bars scaled to the first step, values with French thousands separators, rate pills (accent = vs first step, outlined = vs previous) and their legend. |
 | `timeline` | `phases*` `[{date, title, text, color}]` | Horizontal line, one dot per phase, date above, title and text below. |
-| `process` | `steps*` `[{label, sub, fill, color, w}]`, `arrow_w` | Boxes separated by → arrows. |
+| `process` | `steps*` `[{label, sub, fill, color, w}]`, `arrow_w` | Rounded boxes (light grounds, `fill: accent` for the highlighted step) separated by → arrows. |
 | `hub_spoke` | `center*`, `sats*` `[{label, hl}]`, `hub_w`, `hub_h`, `sat_d` | Accent hub linked to round satellites laid out on an ellipse (`hl` = accent outline). |
 | `stack` | `items*` `[{label, sub, fill, color, width}]`, `item_h`, `gap`, `min_ratio` | Centred layers of decreasing width (pyramid / simple funnel). |
 | `bigstat` | `value*`, `label*`, `sub`, `color` | One 54 pt figure, centred. |
@@ -66,7 +66,7 @@ list props; read `list_components()` for the guidance.
 | `compare_bars` | `bars*` `[{label, frac, color}]`, `gap` | Full-width grey tracks with a filled fraction. |
 | `effort_matrix` | `bubbles*` `[{n, label, x, y, d, fill, color, above}]`, `x_label`, `y_label` | Two axes, numbered bubbles at fractional positions (y = 1 is top). |
 | `bubbles` | `points*` `[{name, x, y, size, color}]`, `x_max`, `y_max`, `x_title` | Bubble chart on a 4×4 grid with axis ticks. |
-| `heatmap` | `rows*` (header row, label column, numbers or `null`), `col_w`, `row_h`, `size` | Table whose numeric cells are binned into `heat_1…heat_4`. |
+| `heatmap` | `rows*` (header row, label column, numbers or `null`), `col_w`, `row_h`, `size` | Table with a dark header whose numeric cells are binned into `heat_1…heat_4` (surface, pale mint, mint, navy). |
 
 Mockups (tag `mockups`):
 
@@ -85,8 +85,8 @@ Text and structure (lot 4):
 | `numbered_list` | `items*` `[{title, sub, icon}]`, `marker` (`circle` `square`), `start`, `card`, `connector`, `gap` | Vertical list: accent disc (picto or number) + `#n` + title/sub, or square chip + uppercase title. Optional light cards and a vertical accent connector. |
 | `big_numbers` | `items*` `[{num, title, text}]`, `cols`, `row_gap`, `highlight` | "1 2 3" columns: 54 pt figure, highlighted bold title (line breaks allowed), centred paragraph. |
 | `phase_cards` | `phases*` `[{num, title, text, icon, note, deliverables}]`, `cols`, `gap`, `num_size` | Methodology cards: big accent number above an accent-outlined card, picto + note row, "LIVRABLES" list with → bullets. Heights equalised per row. |
-| `compare_cards` | `cards*` `[{kind (bad/good/neutral), label, title, text}]`, `cols`, `gap` | Myth vs. answer: ✗ card on `danger_bg`, ✓ card on `surface_dark` with accent label, neutral on `surface`. |
-| `before_after` | `before*` / `after*` `{title, items, note}`, `arrow`, `gap` | Two rounded panels (`danger_bg` / `success_bg`) with a caps title, rule-separated lines, italic note, → between them. |
+| `compare_cards` | `cards*` `[{kind (bad/good/neutral), label, title, text}]`, `cols`, `gap` | Myth vs. answer, rounded cards: ✗ card on `surface` with a coral label, ✓ card on `accent` (mint), neutral on `surface`. |
+| `before_after` | `before*` / `after*` `{title, items, note}`, `arrow`, `gap` | Two rounded panels (`surface` with a coral title / `accent`) with a caps title, rule-separated lines, italic note, → between them. |
 | `stat_pair` | `pairs*` `[{label, before, after}]`, `cols` | Before → after figures: muted before, bold after. |
 | `palette` | `swatches*` `[{color, text, name, ratio, sample}]`, `cols`, `sample` | "Aa" swatches with name and contrast ratio (RGAA slides, brand palettes). |
 
@@ -123,9 +123,9 @@ Bilan média (reporting régies + GA4; reference: the agency's generated PPTX bi
 | `stat_box` | `boxes*` `[{value, label}]`, `operator` (`=`), `box_w`, `box_h` | Accent-outlined figures joined by an operator, centred as a group. |
 | `takeaways` | `items*` (`{title, text}` or text), `highlight`, `gap` | Enseignements / recos: bold (optionally highlighted) title + paragraph per point. |
 | `placeholder` | `text*`, `height`, `dash` | Dashed grey frame with a centred message (export pending, capture to drop). |
-| `ad_scoreboard` | `ads*` `[{name, image, image_url, values}]`, `metrics*`, `image_h`, `row_h`, `first_col_w`, `name_label`, `image_label`, `top_note`, `size` | Transposed results-per-ad table: dark header with the ad names, « Visuel » row with the thumbnails (contain) or dashed frames, one row per metric, accent first column, italic « Top annonce » note. |
+| `ad_scoreboard` | `ads*` `[{name, image, image_url, values}]`, `metrics*`, `image_h`, `row_h`, `first_col_w`, `name_label`, `image_label`, `top_note`, `size` | Transposed results-per-ad table: dark header with the ad names, « Visuel » row with the thumbnails (contain) or dashed frames, one row per metric, grey bold first column, italic « Top annonce » note. |
 | `gallery` | `images*` (asset, `{asset | url, caption}`, or `null`), `cols`, `gap`, `ratio` (0.62), `captions`, `placeholder_text` | Fixed-ratio image cells with optional captions; `null` draws a dashed « Capture de l'annonce (à déposer) » frame. |
-| `media_plan` | `levers*` `[{name, logos, budget, dates}]`, `objective` `{title, items}`, `heading`, `budget_label`, `dates_label`, `split`, `tint` | « Rappel du dispositif »: accent dot, uppercase lever name, régie logos, bold budget and dates; accent « Objectif à atteindre » panel with chevrons on the right. |
+| `media_plan` | `levers*` `[{name, logos, budget, dates}]`, `objective` `{title, items}`, `objective_eyebrow`, `heading`, `budget_label`, `dates_label`, `split`, `tint` | « Rappel du dispositif »: accent dot, uppercase lever name, régie logos, bold budget and dates; on the right a mint content_card-style panel (tracked eyebrow, title, chevrons). |
 | `timeline_arrow` | `events*` `[{date, text, style (filled | outline | dashed), above}]`, `box_w`, `box_h`, `connector`, `alternate` | Thick accent arrow, dated boxes alternating below / above joined by a thin connector. |
 
 Design system (brand, from the Periscope design system v1.0):

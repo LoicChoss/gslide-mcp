@@ -2,6 +2,17 @@
 
 All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/) (0.x: minor bumps may change tool signatures).
 
+## [0.5.0] — 2026-09-25
+
+### Added
+
+- Catalogue `variants`: a component can declare other typical settings (`[{title, props}]`, exposed by `list_components`); `table` declares four (simple accent table, picto column with navy header, « vs N-1 » delta columns, CPA pills with mint total).
+- `media_plan.objective_eyebrow`; theme token `mint_pale` (#BFF5E6) and roles `heat_1…heat_4` on the charter palette.
+
+### Changed
+
+- **Charter restyle, light grounds and rounded corners**: `card` / `card_grid` (round rectangle, square only for `plain`), `compare_cards` (✗ grey with coral label, ✓ mint, neutral grey), `before_after` (grey / mint panels, no outline), `process` (rounded steps), `media_plan` (objective panel styled like a `content_card`: mint, tracked eyebrow, title, chevrons), `ad_scoreboard` (grey bold label column), `heatmap` (navy header, heat scale surface → pale mint → mint → navy).
+
 ## [0.4.1] — 2026-09-25
 
 ### Changed

@@ -154,7 +154,7 @@ def _process(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
     for i, st in enumerate(steps):
         sw = float(st.get("w") or auto_w)
         fg = st.get("color") or ("on_dark" if str(st.get("fill", "")).startswith("surface_dark") else "ink")
-        ops.append({"op": "box", "x": x, "y": 0, "w": sw, "h": height, "fill": st.get("fill") or "surface", "role": "step"})
+        ops.append({"op": "box", "x": x, "y": 0, "w": sw, "h": height, "shape": "ROUND_RECTANGLE", "fill": st.get("fill") or "surface", "role": "step"})
         ops.append({"op": "text", "x": x + 6, "y": 10, "w": sw - 12, "h": 16 + INSETS, "text": str(st.get("label", "")),
                     "style": "label", "bold": True, "color": fg, "align": "CENTER"})
         if st.get("sub"):
@@ -175,7 +175,7 @@ register(Component(
         Prop("arrow_w", "number", "Largeur réservée à chaque flèche.", default=30),
     ],
     render=_process,
-    example={"steps": [{"label": "Audit", "sub": "2 semaines"}, {"label": "Plan", "sub": "priorisation"}, {"label": "Run", "sub": "sprints mensuels", "fill": "surface_dark"}]},
+    example={"steps": [{"label": "Audit", "sub": "2 semaines"}, {"label": "Plan", "sub": "priorisation"}, {"label": "Run", "sub": "sprints mensuels", "fill": "accent"}]},
     tags=["schémas"],
 ))
 
@@ -402,7 +402,7 @@ def _heatmap(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
     row_h = float(p["row_h"])
     op = {
         "op": "table", "x": 0, "y": 0, "w": w, "rows": text_rows, "col_w": p["col_w"], "row_h": row_h,
-        "header": {"fill": "accent", "color": "on_accent", "bold": True},
+        "header": {"fill": "ink", "color": "on_dark", "bold": True},
         "banding": ["background"], "first_col_bold": True,
         "borders": {"color": "background", "weight": 1.5},
         "align": [None] + ["CENTER"] * (max(len(r) for r in rows) - 1),
@@ -420,7 +420,7 @@ def _is_num(v) -> bool:
 
 
 register(Component(
-    name="heatmap", description="Tableau thermique : cellules numériques colorées par quartile (rôles heat_1…heat_4), en-tête accent, première colonne en gras.",
+    name="heatmap", description="Tableau thermique : cellules numériques colorées par quartile (gris, menthe pâle, menthe, navy), en-tête sombre, première colonne en gras.",
     props=[
         Prop("rows", "list", "Lignes : première = en-tête, première colonne = libellés, cellules numériques (null = vide).", required=True),
         Prop("col_w", "list", "Largeurs de colonnes en pt."),

@@ -32,7 +32,8 @@
     "meta": "#FA00A6",
     "pinterest": "#E8FF00",
     "linkedin": "#0A66C2",
-    "tiktok": "#111418"
+    "tiktok": "#111418",
+    "mint_pale": "#BFF5E6"
   },
   "roles": {
     "background": "white",
@@ -80,7 +81,7 @@
     "marker": "background",
     "heat_0": "background",
     "heat_1": "card",
-    "heat_2": "info_bg",
+    "heat_2": "mint_pale",
     "heat_3": "mint",
     "heat_4": "navy",
     "stat": "accent",

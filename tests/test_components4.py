@@ -107,10 +107,10 @@ def test_compare_cards_kinds_and_bad_kind_rejected():
     ops, _ = _render("compare_cards", {"cards": [{"kind": "bad", "label": "Idée reçue", "title": "T1"},
                                                  {"kind": "good", "label": "Réponse", "title": "T2", "text": "x"}, {"title": "T3"}]})
     cards = _of(ops, "box", "card")
-    assert [c["fill"] for c in cards] == ["danger_bg", "surface_dark", "surface"]
+    assert [c["fill"] for c in cards] == ["surface", "accent", "surface"]
     labels = _of(ops, "text", "label")
-    assert labels[0]["text"].startswith("✗") and labels[0]["color"] == "danger_ink"
-    assert labels[1]["text"].startswith("✓") and labels[1]["color"] == "accent"
+    assert labels[0]["text"].startswith("✗") and labels[0]["color"] == "coral"
+    assert labels[1]["text"].startswith("✓") and labels[1]["color"] == "ink"
     assert len({c["h"] for c in cards}) == 1
     with pytest.raises(ValueError, match="kind"):
         components.render("compare_cards", {"cards": [{"kind": "meh", "title": "x"}]}, PERISCOPE, 300)
@@ -120,7 +120,7 @@ def test_before_after_panels_rules_note_and_arrow():
     ops, height = _render("before_after", {"before": {"title": "Actuel", "items": ["a", "b", "c"], "note": "plat"},
                                            "after": {"title": "Cible", "items": ["==x=="]}, "gap": 20})
     panels = _of(ops, "box", "panel")
-    assert [p["fill"] for p in panels] == ["danger_bg", "success_bg"] and panels[0]["h"] == panels[1]["h"] == height
+    assert [p["fill"] for p in panels] == ["surface", "accent"] and panels[0]["h"] == panels[1]["h"] == height
     assert panels[1]["x"] == 210 and panels[0]["w"] == 190
     titles = _of(ops, "text", "title")
     assert titles[0]["text"] == "✗  ACTUEL" and titles[1]["text"] == "✓  CIBLE"
