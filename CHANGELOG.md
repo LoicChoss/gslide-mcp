@@ -2,6 +2,15 @@
 
 All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/) (0.x: minor bumps may change tool signatures).
 
+## [0.4.0] — 2026-09-25
+
+### Added
+
+- **Workshop and restitution components** — `score_matrix` (tiles by threshold), `ranked_bars` (votes), `chip_cloud`, `quadrant_matrix` (impact × urgence), `next_steps`, `board_columns`, `session_plan` (sections + proportional time strip), `attention_points` (level pills, highlighted figures), `bar_list` (commented bars, states, hatching). Light grounds only: transparent or `surface`; colour on headers, tags and tiles.
+- `table`: `header_fill` (navy header), `total_fill` (grey total), `subs` (muted second line under the name), `dots` (colour dot per row), `zero_cols` (zeros in coral), `na_text` (muted `–` for empty cells), `pill_cols` (values in rounded tags coloured by threshold). `draw` table ops take `cell_runs`.
+- `badge.mono` (code-like tag) and `pill.count` (« ×n »).
+- Theme roles `accent_dark`, `coral`, `acid` (and `gray_2` in `default`).
+
 ## [0.3.1] — 2026-09-24
 
 ### Fixed

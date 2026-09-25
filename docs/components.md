@@ -45,10 +45,10 @@ list props; read `list_components()` for the guidance.
 | `card` | `variant` (`light` `dark` `mint` `acid` `outline` `plain`), `label`, `big`, `num`, `title`, `body` (markdown), `dot`, `icon`, `icon_color` | The flat card pattern; natural height follows the content. `icon` names a PNG of the assets folder (`bolt`, `people`…) drawn in a white disc, tinted with `icon_color` (default `ink`). |
 | `card_grid` | `cards*` (list of `card` props), `cols`, `gap` | Rows of cards with equalised heights — the "three pillars" slide. |
 | `callout` | `type` (`info` `idea` `warn` `alert` `dark`), `title`, `body*` (markdown) | Flat box with an accent bar on the left. |
-| `badge` | `text*`, `fill`, `color` | Small uppercase tag; width follows the text. |
+| `badge` | `text*`, `fill`, `color`, `mono` | Small uppercase tag; width follows the text. `mono` = lowercase code-like tag in Roboto Mono, rounded (« signal doux »). |
 | `steps` | `items*` (markdown), `dark` | Numbered circles + text. |
 | `quote` | `text*` (markdown), `author`, `role`, `dark` | Accent-outlined box, bold italic quote. |
-| `table` | `rows*`, `col_w`, `row_h`, `row_heights`, `header`, `total_row`, `align`, `size`, `icons`, `icon_w`, `icon_tint`, `delta_cols` | Accent header, bold first column, banded rows, thin horizontal rules, optional accent total row. `icons` (one asset per data row) adds a narrow picto column in front; `delta_cols` colours « vs N-1 » cells by sign. |
+| `table` | `rows*`, `col_w`, `row_h`, `row_heights`, `header`, `total_row`, `align`, `size`, `icons`, `icon_w`, `icon_tint`, `delta_cols`, `header_fill` (`accent` `ink`), `total_fill`, `subs`, `dots`, `zero_cols`, `na_text`, `pill_cols` | Accent or navy header, bold first column (optional muted sub-line via `subs`, colour dot via `dots`), banded rows, thin rules, accent or grey total row. `icons` adds a picto column in front; `delta_cols` colours « vs N-1 » cells by sign; `zero_cols` shows zeros in coral; empty / `-` cells become a muted `–`; `pill_cols` puts a column's values in rounded tags coloured by threshold (`{"7": [{max, color}, …, {color}]}`). |
 | `chart_bars` | `labels*`, `values*`, `horizontal`, `unit`, `max`, `show_values`, `color`, `colors`, `y_axis`, `dividers`, `title`, `panel` | Vertical histogram with baseline (optional graduated Y axis with grid, period dividers `[{after, left, right}]`), or horizontal bars on grey tracks. `colors` = one colour per bar (`regie_google`…). Values in French format (`4 000 000 €`). |
 | `chart_line` | `labels*`, `series*` `[{name, values, dash, color}]`, `y_max`, `legend`, `legend_pos`, `markers`, `title`, `panel` | Light grid, axis labels, 1.5 pt lines, small markers (`auto`: shown up to 12 points), dashed series, `null` = gap, legend. |
 | `donut` | `segments*` `[{label, value, color}]`, `thickness`, `center`, `legend`, `legend_pos` (`right` `bottom` `none`), `labels`, `title`, `panel` | Ring with legend and percentages; `labels` puts the percentages on the segments (from 6 %), text light or dark by luminance. |
@@ -60,7 +60,7 @@ list props; read `list_components()` for the guidance.
 | `stack` | `items*` `[{label, sub, fill, color, width}]`, `item_h`, `gap`, `min_ratio` | Centred layers of decreasing width (pyramid / simple funnel). |
 | `bigstat` | `value*`, `label*`, `sub`, `color` | One 54 pt figure, centred. |
 | `stats` | `items*` `[{value, label, sub}]`, `color` | Row of centred figures, optional caption under each. |
-| `pill` | `text*`, `color`, `outline`, `size` | Capsule, filled or outlined (uppercase), width follows the text. |
+| `pill` | `text*`, `color`, `outline`, `size`, `count` | Capsule, filled or outlined (uppercase), width follows the text; `count` ≥ 2 appends « ×n ». |
 | `checklist` | `items*` (text or `{text, done}`), `gap`, `color` | Square boxes; done items are filled with a tick. |
 | `chevrons` / `arrows` | `items*`, `size`, `spacing` | One text box, one paragraph per item, › (accent) or → prefix. |
 | `compare_bars` | `bars*` `[{label, frac, color}]`, `gap` | Full-width grey tracks with a filled fraction. |
@@ -141,6 +141,20 @@ Design system (brand, from the Periscope design system v1.0):
 | `section_header` | `title*` (markdown, `==…==` highlighted), `eyebrow`, `text`, `tags`, `highlight` (`highlight_alt`), `size`, `dark`, `align` | The signature section opener: eyebrow, yellow-highlighted title, paragraph, hashtags. |
 | `client_ticker` | `names*`, `dark`, `separator`, `size`, `pad` | Text-only client band, bold names separated by accent dots on a dark band. |
 | `do_dont` | `pairs*` `[{do, dont, do_note, dont_note}]`, `do_label`, `dont_label`, `gap` | ✓ / ✕ pairs of quoted copy with a note, on `success_bg` / `danger_bg`. |
+
+Workshop and restitution blocks (light grounds: transparent or `surface` panels; only headers, tags and tiles carry colour):
+
+| Name | Props | Notes |
+|---|---|---|
+| `score_matrix` | `rows*` `[{label, sub, values, counts}]`, `columns*`, `thresholds`, `row_title`, `count_label`, `label_ratio`, `tile_h`, `legend` | Families × criteria: rounded tiles coloured by threshold (coral, acid, pale mint, mint by default), big score, « n rép. », threshold legend. |
+| `ranked_bars` | `items*` `[{label, value}]`, `top`, `max`, `eyebrow`, `label_ratio`, `bar_h` | Votes / priorities: grey track, accent fill and bold label for the top n, grey fill below, big count on the right. |
+| `chip_cloud` | `items*` (text or `{text, count}`), `fill`, `size`, `gap` | Wrapping row of rounded chips with a « ×n » counter. |
+| `quadrant_matrix` | `quadrants*` (4 × `{title, sub, items, highlight}`), `x_label`, `y_label`, `eyebrow`, `height` | 2 × 2 grid of titled panels, one highlighted in accent, chevron items, axis labels. |
+| `next_steps` | `steps*` `[{title, text, current}]` | Columns with a top rule (accent = current), bold title, text. |
+| `board_columns` | `columns*` `[{title, items}]`, `empty_text` | Workshop board: eyebrow per column, numbered cards, italic empty state, equalised column height. |
+| `session_plan` | `sections` `[{title, text}]`, `slots` `[{time, label, weight, current}]`, `slot_h` | Section headers with an accent rule, then a proportional time strip (current slot in accent). |
+| `attention_points` | `items*` `[{level (critical | warning | good), tag, text}]`, `title`, `note`, `tag_w` | Cards with a level pill on the left (coral with outline, acid, mint) and markdown text with `==highlighted==` figures. |
+| `bar_list` | `items*` `[{label, sub, value, value_text, sub_right, state, color, pattern}]`, `states`, `max`, `unit`, `title`, `note`, `value_in_bar`, `label_ratio`, `value_ratio`, `bar_h` | Commented horizontal bars: label + sub on the left, value + sub on the right (or value inside the bar), colour by state, `pattern: stripes` hatching, state legend and scale note. |
 
 Pixel icons: `scripts/make_pixel_icons.py` writes the design-system pixel-art set
 (`assets/pixel-icons/px-envelope.png`, `px-heart`, `px-chat`, `px-chart`,
