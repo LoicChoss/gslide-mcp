@@ -315,7 +315,7 @@ VARIANTS: dict[str, list[dict]] = {
         {"title": "compact : cinq pages sur une demi-page, deux actions",
          "when": "Cocon fourni (5 pages) qui doit tenir à côté d'un texte : petits disques, arc serré, deux nœuds d'action.",
          "props": {"center": "Don en ligne", "pages": ["Pourquoi donner", "Déduction fiscale", "Don mensuel", "Don en mémoire", "Questions fréquentes"],
-                   "actions": ["Faire un don", "Nous contacter"], "page_d": 70, "center_d": 64, "action_d": 60, "radius": 118}},
+                   "actions": ["Faire un don", "Contact"], "page_d": 70, "center_d": 64, "action_d": 64, "radius": 118}},
         {"title": "page à créer mise en avant (acide)",
          "when": "Audit de cocon : les pages existantes en menthe, la page manquante ou à créer en jaune acide, l'action en navy.",
          "props": {"center": "Cataracte", "pages": ["Symptômes", "Opération", {"label": "Prix et remboursement", "fill": "acid"}, "Convalescence"],

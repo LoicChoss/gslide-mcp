@@ -105,7 +105,7 @@ register(Component(
         Prop("link_color", "color", "Couleur des filets.", default="muted"),
         Prop("page_d", "number", "Diamètre des pages.", default=104),
         Prop("center_d", "number", "Diamètre du centre.", default=84),
-        Prop("action_d", "number", "Diamètre des nœuds d'action.", default=80),
+        Prop("action_d", "number", "Diamètre des nœuds d'action (un mot de 9 lettres et plus demande 70 pt et plus, le texte ne descend pas sous 7 pt).", default=80),
         Prop("center_fill", "color", "Couleur du centre.", default="cyan"),
     ],
     render=_cocon,
