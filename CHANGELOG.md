@@ -6,7 +6,7 @@ All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachang
 
 ### Added
 
-- Catalogue `variants`: a component can declare other typical settings (`[{title, when, props}]`, exposed by `list_components`; `when` says which situation the variant fits and the `use` sentence points at them); `table` declares four (simple accent table, picto column with navy header, « vs N-1 » delta columns, CPA pills with mint total).
+- Catalogue `variants` (`[{title, when, props}]`, exposed by `list_components`): `when` says which situation the setting fits. Declared in `components/variants.py` for 33 components (table, kpi, kpi_grid, card, card_grid, callout, the charts, donuts, funnel, content_card(s), section_header, button_row, numbered_list, pills, score_matrix, bar_list, people…); a component without an entry derives one variant per value of its `choice` props, so future components are catalogued with their modes automatically. The component deck renders one slide per variant.
 - `media_plan.objective_eyebrow`; theme token `mint_pale` (#BFF5E6) and roles `heat_1…heat_4` on the charter palette.
 
 ### Changed

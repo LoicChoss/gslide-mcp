@@ -48,7 +48,7 @@ list props; read `list_components()` for the guidance.
 | `badge` | `text*`, `fill`, `color`, `mono` | Small uppercase tag; width follows the text. `mono` = lowercase code-like tag in Roboto Mono, rounded (« signal doux »). |
 | `steps` | `items*` (markdown), `dark` | Numbered circles + text. |
 | `quote` | `text*` (markdown), `author`, `role`, `dark` | Accent-outlined box, bold italic quote. |
-| `table` | `rows*`, `col_w`, `row_h`, `row_heights`, `header`, `total_row`, `align`, `size`, `icons`, `icon_w`, `icon_tint`, `delta_cols`, `header_fill` (`accent` `ink`), `total_fill`, `subs`, `dots`, `zero_cols`, `na_text`, `pill_cols` | Accent or navy header, bold first column (optional muted sub-line via `subs`, colour dot via `dots`), banded rows, thin rules, accent or grey total row. `icons` adds a picto column in front; `delta_cols` colours « vs N-1 » cells by sign; `zero_cols` shows zeros in coral; empty / `-` cells become a muted `–`; `pill_cols` puts a column's values in rounded tags coloured by threshold (`{"7": [{max, color}, …, {color}]}`). The catalogue entry carries `variants` — `{title, when, props}`: simple / icons / delta columns / pills — each with the situation it fits, rendered as extra slides of the component deck. |
+| `table` | `rows*`, `col_w`, `row_h`, `row_heights`, `header`, `total_row`, `align`, `size`, `icons`, `icon_w`, `icon_tint`, `delta_cols`, `header_fill` (`accent` `ink`), `total_fill`, `subs`, `dots`, `zero_cols`, `na_text`, `pill_cols` | Accent or navy header, bold first column (optional muted sub-line via `subs`, colour dot via `dots`), banded rows, thin rules, accent or grey total row. `icons` adds a picto column in front; `delta_cols` colours « vs N-1 » cells by sign; `zero_cols` shows zeros in coral; empty / `-` cells become a muted `–`; `pill_cols` puts a column's values in rounded tags coloured by threshold (`{"7": [{max, color}, …, {color}]}`). Four `variants` in the catalogue: simple / icons / delta columns / pills. |
 | `chart_bars` | `labels*`, `values*`, `horizontal`, `unit`, `max`, `show_values`, `color`, `colors`, `y_axis`, `dividers`, `title`, `panel` | Vertical histogram with baseline (optional graduated Y axis with grid, period dividers `[{after, left, right}]`), or horizontal bars on grey tracks. `colors` = one colour per bar (`regie_google`…). Values in French format (`4 000 000 €`). |
 | `chart_line` | `labels*`, `series*` `[{name, values, dash, color}]`, `y_max`, `legend`, `legend_pos`, `markers`, `title`, `panel` | Light grid, axis labels, 1.5 pt lines, small markers (`auto`: shown up to 12 points), dashed series, `null` = gap, legend. |
 | `donut` | `segments*` `[{label, value, color}]`, `thickness`, `center`, `legend`, `legend_pos` (`right` `bottom` `none`), `labels`, `title`, `panel` | Ring with legend and percentages; `labels` puts the percentages on the segments (from 6 %), text light or dark by luminance. |
@@ -200,6 +200,22 @@ the theme's `highlight` role as text background — the marker effect the
 Periscope decks use on key phrases. `runs` take a `highlight` key with any
 colour, and a text op's `highlight` key changes the colour used by `==…==`
 in that box.
+
+## Variants
+
+Every catalogue entry can carry `variants`: `[{title, when, props}]` — what the
+setting looks like, the situation it fits, the call to copy. `list_components`
+returns them and the component deck renders one slide per variant after the
+main example. Two sources:
+
+- **Declared**: `components/variants.py` (`VARIANTS[name]`), for settings that
+  combine several props or need a real *when* (`table`, `card`, `kpi_grid`,
+  the charts, `content_card`…). A new component with meaningful modes gets its
+  entry there, next to its `use` sentence in `uses.py`.
+- **Derived**: a component without an entry gets one variant per value of each
+  `choice` prop the example does not use (`when` = the prop's description),
+  so a new component with a `choice` prop is never catalogued without its modes.
+  Declaring an entry replaces the derived list.
 
 ## Assets (pictos, logos, screenshots)
 

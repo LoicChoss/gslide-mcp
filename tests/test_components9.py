@@ -189,6 +189,31 @@ def test_table_declares_catalogue_variants_with_valid_props():
         assert h > 0 and any(o["op"] == "table" for o in ops)
 
 
+def test_every_declared_variant_renders_and_says_when():
+    from gslides_mcp import components
+    from gslides_mcp.components.variants import VARIANTS
+    assert set(VARIANTS) <= set(components.names())
+    for name, variants in VARIANTS.items():
+        for v in variants:
+            assert v["title"] and v["when"] and isinstance(v["props"], dict), (name, v.get("title"))
+            ops, h = _render(name, v["props"], w=600)
+            assert ops and h > 0, (name, v["title"])
+
+
+def test_choice_props_derive_variants_automatically():
+    from gslides_mcp import components
+    comp = components.get("eyebrow")  # no explicit entry: align START/CENTER/END → two auto variants
+    assert not comp.variants
+    auto = comp.schema()["variants"]
+    assert {v["props"]["align"] for v in auto} == {"CENTER", "END"} and all(v["when"] for v in auto)
+    for v in auto:
+        assert _render("eyebrow", v["props"], w=400)[1] > 0
+    # every component with a choice prop exposes variants one way or the other
+    for e in components.catalogue():
+        if any(p.get("choices") for p in e["props"]):
+            assert e.get("variants"), e["name"]
+
+
 def test_rounded_charter_frames():
     ops, _ = _render("card", {"title": "T", "body": "x"}, w=300)
     assert _of(ops, "box", "card")[0]["shape"] == "ROUND_RECTANGLE"

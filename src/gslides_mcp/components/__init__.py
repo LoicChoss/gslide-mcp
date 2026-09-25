@@ -62,8 +62,29 @@ class Component:
             "props": [p.schema() for p in self.props],
             "example": {"props": self.example},
         }
-        if self.variants:
-            out["variants"] = [{"title": v["title"], "when": v.get("when", ""), "props": v["props"]} for v in self.variants]
+        variants = self.variants or self.auto_variants()
+        if variants:
+            out["variants"] = [{"title": v["title"], "when": v.get("when", ""), "props": v["props"]} for v in variants]
+        return out
+
+    def auto_variants(self) -> list[dict]:
+        """One variant per value of each ``choice`` prop the example does not use.
+
+        A component without an entry in ``variants.VARIANTS`` still shows its modes
+        in the catalogue: ``when`` is the prop's description, ``props`` the example
+        with that value. Declare explicit variants when the modes worth showing are
+        combinations of props or need a real *when*.
+        """
+        out = []
+        for prop in self.props:
+            if not prop.choices:
+                continue
+            current = self.example.get(prop.name, prop.default)
+            for choice in prop.choices:
+                if choice == current:
+                    continue
+                out.append({"title": f"{prop.name} = {choice}", "when": f"{prop.description} Réglage `{prop.name}: {choice!r}`.",
+                            "props": {**self.example, prop.name: choice}})
         return out
 
 
@@ -148,7 +169,10 @@ def shift(ops: list[dict], dx: float, dy: float) -> list[dict]:
 
 from . import axes, blocks, brand, builtin, charts2, charts3, diagrams, flow, lists, mockups, people, reporting, workshop  # noqa: E402,F401  — registers the built-in components
 from .uses import USES  # noqa: E402
+from .variants import VARIANTS  # noqa: E402
 
 for _name, _use in USES.items():
     _REGISTRY[_name].use = _use
-del _name, _use
+for _name, _variants in VARIANTS.items():
+    _REGISTRY[_name].variants = _variants
+del _name, _use, _variants
