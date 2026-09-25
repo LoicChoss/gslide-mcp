@@ -80,7 +80,7 @@ To build the bundle locally (requires Node.js):
 
 ```sh
 npx @anthropic-ai/mcpb validate manifest.json
-npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.5.0.mcpb
+npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.6.0.mcpb
 ```
 
 `.mcpbignore` keeps docs, examples, virtualenvs and any local `credentials.json` / `token.json` out of the archive.
@@ -92,14 +92,16 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.5.0.mcpb
 | **Deck** | `create_presentation` | Create a new blank deck; returns `{presentation_id, url}` |
 | | `clone_deck` | Copy an existing deck via Drive |
 | | `list_slides` | List slides with index, object ID, and summary |
-| | `inspect_slide` | Inspect all elements on a slide (optionally recursive) |
+| | `inspect_slide` | Inspect all elements on a slide (optionally recursive): geometry, placeholder type, paragraphs with bullets, table cells, image URLs |
 | | `find_elements` | Search elements by type, alt-title, or text content |
 | | `get_presentation` | Raw `presentations.get` passthrough with an optional `fields` mask (auto-trimmed to 200 kB) |
 | | `get_page` | One page — slide, layout, master or notes — raw, or `compact=True` for one line per element |
 | | `export_pres` | Export to local `.pptx` or `.pdf` |
 | | `batch_apply` | Raw `batchUpdate` escape hatch for unsupported operations |
 | | `raw_request` | GET/POST any Slides API path under the presentation (Drive refused) |
-| **Layout** | `list_layouts` | Masters and layouts with placeholders and per-slide usage counts |
+| **Rework** | `harvest_deck_assets` | Copy a deck's images (and slide thumbnails) into a Drive folder, returned as stable URLs / `drive:<id>` assets, before rebuilding it on the charter |
+| | `suggest_components` | Split a source slide into blocks and rank the charter components that would present each one, with reasons (see [docs/rework-deck.md](docs/rework-deck.md)) |
+| **Layout** | `list_layouts` | Masters and layouts with placeholders (geometry), `content_area` per layout and per-slide usage counts |
 | | `screenshot_layout` | Render one layout page inline; `annotate=True` renders the placeholder-key map |
 | | `screenshot_layouts` | Vertical strip of every layout (or a chosen list), captioned by name |
 | | `create_slide_from_layout` | New slide on a layout with placeholders filled from markdown — one atomic batch |

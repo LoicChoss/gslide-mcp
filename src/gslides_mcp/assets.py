@@ -110,7 +110,14 @@ def _tint(src_bytes: bytes, hex6: str, dst: Path) -> Path:
 
 
 def ensure_asset(ref: str, tint: str | None = None) -> str:
-    """Drive file id for an asset name or local path, optionally tinted."""
+    """Drive file id for an asset name, a local path or a ``drive:<id>`` ref, optionally tinted."""
+    if ref.startswith("drive:"):
+        fid = ref[6:].strip()
+        if not fid:
+            raise ValueError("empty drive: asset ref")
+        if not tint:
+            return fid
+        return _tinted_copy(fid, _norm_hex(tint))
     folder = folder_id()
     is_path = os.path.isfile(ref)
     base = os.path.basename(ref) if is_path else ref
@@ -149,6 +156,26 @@ def ensure_asset(ref: str, tint: str | None = None) -> str:
     cache[key] = fid
     _cache_write(cache)
     return fid
+
+
+def _tinted_copy(fid: str, hex6: str) -> str:
+    """Tinted variant of a Drive file (harvested image), stored in the assets folder."""
+    folder = folder_id()
+    target = f"drive-{fid}__{hex6}.png"
+    key = f"{folder}/{target}"
+    cache = _cache_read()
+    if key in cache:
+        return cache[key]
+    drv = drive_service()
+    listing = _list_folder(drv, folder)
+    out = listing.get(target)
+    if out is None:
+        src = drv.files().get_media(fileId=fid, supportsAllDrives=True).execute()
+        tmp = _tint(src, hex6, CACHE.parent / "tinted" / target)
+        out = _upload(drv, folder, str(tmp), target)
+    cache[key] = out
+    _cache_write(cache)
+    return out
 
 
 def _measure(data: bytes) -> tuple[int, int]:

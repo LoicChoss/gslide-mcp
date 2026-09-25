@@ -142,7 +142,55 @@ def _summarize_element(el: dict, parent_tx: float = 0, parent_ty: float = 0,
         out["alt_title"] = alt_title
     if parent_id:
         out["parent_id"] = parent_id
+    if kind == "image":
+        img = el["image"]
+        if img.get("contentUrl"):
+            out["image_url"] = img["contentUrl"]  # temporary (~30 min): harvest_deck_assets stores a copy
+        if img.get("sourceUrl"):
+            out["source_url"] = img["sourceUrl"]
+    elif kind == "table":
+        out["rows"] = _table_cells(el["table"])
+    else:
+        ph = el.get("shape", {}).get("placeholder", {}).get("type")
+        if ph:
+            out["placeholder"] = ph
+        paras = _paragraphs(el.get("shape", {}).get("text", {}).get("textElements", []))
+        if len(paras) > 1 or any(p["bullet"] for p in paras):
+            out["paragraphs"] = paras
     return out, tx, ty, sx, sy
+
+
+def _table_cells(table: dict, max_rows: int = 40, max_cols: int = 12) -> list[list[str]]:
+    """Cell texts of a table element, row by row (for reuse in a `table` component)."""
+    rows: list[list[str]] = []
+    for tr in table.get("tableRows", [])[:max_rows]:
+        cells: list[str] = []
+        for tc in tr.get("tableCells", [])[:max_cols]:
+            chunks = [te.get("textRun", {}).get("content", "") for te in tc.get("text", {}).get("textElements", [])]
+            cells.append("".join(chunks).strip())
+        rows.append(cells)
+    return rows
+
+
+def _paragraphs(text_elements: list) -> list[dict]:
+    """[{text, level, bullet}] per paragraph of a shape's text, markdown-ready."""
+    out: list[dict] = []
+    current: dict | None = None
+    for te in text_elements:
+        pm = te.get("paragraphMarker")
+        if pm is not None:
+            current = {"text": "", "level": pm.get("bullet", {}).get("nestingLevel", 0), "bullet": "bullet" in pm}
+            out.append(current)
+            continue
+        run = te.get("textRun", {}).get("content", "")
+        if run and current is not None:
+            current["text"] += run
+    cleaned = []
+    for p in out:
+        p["text"] = p["text"].strip()[:300]
+        if p["text"]:
+            cleaned.append(p)
+    return cleaned
 
 
 def _walk_elements(elements: list, recursive: bool, out: list,
@@ -172,7 +220,10 @@ def inspect_slide(presentation: str, slide: str, recursive: bool = False) -> dic
             local). Use this to address group-nested elements directly via
             write_text_markdown / set_text.
 
-    Returns: ``{slide_id, elements: [{id, type, x, y, w, h, text, alt_title?, parent_id?}]}``
+    Returns: ``{slide_id, elements: [{id, type, x, y, w, h, text, alt_title?, parent_id?,
+    placeholder?, paragraphs?: [{text, level, bullet}], rows? (table cells),
+    image_url? (temporary), source_url?}]}`` — enough to rebuild the content
+    with components elsewhere; ``harvest_deck_assets`` stores the images first.
     """
     pid = parse_pres_id(presentation)
     svc = slide_service()

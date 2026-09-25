@@ -23,6 +23,11 @@ them rather than paper over them:
 
 ## 1. See what the deck offers
 
+`list_layouts` also reports each placeholder's geometry and a `content_area`
+per layout — the free zone for components when a slide is rebuilt on a
+layout (see [rework-deck.md](rework-deck.md)).
+
+
 ```
 list_layouts(presentation="1AbC…")
 ```

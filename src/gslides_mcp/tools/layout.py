@@ -199,11 +199,15 @@ _PAGE_KINDS = {
 
 # Everything list_layouts needs and nothing else — full decks run to MBs.
 _LAYOUT_FIELDS = (
+    "pageSize,"
     "masters(objectId,masterProperties(displayName)),"
     "layouts(objectId,layoutProperties(name,displayName,masterObjectId),"
-    "pageElements(objectId,shape(placeholder(type,index)))),"
+    "pageElements(objectId,size,transform,shape(placeholder(type,index)))),"
     "slides(objectId,slideProperties(layoutObjectId,masterObjectId))"
 )
+_BODY_TYPES = {"BODY", "OBJECT", "PICTURE", "CHART", "TABLE", "DIAGRAM", "MEDIA", "CLIP_ART"}
+_TITLE_TYPES = {"TITLE", "CENTERED_TITLE"}
+_FOOTER_TYPES = {"FOOTER", "SLIDE_NUMBER", "DATE_AND_TIME", "HEADER"}
 
 
 def _json_len(obj) -> int:
@@ -338,17 +342,56 @@ def get_page(presentation: str, page_id: str, compact: bool = False) -> dict:
 
 
 def _layout_placeholders(layout: dict) -> list[dict]:
-    """Placeholders of a layout page, in page order. Google omits index 0."""
+    """Placeholders of a layout page, in page order, with their geometry in pt. Google omits index 0."""
     out = []
     for el in layout.get("pageElements", []):
         ph = el.get("shape", {}).get("placeholder")
         if ph is not None:
-            out.append({
+            row = {
                 "type": ph.get("type", "NONE"),
                 "index": ph.get("index", 0),
                 "object_id": el["objectId"],
-            })
+            }
+            geo = _geometry(el)
+            if geo:
+                row.update(geo)
+            out.append(row)
     return out
+
+
+def _geometry(el: dict) -> dict | None:
+    s, t = el.get("size"), el.get("transform")
+    if not s or not t:
+        return None
+    sx, sy = t.get("scaleX", 1), t.get("scaleY", 1)
+    return {"x": round(t.get("translateX", 0) / PT_TO_EMU, 1), "y": round(t.get("translateY", 0) / PT_TO_EMU, 1),
+            "w": round(s.get("width", {}).get("magnitude", 0) * sx / PT_TO_EMU, 1),
+            "h": round(s.get("height", {}).get("magnitude", 0) * sy / PT_TO_EMU, 1)}
+
+
+def _content_area(placeholders: list[dict], page_w: float, page_h: float) -> dict | None:
+    """Where components go on a slide of this layout: the body placeholders' box,
+    else the band between the title and the footer. None without geometry."""
+    with_geo = [p for p in placeholders if "x" in p]
+    if not with_geo:
+        return None
+    bodies = [p for p in with_geo if p["type"] in _BODY_TYPES]
+    if bodies:
+        x0 = min(p["x"] for p in bodies)
+        y0 = min(p["y"] for p in bodies)
+        x1 = max(p["x"] + p["w"] for p in bodies)
+        y1 = max(p["y"] + p["h"] for p in bodies)
+        return {"x": round(x0, 1), "y": round(y0, 1), "w": round(x1 - x0, 1), "h": round(y1 - y0, 1), "from": "body placeholders"}
+    titles = [p for p in with_geo if p["type"] in _TITLE_TYPES]
+    footers = [p for p in with_geo if p["type"] in _FOOTER_TYPES]
+    x0 = min((p["x"] for p in titles), default=30.0)
+    x1 = max((p["x"] + p["w"] for p in titles), default=page_w - 30.0)
+    y0 = max((p["y"] + p["h"] for p in titles), default=30.0) + 12
+    footer_top = min((p["y"] for p in footers if p["y"] > y0), default=None)
+    y1 = footer_top - 8 if footer_top is not None else page_h - 30.0
+    if y1 - y0 < 60 or x1 - x0 < 120:  # the title fills the layout (« Argument principal »): the page, minus margins
+        return {"x": 30.0, "y": 30.0, "w": round(page_w - 60, 1), "h": round(page_h - 60, 1), "from": "page (the title fills the layout)"}
+    return {"x": round(x0, 1), "y": round(y0, 1), "w": round(x1 - x0, 1), "h": round(y1 - y0, 1), "from": "below the title"}
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -365,16 +408,26 @@ def list_layouts(presentation: str, only_used_master: bool = True) -> dict:
 
     Returns::
 
-        {masters: [{master_id, display_name, used_by_slides}],
+        {page: {w, h},
+         masters: [{master_id, display_name, used_by_slides}],
          layouts: [{layout_id, display_name, name, master_id,
-                    placeholders: [{type, index, object_id}], used_by_slides}]}
+                    placeholders: [{type, index, object_id, x, y, w, h}],
+                    content_area: {x, y, w, h, from} | null, used_by_slides}]}
 
-    Example: ``list_layouts(deck)["layouts"][0]["display_name"]``
+    ``content_area`` (pt) is where components go on a slide of that layout:
+    the body placeholders' box, else the band between the title and the
+    footer — pass it as ``x_pt`` / ``y_pt`` / ``width_pt`` to
+    ``insert_component`` when rebuilding a slide on another layout.
+
+    Example: ``list_layouts(deck)["layouts"][0]["content_area"]``
     """
     pid = parse_pres_id(presentation)
     pres = slide_service().presentations().get(
         presentationId=pid, fields=_LAYOUT_FIELDS
     ).execute()
+    size = pres.get("pageSize", {})
+    page_w = size.get("width", {}).get("magnitude", 9144000) / PT_TO_EMU
+    page_h = size.get("height", {}).get("magnitude", 5143500) / PT_TO_EMU
 
     layout_use, master_use = _usage_counts(pres)
     masters = [
@@ -393,13 +446,14 @@ def list_layouts(presentation: str, only_used_master: bool = True) -> dict:
             "display_name": l.get("layoutProperties", {}).get("displayName", ""),
             "name": l.get("layoutProperties", {}).get("name", ""),
             "master_id": l.get("layoutProperties", {}).get("masterObjectId"),
-            "placeholders": _layout_placeholders(l),
+            "placeholders": (phs := _layout_placeholders(l)),
+            "content_area": _content_area(phs, page_w, page_h),
             "used_by_slides": layout_use[l["objectId"]],
         }
         for l in pres.get("layouts", [])
         if l.get("layoutProperties", {}).get("masterObjectId") in kept_masters
     ]
-    return {"masters": masters, "layouts": layouts}
+    return {"page": {"w": round(page_w, 1), "h": round(page_h, 1)}, "masters": masters, "layouts": layouts}
 
 
 def _usage_counts(pres: dict) -> tuple[Counter, Counter]:

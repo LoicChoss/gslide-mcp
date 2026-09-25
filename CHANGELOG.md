@@ -2,6 +2,14 @@
 
 All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/) (0.x: minor bumps may change tool signatures).
 
+## [0.6.0] — 2026-09-25
+
+### Added
+
+- **Rework an existing deck on the charter** ([docs/rework-deck.md](docs/rework-deck.md)): `harvest_deck_assets` copies a deck's images and slide thumbnails into a Drive folder (an existing one by id, or « <title> · sources » created in the assets folder; idempotent) and returns stable URLs plus `drive:<id>` asset refs, accepted by every image prop and by `draw`, tint included; `suggest_components` splits a source slide into blocks (tables, rows of figures, side-by-side texts, bullets, images, source notes, arrows) and ranks the charter components for each with reasons, the `use` sentence and the variant titles, plus whole-slide alternatives read from the wording.
+- `inspect_slide` returns the placeholder type, the paragraphs (text, level, bullet), the table cells (`rows`) and the images' temporary URLs.
+- `list_layouts` returns the page size, each placeholder's geometry and a `content_area` per layout (body placeholders' box, else the band between title and footer) to position components on a new layout.
+
 ## [0.5.0] — 2026-09-25
 
 ### Added
