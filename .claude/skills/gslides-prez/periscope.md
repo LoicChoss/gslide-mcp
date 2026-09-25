@@ -27,9 +27,19 @@ Slide 2 · Notre philosophie média (2/2)
 - **Chatbot propriétaire** : quand l'AO demande un chatbot (relation testateurs, par exemple), Periscope dispose de son propre chatbot ; atout majeur sur l'axe innovation.
 - **Expérience avérée du travail en co-agence** : dispositifs multi-lots en bonne intelligence, c'est dans notre culture. Exemples : Maxyma sur le compte Amnesty International, Hopening sur les comptes Fondation de France et 30 Millions d'Amis, Adfinitas sur le compte Armée du Salut. Nous savons co-construire sans ego, en maintenant une exigence de performance digitale totale.
 
+## Couleurs de régies (bilans média)
+
+Rôles du thème `periscope`, à passer tels quels dans les props `color` / `colors` / `category_colors` / `dots` : `regie_google` (#00E5C3), `regie_bing` (#C383FF), `regie_meta` et `regie_facebook` (#FA00A6), `regie_instagram` (#FF9170), `regie_pinterest` (#E8FF00), `regie_linkedin`, `regie_tiktok`, `regie_ga4` (#45DBFF). Convention N / N-1 : N en couleur pleine (`accent_dark` navy), N-1 en gris (`gray_2`). Côté Google Sheets (graphiques natifs), les mêmes hex dans `series_colors` / `point_colors`, et dans l'ordre des accents du thème pour les camemberts.
+
+## Références visuelles
+
+- Catalogue des composants (une slide par composant, puis une par variante ; les graphiques natifs Sheets y sont embarqués reliés) : deck `1cPrerkVnlbxs5QtKjlILoBDO-MczFd-WViffUEUfi1E`.
+- Classeur des graphiques natifs du catalogue (une feuille par graphique, thème `periscope`) : `1YHQ1HC2MvXhFm6vk9rGsi8CB_jmBXPvvEyX_BVvqKdo` ; ses `manage_chart` sont ceux des blocs `native` de `list_components`.
+- Le bilan média type (tableaux à pictos de canaux, KPI alignés, graphiques légende en haut et valeurs sur toutes les barres) est la référence de style des composants `kpi_grid`, `table`, `chart_*`, `media_plan`, `ad_scoreboard`, `source_note`.
+
 ## Assets du dossier Drive (septembre 2026)
 
-Pictos blancs recolorables : `bolt`, `download`, `google`, `lightbulb`, `megaphone`, `people`, `search`, `share`, `star`, `video`. Captures de démo : `screen-demo` (16:9), `laptop-demo`. La liste vivante : `list_assets()`.
+Pictos blancs recolorables : `bolt`, `download`, `google`, `lightbulb`, `megaphone`, `people`, `search`, `share`, `star`, `video`. Pictos pixel-art du design system (décoratifs, 48 à 120 pt, teintés par le thème) : `px-*` (onze, dernière slide du catalogue). Captures de démo : `screen-demo` (16:9), `laptop-demo`. Les images moissonnées d'un deck source s'emploient par `drive:<id>`. La liste vivante : `list_assets()`.
 
 ## À enrichir
 

@@ -71,6 +71,10 @@ def test_numbered_list_circle_markers_index_cards_and_connector():
     (conn,) = _of(ops, "line", "connector")
     assert conn["weight"] == 4 and ops.index(conn) < ops.index(markers[0])  # drawn under the discs
     assert height > 2 * 40
+    # no icon anywhere: the number lives in the disc alone, no « #n » beside it
+    ops, _ = _render("numbered_list", {"items": ["Un", "Deux"]})
+    assert [m["text"] for m in _of(ops, "box", "marker")] == ["1", "2"] and not _of(ops, "text", "index")
+    assert not [o for o in ops if o["op"] == "line"]
 
 
 def test_numbered_list_square_markers_uppercase_titles():

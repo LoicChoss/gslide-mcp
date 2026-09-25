@@ -65,7 +65,8 @@ def _numbered_list(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
     d = 18.0 if square else 40.0
     gap = float(p["gap"])
     start = int(p["start"])
-    text_x = d + 12 if square else d + 56
+    indexed = not square and any(it.get("icon") for it in items)  # picto in the disc, « #n » beside it; otherwise the number sits in the disc
+    text_x = d + 56 if indexed else d + 12
     text_w = w - text_x - (PAD if p["card"] else 0)
     ops_bg: list[dict] = []
     ops: list[dict] = []
@@ -93,9 +94,10 @@ def _numbered_list(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
             else:
                 disc.update({"text": n, "style": "step_number", "size": 13, "color": "on_accent", "align": "CENTER", "valign": "MIDDLE"})
                 ops.append(disc)
-            ops.append({"op": "text", "x": d + 8, "y": cy - 11, "w": 40, "h": 14 + INSETS, "text": f"#{n}",
-                        "style": "card_title", "size": 11, "color": "ink", "role": "index"})
-            ops.append({"op": "line", "x1": d + 48, "y1": y + 4, "x2": d + 48, "y2": y + row_h - 4, "color": "rule", "weight": 1})
+            if indexed:
+                ops.append({"op": "text", "x": d + 8, "y": cy - 11, "w": 40, "h": 14 + INSETS, "text": f"#{n}",
+                            "style": "card_title", "size": 11, "color": "ink", "role": "index"})
+                ops.append({"op": "line", "x1": d + 48, "y1": y + 4, "x2": d + 48, "y2": y + row_h - 4, "color": "rule", "weight": 1})
         ty = cy - (title_h + sub_h) / 2
         ops.append({"op": "text", "x": text_x, "y": ty, "w": text_w, "h": title_h, "text": title.upper() if square else title,
                     "style": "card_title", "size": 11, "role": "title"})

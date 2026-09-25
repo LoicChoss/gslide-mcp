@@ -404,5 +404,5 @@ VARIANTS["table"].append({
                                    ["YouTube", 115432, 811, 5, 442], ["Gmail", 21147, 586, 1, 74], ["Total", "=SUM(B2:B5)", "=SUM(C2:C5)", "=SUM(D2:D5)", "=SUM(E2:E5)"]],
                           "format_cells": [{"range": "B2:D6", "number_format": "number:#,##0"}, {"range": "E2:E6", "number_format": "currency:#,##0\" €\""}],
                           "read_range": {"range": "A1:E6", "formatted": True, "format": "json"}},
-               "slides": "insert_component(deck, slide, 'table', {rows: <lignes lues>, header_fill: 'ink', total_row: true, align: [...]}) ; delete_component puis réinsérer pour actualiser."},
+               "slides": "insert_component(deck, slide, 'table', {rows: <lignes lues>, header_fill: 'ink', total_row: true, align: [...]}) ; delete_elements sur la table puis réinsérer pour actualiser."},
 })
