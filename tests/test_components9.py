@@ -249,3 +249,9 @@ def test_heatmap_and_scoreboard_use_dark_header_and_grey_label_column():
 def test_theme_defines_pale_mint_and_heat_scale():
     assert PERISCOPE.colors["mint_pale"].upper() == "#BFF5E6"
     assert PERISCOPE.color("heat_2") == PERISCOPE.color("mint_pale") and PERISCOPE.color("heat_4") == PERISCOPE.color("navy")
+
+
+def test_bar_list_value_in_bar_without_sub_right_emits_no_empty_text():
+    ops, _ = _render("bar_list", {"items": [{"label": "a", "value": 10}, {"label": "b", "value": 5}], "value_in_bar": True}, w=600)
+    assert not [o for o in ops if o["op"] == "text" and o.get("role") == "sub_right"]
+    assert all(o.get("text") or o.get("runs") or o.get("markdown") for o in ops if o["op"] == "text")

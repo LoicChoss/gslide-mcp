@@ -569,10 +569,11 @@ def _bar_list(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[di
             ops.append({"op": "text", "x": bar_x, "y": by - 2, "w": bar_w - 4, "h": bar_h + 4, "text": str(it.get("value_text") or fmt_value(v, p["unit"])),
                         "style": "chart_value", "align": "END", "valign": "MIDDLE", "role": "value"})
         vx = bar_x + bar_w + 12
-        ops.append({"op": "text", "x": vx, "y": y - 2, "w": right_w, "h": 14 + INSETS,
-                    "text": str(it.get("value_text") or fmt_value(v, p["unit"])) if not p["value_in_bar"] else str(it.get("sub_right") or ""),
-                    "style": "label", "size": 11, "bold": not p["value_in_bar"], "color": "ink" if not p["value_in_bar"] else "muted",
-                    "align": "END", "role": "value" if not p["value_in_bar"] else "sub_right"})
+        right_text = str(it.get("value_text") or fmt_value(v, p["unit"])) if not p["value_in_bar"] else str(it.get("sub_right") or "")
+        if right_text:  # an empty text box is refused by the Slides API
+            ops.append({"op": "text", "x": vx, "y": y - 2, "w": right_w, "h": 14 + INSETS, "text": right_text,
+                        "style": "label", "size": 11, "bold": not p["value_in_bar"], "color": "ink" if not p["value_in_bar"] else "muted",
+                        "align": "END", "role": "value" if not p["value_in_bar"] else "sub_right"})
         if it.get("sub_right") and not p["value_in_bar"]:
             ops.append({"op": "text", "x": vx, "y": y + 14, "w": right_w, "h": 12 + INSETS, "text": str(it["sub_right"]), "style": "caption",
                         "size": 10, "align": "END", "role": "sub_right"})
