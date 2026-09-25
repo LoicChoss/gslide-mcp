@@ -15,7 +15,7 @@ from ..themes import Theme
 from . import Component, Prop, get, register, shift, validate
 from .axes import fmt_value
 from .brand import THIN
-from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height
+from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height, fit_text_size
 
 EYEBROW = {"style": "card_label", "size": 9.5, "bold": True, "small_ok": True}
 
@@ -80,8 +80,9 @@ def _score_matrix(p: dict, theme: Theme, w: float, h: float | None) -> tuple[lis
     for r in rows:
         values = list(r.get("values") or [])
         counts = list(r.get("counts") or [])
+        rsize = fit_text_size(r.get("label", ""), label_w - 8, 14, max_lines=1, floor=11.0)
         ops.append({"op": "text", "x": 0, "y": y + tile_h / 2 - 22, "w": label_w - 8, "h": 18 + INSETS, "text": str(r.get("label", "")),
-                    "style": "card_title", "size": 14, "color": "ink", "role": "row_label"})
+                    "style": "card_title", "size": rsize, "color": "ink", "role": "row_label"})
         if r.get("sub"):
             ops.append({"op": "text", "x": 0, "y": y + tile_h / 2 - 1, "w": label_w - 8, "h": 14 + INSETS, "text": str(r["sub"]),
                         "style": "caption", "size": 10, "role": "row_sub"})
@@ -159,10 +160,11 @@ def _ranked_bars(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list
         y = 26.0
     for i, (it, v) in enumerate(zip(items, values)):
         lead = i < top and v > 0
-        lh = _text_height(it.get("label", ""), label_w, 12)
+        lsize = fit_text_size(it.get("label", ""), label_w, 12, max_lines=2, floor=9.0)
+        lh = _text_height(it.get("label", ""), label_w, lsize)
         row_h = max(lh, bar_h + 12)
         ops.append({"op": "text", "x": 0, "y": y + (row_h - lh) / 2, "w": label_w, "h": lh, "text": str(it.get("label", "")), "style": "label",
-                    "size": 12, "bold": lead, "color": "ink", "role": "label"})
+                    "size": lsize, "small_ok": lsize < 11, "bold": lead, "color": "ink", "role": "label"})
         by = y + (row_h - bar_h) / 2
         ops.append({"op": "box", "x": bar_x, "y": by, "w": bar_w, "h": bar_h, "shape": "ROUND_RECTANGLE", "fill": "surface", "role": "track"})
         if v > 0:
@@ -551,8 +553,9 @@ def _bar_list(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[di
         color = it.get("color") or states.get(str(it.get("state") or ""), {}).get("color") if isinstance(states.get(str(it.get("state") or "")), dict) \
             else it.get("color") or states.get(str(it.get("state") or ""), "accent")
         row_h = max(bar_h + 8, 34.0 if it.get("sub") or it.get("sub_right") else bar_h + 8)
-        ops.append({"op": "text", "x": 0, "y": y - 2, "w": label_w, "h": 14 + INSETS, "text": str(it.get("label", "")), "style": "label", "size": 11,
-                    "bold": True, "color": "ink", "role": "label"})
+        lsize = fit_text_size(it.get("label", ""), label_w, 11, max_lines=1, floor=8.5)
+        ops.append({"op": "text", "x": 0, "y": y - 2, "w": label_w, "h": 14 + INSETS, "text": str(it.get("label", "")), "style": "label", "size": lsize,
+                    "small_ok": lsize < 11, "bold": True, "color": "ink", "role": "label"})
         if it.get("sub"):
             ops.append({"op": "text", "x": 0, "y": y + 14, "w": label_w, "h": 12 + INSETS, "text": str(it["sub"]), "style": "caption", "size": 10,
                         "role": "sub"})

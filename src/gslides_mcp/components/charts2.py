@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from ..themes import Theme
 from . import Component, Prop, register
-from .axes import (LEGEND_H, axis_width, baseline_op, divider_height, divider_ops, fmt_value, inner_width, legend_ops,
-                   panelize, thin_labels, y_axis_ops)
+from .axes import (LEGEND_H, axis_width, baseline_op, divider_height, divider_ops, fit_labels, fmt_value, inner_width, label_size,
+                   legend_ops, panelize, y_axis_ops)
 from .builtin import INSETS, LEADING, _frame_h, _nice_max
 
 
@@ -164,7 +164,7 @@ def _chart_stacked(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
             ops += legend_ops(entries, px, 0, pw, "top")[0]
         if p["y_axis"]:
             ops += y_axis_ops(px, top, pw, plot_h - top, vmax, unit, side="left", label_w=ml - 6)
-        shown = thin_labels(labels, col_w)
+        shown, lsize = fit_labels(labels, col_w)
         for i, lb in enumerate(labels):
             x = px + i * col_w + (col_w - bar_w) / 2
             y = plot_h
@@ -180,7 +180,7 @@ def _chart_stacked(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
             if shown[i]:
                 lw = max(col_w, 56.0)
                 ops.append({"op": "text", "x": px + (i + 0.5) * col_w - lw / 2, "y": plot_h + 2, "w": lw, "h": 26 + INSETS, "text": lb,
-                            "style": "chart_label", "align": "CENTER", "role": "label"})
+                            "style": "chart_label", "align": "CENTER", "role": "label", **label_size(lsize)})
         ops += divider_ops(p["dividers"], labels, px, top, col_w, plot_h - top)
         ops.insert(0, baseline_op(px, plot_h, pw))
         height = plot_h + 30

@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from ..themes import Theme
 from . import Component, Prop, register, shift, validate, get
-from .axes import (FRAME_PROPS, LEGEND_H, auto, axis_width, baseline_op, fmt_value, inner_width, legend_ops, panelize,
-                   thin_labels, value_label, y_axis_ops)
+from .axes import (FRAME_PROPS, LEGEND_H, auto, axis_width, baseline_op, fit_labels, fmt_value, inner_width, label_size, legend_ops,
+                   panelize, value_label, y_axis_ops)
 from .builtin import INSET_X, INSETS, _chart_bars, _donut, _frame_h, _nice_max
 
 TINT_STEP = 0.55  # how much whiter each further series gets when categories carry the colour
@@ -92,7 +92,7 @@ def _chart_grouped(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
     if p["y_axis"]:
         ops += y_axis_ops(px, py, pw, ph, vmax, unit, side="left", label_w=ml - 6)
     ops.append(baseline_op(px, py + ph, pw))
-    shown = thin_labels(labels, slot)
+    shown, lsize = fit_labels(labels, slot)
     for i, lb in enumerate(labels):
         gx = px + i * slot + (slot - inner) / 2
         for k in range(m):
@@ -106,7 +106,7 @@ def _chart_grouped(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
         if shown[i]:
             lw = max(slot, 56.0)
             ops.append({"op": "text", "x": px + (i + 0.5) * slot - lw / 2, "y": py + ph + 3, "w": lw, "h": 26 + INSETS, "text": lb,
-                        "style": "chart_label", "align": "CENTER", "role": "label"})
+                        "style": "chart_label", "align": "CENTER", "role": "label", **label_size(lsize)})
     if pos == "bottom":
         ops += legend_ops(entries, px, height - LEGEND_H, pw, "bottom")[0]
     return panelize(ops, height, w, p)

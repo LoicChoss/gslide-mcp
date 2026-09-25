@@ -108,6 +108,24 @@ def thin_labels(labels: list, slot: float, size: float = 10.0) -> list[str | Non
     return [lb if i in keep else None for i, lb in enumerate(labels)]
 
 
+def fit_labels(labels: list, slot: float, size: float = 10.0) -> tuple[list[str | None], float]:
+    """Category labels for slots of ``slot`` pt: shrink first (down to 8 pt, two lines allowed),
+    thin only what still does not fit. Returns (labels or None, size)."""
+    from .builtin import fit_text_size
+
+    labels = [str(lb) for lb in labels]
+    if not labels:
+        return [], size
+    box_w = max(slot, 56.0)
+    lsize = min(fit_text_size(lb, box_w, size, max_lines=2, floor=8.0) for lb in labels)
+    return thin_labels(labels, slot, lsize), lsize
+
+
+def label_size(size: float) -> dict:
+    """Op keys for a fitted label size (``small_ok`` under the charter floor)."""
+    return {"size": size, "small_ok": True} if size < 10 else {}
+
+
 def legend_ops(entries: list[dict], x: float, y: float, w: float, pos: str = "bottom") -> tuple[list[dict], float]:
     """A legend line: swatch (box) or short line per entry; centred when ``pos`` is 'top'.
 
@@ -115,12 +133,18 @@ def legend_ops(entries: list[dict], x: float, y: float, w: float, pos: str = "bo
     """
     if pos == "none" or not entries:
         return [], 0.0
-    items = []
-    for e in entries:
-        name = str(e.get("name", ""))
-        tw = len(name) * 5.6 + 2 * INSET_X + 4
-        items.append((name, e.get("color") or "accent", e.get("kind", "box"), tw))
-    total = sum(18 + tw + 10 for _, _, _, tw in items) - 10
+    size = 10.0
+    for _ in range(5):  # a legend wider than its chart shrinks (down to 8 pt) instead of overflowing
+        items = []
+        for e in entries:
+            name = str(e.get("name", ""))
+            tw = len(name) * size * 0.56 + 2 * INSET_X + 4
+            items.append((name, e.get("color") or "accent", e.get("kind", "box"), tw))
+        total = sum(18 + tw + 10 for _, _, _, tw in items) - 10
+        if total <= w or size <= 8.0:
+            break
+        size = max(8.0, round(size - 0.5, 1))
+    extra = label_size(size)
     lx = x + max(0.0, (w - total) / 2) if pos == "top" else x
     ops: list[dict] = []
     for name, color, kind, tw in items:
@@ -129,7 +153,7 @@ def legend_ops(entries: list[dict], x: float, y: float, w: float, pos: str = "bo
                         "weight": LINE_W, "role": "swatch"})
         else:
             ops.append({"op": "box", "x": lx, "y": y + LEGEND_H / 2 - 4, "w": 8, "h": 8, "fill": color, "role": "swatch"})
-        ops.append({"op": "text", "x": lx + 16, "y": y, "w": tw, "h": LEGEND_H, "text": name, "style": "legend", "valign": "MIDDLE"})
+        ops.append({"op": "text", "x": lx + 16, "y": y, "w": tw, "h": LEGEND_H, "text": name, "style": "legend", "valign": "MIDDLE", **extra})
         lx += 18 + tw + 10
     return ops, LEGEND_H
 
@@ -259,7 +283,7 @@ def _chart_combo(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list
         ops += y_axis_ops(px, py, pw, ph, vmax, unit, side="left", label_w=ml - 6)
         ops += y_axis_ops(px, py, pw, ph, vmax2, unit2, side="right", label_w=mr - 6)
     ops.append(baseline_op(px, py + ph, pw))
-    shown = thin_labels(labels, slot)
+    shown, lsize = fit_labels(labels, slot)
     for i, lb in enumerate(labels):
         v = bvals[i] if i < len(bvals) else 0.0
         bh = ph * v / vmax
@@ -269,7 +293,7 @@ def _chart_combo(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list
         if shown[i]:
             lw = max(slot, 56.0)
             ops.append({"op": "text", "x": X(i) - lw / 2, "y": py + ph + 3, "w": lw, "h": 26 + INSETS, "text": lb,
-                        "style": "chart_label", "align": "CENTER", "role": "label"})
+                        "style": "chart_label", "align": "CENTER", "role": "label", **label_size(lsize)})
     ops += divider_ops(p["dividers"], labels, px, py, slot, ph)
     pts = [[X(i), Y2(v)] for i, v in enumerate(lvals) if v is not None]
     if len(pts) >= 2:

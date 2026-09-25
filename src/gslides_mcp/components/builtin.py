@@ -60,6 +60,19 @@ def _wrapped_lines(text: str, width: float, size: float) -> int:
     return max(1, total)
 
 
+def fit_text_size(text: str, width: float, size: float, max_lines: int = 1, floor: float = 8.0, step: float = 0.5) -> float:
+    """Largest size ≤ ``size`` (down to ``floor``) at which ``text`` fits in ``max_lines`` lines of ``width`` pt.
+
+    The charter's answer to a block that cannot grow: shrink the text before
+    wrapping, thinning or clipping it. Sizes under the theme floor need
+    ``small_ok`` on the op.
+    """
+    s = float(size)
+    while s > floor and _wrapped_lines(text, width, s) > max_lines:
+        s = round(s - step, 1)
+    return max(floor, s)
+
+
 def _fmt(v) -> str:
     if isinstance(v, float) and v.is_integer():
         v = int(v)
@@ -168,6 +181,9 @@ def _kpi_grid(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[di
     # the label height, any delta reserves the delta line — so every row aligns KPI to KPI
     size = min((_kpi_value_size(str(sp["value"]), col_w - 12) for sp in specs), default=KPI_VALUE_SIZE)
     text_size = 9.0 if rows else 11.0  # with row labels the columns are narrower: smaller label and delta, same big value
+    # a label that would take three lines shrinks (down to 9 pt) before it wraps that far
+    text_size = min((fit_text_size(str(sp["label"]) + (" " + str(sp["note"]) if sp.get("note") else ""), col_w - 12 - PAD, text_size,
+                                   max_lines=2, floor=9.0) for sp in specs), default=text_size)
     label_h = max((_kpi_label_h(sp, col_w - 12, text_size) for sp in specs), default=18.0)
     delta_row = any(sp["delta"] for sp in specs)
     rendered = [_kpi(sp, theme, col_w - 12, None, value_size=size, label_h=label_h, delta_row=delta_row, text_size=text_size)
@@ -605,8 +621,8 @@ def _frame_h(p: dict) -> float:
 
 
 def _chart_bars(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
-    from .axes import (axis_width, baseline_op, divider_height, divider_ops, fmt_value, inner_width, panelize,
-                       thin_labels, value_label, y_axis_ops)
+    from .axes import (axis_width, baseline_op, divider_height, divider_ops, fit_labels, fmt_value, inner_width, label_size,
+                       panelize, value_label, y_axis_ops)
 
     w_in = inner_width(w, p)
     labels, values = list(p["labels"]), [float(v) for v in p["values"]]
@@ -644,7 +660,7 @@ def _chart_bars(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[
     bar_w = slot * 0.6
     if p["y_axis"]:
         ops += y_axis_ops(px, y0, pw, y1 - y0, vmax, unit, side="left", label_w=ml - 6)
-    shown = thin_labels(labels, slot)
+    shown, lsize = fit_labels(labels, slot)
     for i, (lab, v) in enumerate(zip(labels, values)):
         bh = (y1 - y0) * v / vmax
         x = px + i * slot + slot * 0.2
@@ -654,7 +670,7 @@ def _chart_bars(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[
         if shown[i]:
             lw = max(slot, 56.0)
             ops.append({"op": "text", "x": px + (i + 0.5) * slot - lw / 2, "y": y1 + 3, "w": lw, "h": label_h, "text": str(lab),
-                        "style": "chart_label", "align": "CENTER", "role": "label"})
+                        "style": "chart_label", "align": "CENTER", "role": "label", **label_size(lsize)})
     ops += divider_ops(p["dividers"], [str(lb) for lb in labels], px, y0, slot, y1 - y0)
     ops.append(baseline_op(px, y1, pw))
     return panelize(ops, height, w, p)
@@ -684,7 +700,7 @@ register(Component(
 
 
 def _chart_line(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
-    from .axes import AXIS_W, GRID_W, LEGEND_H, LINE_W, MARKER, auto, inner_width, legend_ops, panelize, thin_labels
+    from .axes import AXIS_W, GRID_W, LEGEND_H, LINE_W, MARKER, auto, fit_labels, inner_width, label_size, legend_ops, panelize
 
     w_in = inner_width(w, p)
     height = (h - _frame_h(p)) if h else 180.0
@@ -741,11 +757,11 @@ def _chart_line(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[
             if len(r) >= 2:
                 ops.append({"op": "polyline", "points": r, "color": color, "weight": LINE_W, "dash": dash, "role": "line"})
     ops.extend(markers)
-    shown = thin_labels(labels, pw / max(n - 1, 1))
+    shown, lsize = fit_labels(labels, pw / max(n - 1, 1))
     for i, lab in enumerate(labels):
         if shown[i]:
             ops.append({"op": "text", "x": X(i) - 24, "y": py + ph + 3, "w": 48, "h": 12, "text": str(lab),
-                        "style": "chart_label", "align": "CENTER", "role": "label"})
+                        "style": "chart_label", "align": "CENTER", "role": "label", **label_size(lsize)})
     if pos == "bottom":
         ops += legend_ops(entries, px, height - LEGEND_H, pw, "bottom")[0]
     return panelize(ops, height, w, p)

@@ -154,3 +154,22 @@ def test_workshop_components_have_use_and_render_in_both_themes():
             draw.ops_to_requests("s", ops, theme, prefix="cmp", resolve_asset=lambda name, tint=None: ("fid", (100, 100)))
             assert height > 0, entry["name"]
     assert not names
+
+
+def test_fit_text_size_and_fit_labels():
+    from gslides_mcp.components.axes import fit_labels, legend_ops
+    from gslides_mcp.components.builtin import fit_text_size
+
+    assert fit_text_size("Court", 200, 11) == 11
+    small = fit_text_size("Un libellé beaucoup trop long pour la colonne", 90, 11, max_lines=2, floor=9)
+    assert 9 <= small < 11
+    shown, size = fit_labels(["Search Hors marque", "PMax", "Search Marque"], slot=60)
+    assert size < 10 and all(shown)  # shrunk, nothing thinned
+    dense, dsize = fit_labels([f"{d:02d}/12" for d in range(1, 32)], slot=14)
+    assert dsize == 10.0 and any(lb is None for lb in dense)  # short labels: nothing to shrink, thinned instead
+    ops, _ = legend_ops([{"name": "Une série au nom vraiment très long"}, {"name": "Une autre série au nom très long aussi"}], 0, 0, 220, "top")
+    texts = [o for o in ops if o["op"] == "text"]
+    assert texts and texts[0]["size"] < 10 and texts[0]["small_ok"]
+    ops, _ = _render("chart_bars", {"labels": ["Search Hors marque", "PMax", "Search Marque"], "values": [1, 2, 3]}, w=200)
+    labels = _of(ops, "text", "label")
+    assert len(labels) == 3 and labels[0]["size"] < 10
