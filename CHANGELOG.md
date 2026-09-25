@@ -2,6 +2,12 @@
 
 All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/) (0.x: minor bumps may change tool signatures).
 
+## [0.4.1] — 2026-09-25
+
+### Changed
+
+- **Shrink before wrapping**: category labels, legends, KPI labels, ranked / commented bar labels and score-matrix labels reduce their size (down to 8 or 9 pt, `small_ok`) when they cannot fit, before any wrap, thinning or clip (`fit_text_size`, `fit_labels`).
+
 ## [0.4.0] — 2026-09-25
 
 ### Added
