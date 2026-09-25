@@ -182,7 +182,7 @@ def test_table_declares_catalogue_variants_with_valid_props():
     comp = components.get("table")
     assert len(comp.variants) >= 4 and all(v["title"] and v["when"] and v["props"]["rows"] for v in comp.variants)
     schema = comp.schema()
-    assert len(schema["variants"]) == len(comp.variants) and all(set(v) == {"title", "when", "props"} for v in schema["variants"])
+    assert len(schema["variants"]) == len(comp.variants) and all(set(v) <= {"title", "when", "props", "native"} for v in schema["variants"])
     assert "variants" in comp.use  # the use sentence points the model at them
     for v in comp.variants:
         ops, h = _render("table", v["props"], w=600)
@@ -198,6 +198,23 @@ def test_every_declared_variant_renders_and_says_when():
             assert v["title"] and v["when"] and isinstance(v["props"], dict), (name, v.get("title"))
             ops, h = _render(name, v["props"], w=600)
             assert ops and h > 0, (name, v["title"])
+
+
+def test_native_sheets_variants_carry_a_sheets_recipe_and_a_drawn_fallback():
+    from gslides_mcp import components
+    natives = {e["name"]: [v for v in e.get("variants", []) if v.get("native")] for e in components.catalogue()}
+    charts = {n for n, vs in natives.items() if vs and vs[0]["native"]["kind"] == "chart"}
+    assert charts == {"chart_bars", "chart_grouped", "chart_stacked", "chart_line", "chart_combo", "donut", "pie"}
+    assert natives["table"] and natives["table"][0]["native"]["kind"] == "table" and "read_range" in natives["table"][0]["native"]["sheets"]
+    for name, vs in natives.items():
+        for v in vs:
+            sheets = v["native"]["sheets"]
+            assert sheets["data"] and all(len(r) == len(sheets["data"][0]) for r in sheets["data"]), name
+            if v["native"]["kind"] == "chart":
+                mc = sheets["manage_chart"]
+                assert mc["action"] == "add" and mc["style"] == "periscope" and mc["chart_type"] and mc["domain"] and isinstance(mc["series"], list), name
+                assert "insert_sheets_chart" in v["native"]["slides"]
+            assert _render(name, v["props"], w=600)[1] > 0  # the drawn fallback still renders
 
 
 def test_choice_props_derive_variants_automatically():

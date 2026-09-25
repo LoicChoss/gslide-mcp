@@ -310,3 +310,95 @@ VARIANTS: dict[str, list[dict]] = {
                    "pill_cols": {"6": [{"max": 17, "color": "accent"}, {"max": 30, "color": "accent_alt"}, {"color": "coral"}]}}},
     ],
 }
+
+
+# --- natif Google Sheets ---------------------------------------------------------------
+# The same charts (and a table) built by the Google Sheets MCP and embedded linked in Slides.
+# ``native.sheets`` is what to give the Sheets MCP (data rows, then ``manage_chart add`` arguments
+# without ``spreadsheet`` / ``sheet``); ``native.slides`` is the gslide-mcp call. The drawn ``props``
+# stay the fallback when the deck has no spreadsheet.
+
+_SHEETS_FLOW = ("Classeur : celui de l'utilisateur ou create_spreadsheet nommé comme le deck ; set_theme preset periscope une fois ; "
+                "write_values des données ; format_cells number_format '#,##0' (ou '#,##0\" €\"') sur les colonnes de valeurs — les étiquettes et l'axe "
+                "des graphiques suivent le format des cellules (1 085 349 au lieu de 1085349) ; manage_chart add (renvoie chart_id) ; "
+                "puis insert_sheets_chart côté Slides, refresh_sheets_charts quand les données bougent.")
+_CHART_SLIDES = "insert_sheets_chart(deck, slide, spreadsheet, chart_id, x_pt, y_pt, width_pt, height_pt) — relié : suit le classeur ; refresh_sheets_charts après une modification."
+
+
+def _native_chart(title: str, when: str, props: dict, data: list[list], chart: dict) -> dict:
+    return {"title": title, "when": when, "props": props,
+            "native": {"kind": "chart", "flow": _SHEETS_FLOW, "sheets": {"data": data, "manage_chart": {"action": "add", "headers": 1, "style": "periscope", **chart}},
+                       "slides": _CHART_SLIDES}}
+
+
+VARIANTS["chart_bars"].append(_native_chart(
+    "natif Sheets, relié (column)",
+    "Quand les chiffres vivent dans un classeur ou doivent se rafraîchir (bilan récurrent) : colonnes Sheets à la charte, une couleur de régie par barre via point_colors, valeurs affichées.",
+    {"labels": ["Google", "Bing", "Facebook", "Instagram"], "values": [3.9, 2.5, 3.45, 1.5], "colors": ["regie_google", "regie_bing", "regie_facebook", "regie_instagram"], "title": "ROAS par régie"},
+    [["Régie", "ROAS"], ["Google", 3.9], ["Bing", 2.5], ["Facebook", 3.45], ["Instagram", 1.5]],
+    {"chart_type": "column", "domain": "A1:A5", "series": ["B1:B5"], "title": "ROAS par régie", "legend": "none", "data_labels": True,
+     "point_colors": ["1:1 #00e5c3", "1:2 #c383ff", "1:3 #fa00a6", "1:4 #ff9170"]}))
+
+VARIANTS["chart_grouped"].append(_native_chart(
+    "natif Sheets, relié (colonnes N / N-1)",
+    "Comparaison N / N-1 reliée au classeur : deux séries, N en navy et N-1 en gris (convention charte), valeurs sur les barres, légende en haut.",
+    {"labels": ["Google", "Bing", "Facebook", "Instagram"], "series": [{"name": "Collecte N", "values": [356118, 35079, 60007, 11522], "color": "accent_dark"},
+                                                                       {"name": "Collecte N-1", "values": [0, 47353, 36090, 11726], "color": "gray_2"}], "unit": "€", "legend_pos": "top"},
+    [["Régie", "Collecte N", "Collecte N-1"], ["Google", 356118, 0], ["Bing", 35079, 47353], ["Facebook", 60007, 36090], ["Instagram", 11522, 11726]],
+    {"chart_type": "column", "domain": "A1:A5", "series": ["B1:B5", "C1:C5"], "title": "Collecte N et N-1 par régie", "legend": "top",
+     "series_colors": ["#002b3c", "#ededed"], "data_labels": True}))
+
+VARIANTS["chart_stacked"].append(_native_chart(
+    "natif Sheets, relié (colonnes empilées)",
+    "Total décomposé en parts, relié au classeur : stacked, une couleur charte par série, légende en haut ; percent pour des parts en %.",
+    {"labels": ["2023", "2024", "2025"], "series": [{"name": "Hors digital", "values": [3.3, 3.5, 3.8]}, {"name": "Digital", "values": [0.8, 1.2, 1.4]}], "unit": "M€", "show_values": True},
+    [["Année", "Hors digital", "Digital", "Dons ≥ 1 000 €"], [2023, 3.3, 0.8, 1.2], [2024, 3.5, 1.2, 1.3], [2025, 3.8, 1.4, 1.4]],
+    {"chart_type": "column", "stacked": "stacked", "domain": "A1:A4", "series": ["B1:B4", "C1:C4", "D1:D4"], "title": "Collecte par source (M€)", "legend": "top",
+     "series_colors": ["#002b3c", "#00f5b5", "#45dbff"], "data_labels": True}))
+
+VARIANTS["chart_line"].append(_native_chart(
+    "natif Sheets, relié (courbes)",
+    "Évolution reliée au classeur : une couleur charte par courbe, la période précédente en pointillé (line_dash), largeur 2 px, valeurs sur les points, légende en haut.",
+    {"labels": ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin"], "series": [{"name": "2025", "values": [120, 140, 135, 160, 150, 170], "color": "accent_dark"},
+                                                                       {"name": "2026", "values": [130, 150, 165, 190, 210, 240], "color": "accent"}], "legend_pos": "top"},
+    [["Mois", "2025", "2026"], ["Jan", 120, 130], ["Fév", 140, 150], ["Mar", 135, 165], ["Avr", 160, 190], ["Mai", 150, 210], ["Juin", 170, 240]],
+    {"chart_type": "line", "domain": "A1:A7", "series": ["B1:B7", "C1:C7"], "title": "Sessions organiques", "legend": "top",
+     "series_colors": ["#ededed", "#002b3c"], "line_dash": ["dashed", "solid"], "line_width": [2, 2], "data_labels": True}))
+
+VARIANTS["chart_combo"].append(_native_chart(
+    "natif Sheets, relié (combo colonnes + courbe)",
+    "Barres et courbe sur second axe reliées au classeur : series_types column / line, series_axes left / right, barres menthe, courbe magenta 2 px (line_width entier par série, 0 pour la série colonne).",
+    {"labels": ["2021", "2022", "2023", "2024", "2025", "2026"], "bars": {"name": "Collecte annuelle", "values": [664974, 1085349, 826300, 1152729, 1067244, 708134]},
+     "line": {"name": "Nombre de dons", "values": [524, 780, 497, 780, 404, 259], "color": "regie_meta"}, "unit": "€"},
+    [["Année", "Collecte annuelle", "Nombre de dons"], [2021, 664974, 524], [2022, 1085349, 780], [2023, 826300, 497], [2024, 1152729, 780], [2025, 1067244, 404], [2026, 708134, 259]],
+    {"chart_type": "combo", "domain": "A1:A7", "series": ["B1:B7", "C1:C7"], "series_types": ["column", "line"], "series_axes": ["left", "right"],
+     "series_colors": ["#00f5b5", "#fa00a6"], "line_width": [0, 2], "title": "Collecte et nombre de dons", "legend": "top", "data_labels": True}))
+
+VARIANTS["donut"].append(_native_chart(
+    "natif Sheets, relié (doughnut)",
+    "Répartition reliée au classeur : doughnut avec pie_hole 0,55, légende à droite, 400 × 400 px. Limites de l'API Sheets : pas de pourcentages sur les parts (garder le donut dessiné quand les % doivent se lire), couleurs des parts prises dans le thème du classeur à partir d'accent2 (menthe, cyan, corail…) et non par régie ; pie_labels (légende sur les parts) ne s'affiche pas une fois embarqué dans Slides. Plusieurs répartitions = plusieurs graphiques côte à côte (l'équivalent de donut_row).",
+    {"segments": [{"label": "Google", "value": 62, "color": "regie_google"}, {"label": "Meta", "value": 25, "color": "regie_meta"}, {"label": "Bing", "value": 13, "color": "regie_bing"}],
+     "labels": True, "legend_pos": "bottom", "title": "Répartition des dépenses"},
+    [["Régie", "Dépenses"], ["Google", 62], ["Meta", 25], ["Bing", 13]],
+    {"chart_type": "doughnut", "domain": "A1:A4", "series": ["B1:B4"], "pie_hole": 0.55, "legend": "right", "title": "Répartition des dépenses", "width": 400, "height": 400}))
+
+VARIANTS["pie"] = VARIANTS.get("pie", []) + [_native_chart(
+    "natif Sheets, relié (pie)",
+    "Camembert relié au classeur : pie plein, légende à droite ; mêmes limites que le doughnut (pas de % sur les parts, couleurs du thème à partir d'accent2, pie_labels invisible dans Slides).",
+    {"segments": [{"label": "Mobile", "value": 68}, {"label": "Desktop", "value": 27}, {"label": "Tablette", "value": 5}]},
+    [["Appareil", "Sessions"], ["Mobile", 68], ["Desktop", 27], ["Tablette", 5]],
+    {"chart_type": "pie", "domain": "A1:A4", "series": ["B1:B4"], "legend": "right", "title": "Sessions par appareil", "width": 400, "height": 400})]
+
+VARIANTS["table"].append({
+    "title": "alimentée par Sheets (lecture, pas de liaison)",
+    "when": "Quand les chiffres vivent dans un classeur (formules, cumuls) : le MCP Sheets écrit ou lit la plage, gslide la rend en table chartée. L'API Slides n'offre pas de tableau relié : pour actualiser, relire la plage et réinsérer la table.",
+    "props": {"rows": [["Canal", "Impr.", "Clics", "Conv.", "Coût"], ["Recherche Google", "86 085", "4 530", "147", "18 024 €"], ["Discover", "1 729 943", "31 683", "50", "3 445 €"],
+                       ["YouTube", "115 432", "811", "5", "442 €"], ["Gmail", "21 147", "586", "1", "74 €"], ["Total", "1 952 607", "37 610", "203", "21 985 €"]],
+              "header_fill": "ink", "total_fill": "surface", "total_row": True, "align": [None, "END", "END", "END", "END"]},
+    "native": {"kind": "table", "flow": _SHEETS_FLOW,
+               "sheets": {"data": [["Canal", "Impr.", "Clics", "Conv.", "Coût"], ["Recherche Google", 86085, 4530, 147, 18024], ["Discover", 1729943, 31683, 50, 3445],
+                                   ["YouTube", 115432, 811, 5, 442], ["Gmail", 21147, 586, 1, 74], ["Total", "=SUM(B2:B5)", "=SUM(C2:C5)", "=SUM(D2:D5)", "=SUM(E2:E5)"]],
+                          "format_cells": [{"range": "B2:D6", "number_format": "number:#,##0"}, {"range": "E2:E6", "number_format": "currency:#,##0\" €\""}],
+                          "read_range": {"range": "A1:E6", "formatted": True, "format": "json"}},
+               "slides": "insert_component(deck, slide, 'table', {rows: <lignes lues>, header_fill: 'ink', total_row: true, align: [...]}) ; delete_component puis réinsérer pour actualiser."},
+})

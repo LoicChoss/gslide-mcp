@@ -24,6 +24,28 @@ Tables are not linkable: Slides only links charts. Compute the table in Sheets
 (totals, deltas, ROAS), read it with the Sheets MCP `read_range`, and write it with
 the `table` component (`total_row`, `delta_cols`, `icons`).
 
+## Recipes in the catalogue
+
+`list_components` carries, on `chart_bars`, `chart_grouped`, `chart_stacked`,
+`chart_line`, `chart_combo`, `donut`, `pie` and `table`, a variant whose
+`native` block holds the exact Sheets MCP calls (data, `manage_chart add`
+arguments under `style: periscope`, or `read_range` for a table) and the
+Slides call. The component deck shows each one embedded linked next to its
+drawn counterpart.
+
+Learned while building the catalogue charts (spreadsheet « gslides-mcp · catalogue
+graphiques natifs », one sheet per chart):
+
+- axis and data labels follow the **source cells' number format**: `format_cells`
+  `number:#,##0` on the value columns gives « 1 085 349 » instead of « 1085349 »;
+- a combo's `line_width` is one integer per series, `0` for the column series
+  (the API refuses a line style on a column);
+- `pie_labels` (Google's labelled legend) does not show once the chart is embedded
+  in Slides: use `legend: right`. The API puts no percentages on slices — keep the
+  drawn `donut` when the shares must be read on the chart;
+- a table has no live link in Slides: read the range formatted (`read_range`
+  `formatted: true, format: json`) and render it with the `table` component.
+
 ## Which charts go native
 
 | Drawn component (v1) | Sheets chart | Notes |

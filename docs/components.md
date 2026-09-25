@@ -212,6 +212,12 @@ main example. Two sources:
   combine several props or need a real *when* (`table`, `card`, `kpi_grid`,
   the charts, `content_card`…). A new component with meaningful modes gets its
   entry there, next to its `use` sentence in `uses.py`.
+- **Native Sheets**: the chart components and `table` carry a variant with a
+  `native` block — `kind` (`chart` / `table`), the `flow`, `sheets` (data rows and
+  the Google Sheets MCP `manage_chart add` arguments, or the `read_range` call
+  for a table) and `slides` (the gslide-mcp call: `insert_sheets_chart`, or
+  `insert_component` with the rows read). gslide-mcp never touches the Sheets
+  API: the model orchestrates the two MCPs (see [sheets-charts.md](sheets-charts.md)).
 - **Derived**: a component without an entry gets one variant per value of each
   `choice` prop the example does not use (`when` = the prop's description),
   so a new component with a `choice` prop is never catalogued without its modes.
