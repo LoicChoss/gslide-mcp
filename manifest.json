@@ -3,7 +3,7 @@
   "manifest_version": "0.4",
   "name": "gslide-mcp",
   "display_name": "Google Slides MCP",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Typed tools for building Google Slides decks from Claude: layouts, themed components, charts, tables, notes, comments.",
   "long_description": "Build, edit and screenshot Google Slides presentations from Claude Desktop: create decks from templates, fill placeholders, insert images and charts, copy slides across decks, and render slide ranges to PNG for visual QA.\n\nFirst run requires a Google OAuth Desktop-app client (credentials.json) — see the OAuth setup guide linked below.",
   "author": {

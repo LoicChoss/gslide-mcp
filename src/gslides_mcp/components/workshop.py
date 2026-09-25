@@ -20,9 +20,20 @@ from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height
 EYEBROW = {"style": "card_label", "size": 9.5, "bold": True, "small_ok": True}
 
 
-def _eyebrow_op(text: str, x: float, y: float, w: float, color: str = "muted", align: str = "START") -> dict:
-    return {"op": "text", "x": x, "y": y, "w": w, "h": 12 + INSETS, "text": THIN.join(str(text).upper()), "color": color, "align": align,
-            "role": "eyebrow", **EYEBROW}
+def _eyebrow_op(text: str, x: float, y: float, w: float, color: str = "muted", align: str = "START", lines: int = 1) -> dict:
+    up = str(text).upper()
+    avail = w - 2 * INSET_X
+    size = 9.5
+    tracked_w = len(up) * (size * 0.62 + 2.5)  # thin spaces add ~2.5 pt each
+    if tracked_w <= avail:
+        text_out = THIN.join(up)  # tracking only when it fits on one line
+    else:
+        text_out = up
+        longest = max(len(word) for word in up.split()) if up.split() else len(up)
+        if longest * size * 0.62 > avail:  # a word alone would break: shrink instead (down to 7.5 pt)
+            size = max(7.5, round(avail / (longest * 0.62), 1))
+    return {"op": "text", "x": x, "y": y, "w": w, "h": 12 * lines + INSETS, "text": text_out, "color": color, "align": align,
+            "role": "eyebrow", **{**EYEBROW, "size": size}}
 
 
 def _num(value) -> float | None:
@@ -64,8 +75,8 @@ def _score_matrix(p: dict, theme: Theme, w: float, h: float | None) -> tuple[lis
     tile_h = float(p["tile_h"])
     ops: list[dict] = [_eyebrow_op(p["row_title"], 0, 0, label_w)]
     for j, c in enumerate(cols):
-        ops.append(_eyebrow_op(c, label_w + j * (tile_w + gap), 0, tile_w, align="CENTER"))
-    y = 26.0
+        ops.append(_eyebrow_op(c, label_w + j * (tile_w + gap), 0, tile_w, align="CENTER", lines=2))
+    y = 38.0
     for r in rows:
         values = list(r.get("values") or [])
         counts = list(r.get("counts") or [])
@@ -80,7 +91,7 @@ def _score_matrix(p: dict, theme: Theme, w: float, h: float | None) -> tuple[lis
             fill = "#BFF5E6" if fill == "mint_pale" else fill
             x = label_w + j * (tile_w + gap)
             ops.append({"op": "box", "x": x, "y": y, "w": tile_w, "h": tile_h, "shape": "ROUND_RECTANGLE", "fill": fill, "role": "tile"})
-            text = "–" if v is None else fmt_value(v, "")
+            text = "–" if v is None else f"{v:.1f}".replace(".", ",")
             ops.append({"op": "text", "x": x, "y": y + 4, "w": tile_w, "h": tile_h - 22, "text": text, "style": "kpi_value", "size": 24,
                         "color": "ink", "align": "CENTER", "valign": "MIDDLE", "role": "score"})
             if j < len(counts) and counts[j] is not None:
@@ -232,12 +243,12 @@ def _quadrant_matrix(p: dict, theme: Theme, w: float, h: float | None) -> tuple[
     quads = [q if isinstance(q, dict) else {"title": str(q)} for q in p["quadrants"]]
     while len(quads) < 4:
         quads.append({})
-    axis_w = 22.0 if p["y_label"] else 0.0
+    axis_w = 0.0
     axis_h = 20.0 if p["x_label"] else 0.0
     gap = 10.0
     height = h or float(p["height"])
-    grid_h = height - axis_h - (26 if p["eyebrow"] else 0)
-    top = 26.0 if p["eyebrow"] else 0.0
+    top = 26.0 if (p["eyebrow"] or p["y_label"]) else 0.0
+    grid_h = height - axis_h - top
     qw = (w - axis_w - gap) / 2
     qh = (grid_h - gap) / 2
     ops: list[dict] = []
@@ -257,11 +268,13 @@ def _quadrant_matrix(p: dict, theme: Theme, w: float, h: float | None) -> tuple[
             spec = get("chevrons")
             sub, _ = spec.render(validate(spec, {"items": [str(i) for i in q["items"]], "size": 11, "spacing": 4}), theme, qw - 20, None)
             sub[0].update({"x": x + 10, "y": y + 54, "h": min(sub[0]["h"], qh - 60), "color": "ink"})
+            if hl:  # the mint chevron would vanish on the mint quadrant
+                sub[0]["runs"] = [[{**r[0], "color": "ink"}, *r[1:]] for r in sub[0]["runs"]]
             ops.append(sub[0])
     if p["y_label"]:
-        ops.append(_eyebrow_op(f"{p['y_label']} ↑", 0, top + qh - 8, axis_w + 60, color="muted"))
+        ops.append(_eyebrow_op(f"↑ {p['y_label']}", w - 120, 0, 120, color="muted", align="END"))
     if p["x_label"]:
-        ops.append(_eyebrow_op(f"{p['x_label']} →", axis_w, top + grid_h + 2, w - axis_w, color="muted", align="CENTER"))
+        ops.append(_eyebrow_op(f"{p['x_label']} →", 0, top + grid_h + 2, w, color="muted", align="END"))
     return ops, height
 
 
@@ -330,8 +343,8 @@ def _board_columns(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
     per_col: list[list[dict]] = []
     for c in cols:
         items = list(c.get("items") or [])
-        col_ops: list[dict] = [_eyebrow_op(c.get("title", ""), pad, pad, cw - 2 * pad)]
-        y = pad + 26
+        col_ops: list[dict] = [_eyebrow_op(c.get("title", ""), pad, pad, cw - 2 * pad, lines=2)]
+        y = pad + 38
         if not items:
             col_ops.append({"op": "text", "x": pad, "y": y, "w": cw - 2 * pad, "h": 14 + INSETS, "text": str(p["empty_text"]), "style": "body",
                             "italic": True, "color": "muted", "role": "empty"})
@@ -399,17 +412,23 @@ def _session_plan(p: dict, theme: Theme, w: float, h: float | None) -> tuple[lis
         total = sum(weights) or 1.0
         sgap = 4.0
         avail = w - (len(slots) - 1) * sgap
+        min_w = float(p["min_slot_w"])
+        widths = [avail * wt / total for wt in weights]
+        short = sum(max(0.0, min_w - sw) for sw in widths)
+        if short:  # narrow slots are widened to min_slot_w, the wide ones give the room back
+            wide = sum(sw - min_w for sw in widths if sw > min_w) or 1.0
+            widths = [min_w if sw < min_w else sw - short * (sw - min_w) / wide for sw in widths]
         x = 0.0
         slot_h = float(p["slot_h"])
-        for s, wt in zip(slots, weights):
-            sw = avail * wt / total
+        for s, sw in zip(slots, widths):
             current = bool(s.get("current"))
             ops.append({"op": "box", "x": x, "y": y, "w": sw, "h": slot_h, "fill": "surface", "role": "slot"})
             ops.append({"op": "box", "x": x, "y": y, "w": sw, "h": 3, "fill": "accent" if current else "gray_2", "role": "slot_rule"})
-            ops.append({"op": "text", "x": x + 4, "y": y + 10, "w": sw - 8, "h": 14 + INSETS, "text": str(s.get("time", "")), "style": "card_label",
-                        "size": 11, "bold": True, "color": "accent_dark", "role": "time"})
-            ops.append({"op": "text", "x": x + 4, "y": y + slot_h - 24, "w": sw - 8, "h": 14 + INSETS, "text": str(s.get("label", "")), "style": "label",
-                        "size": 11, "bold": True, "color": "ink", "role": "slot_label"})
+            narrow = sw < 70
+            ops.append({"op": "text", "x": x + 2, "y": y + 10, "w": sw - 4, "h": 14 + INSETS, "text": str(s.get("time", "")), "style": "card_label",
+                        "size": 9 if narrow else 11, "small_ok": True, "bold": True, "color": "accent_dark", "role": "time"})
+            ops.append({"op": "text", "x": x + 2, "y": y + slot_h - 24, "w": sw - 4, "h": 14 + INSETS, "text": str(s.get("label", "")), "style": "label",
+                        "size": 9 if narrow else 11, "small_ok": True, "bold": True, "color": "ink", "role": "slot_label"})
             x += sw + sgap
         y += slot_h
     return ops, h or y
@@ -422,6 +441,7 @@ register(Component(
         Prop("sections", "list", "Sections : {title, text?}."),
         Prop("slots", "list", "Créneaux : {time, label, weight? (durée relative), current?}."),
         Prop("slot_h", "number", "Hauteur du bandeau horaire.", default=56),
+        Prop("min_slot_w", "number", "Largeur minimale d'un créneau (les longs créneaux cèdent la place).", default=72),
     ],
     render=_session_plan,
     example={"sections": [{"title": "La collaboration", "text": "Ce qui fonctionne, ce qui ne fonctionne pas, pas assez ou plus."},

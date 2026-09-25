@@ -92,7 +92,7 @@ def test_quadrant_matrix_highlight_axes_and_items():
     assert len(quads) == 4 and quads[1]["fill"] == "accent" and quads[0]["fill"] == "surface" and quads[2]["y"] > quads[0]["y"]
     assert [t["text"] for t in _of(ops, "text", "title")] == ["A", "B", "C", "D"] and h == 300
     eyebrows = [e["text"].replace(" ", "") for e in _of(ops, "text", "eyebrow")]
-    assert "IMPACT ↑" in eyebrows and "URGENCE →" in eyebrows
+    assert "↑ IMPACT" in eyebrows and "URGENCE →" in eyebrows
     assert any("runs" in o for o in ops)  # the items of B as chevrons
 
 
@@ -103,7 +103,7 @@ def test_next_steps_and_session_plan_rules():
     ops, h = _render("session_plan", {"sections": [{"title": "S1", "text": "t"}, {"title": "S2"}],
                                       "slots": [{"time": "0-5'", "label": "Ouverture", "weight": 5, "current": True}, {"time": "5-20'", "label": "Collab", "weight": 15}]}, w=600)
     slots = _of(ops, "box", "slot")
-    assert len(slots) == 2 and slots[1]["w"] == pytest.approx(3 * slots[0]["w"]) and _of(ops, "box", "slot_rule")[0]["fill"] == "accent"
+    assert len(slots) == 2 and slots[1]["w"] > slots[0]["w"] >= 72 and _of(ops, "box", "slot_rule")[0]["fill"] == "accent"
     assert _of(ops, "text", "section")[0]["y"] < slots[0]["y"] and h == slots[0]["y"] + slots[0]["h"]
 
 
