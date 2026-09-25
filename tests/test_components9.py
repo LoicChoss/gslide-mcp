@@ -272,3 +272,25 @@ def test_bar_list_value_in_bar_without_sub_right_emits_no_empty_text():
     ops, _ = _render("bar_list", {"items": [{"label": "a", "value": 10}, {"label": "b", "value": 5}], "value_in_bar": True}, w=600)
     assert not [o for o in ops if o["op"] == "text" and o.get("role") == "sub_right"]
     assert all(o.get("text") or o.get("runs") or o.get("markdown") for o in ops if o["op"] == "text")
+
+
+def test_table_recognises_previous_period_and_variation_columns_from_the_header():
+    rows = [["Famille", "Clics", "Clics N-1", "vs N-1", "Coût", "Évol. coût"],
+            ["Search", "4 530", "3 900", "+16,2 %", "18 024 €", "-3,1 %"],
+            ["Social", "811", "1 020", "-20,5 %", "442 €", "+8,0 %"]]
+    ops, _ = _render("table", {"rows": rows}, w=600)
+    (t,) = [o for o in ops if o["op"] == "table"]
+    c = t["cell_text_colors"]
+    assert c[(1, 2)] == "muted" and c[(2, 2)] == "muted"           # « Clics N-1 »: previous period, muted
+    assert c[(1, 3)] == "positive" and c[(2, 3)] == "negative"     # « vs N-1 »: by sign
+    assert c[(1, 5)] == "negative" and c[(2, 5)] == "positive"     # « Évol. coût »: by sign
+    assert (1, 1) not in c and (1, 4) not in c
+    # signed values without a telling header are still a variation column; [] disables both
+    ops, _ = _render("table", {"rows": [["A", "B"], ["x", "+3 %"], ["y", "-2 %"], ["z", "+1 %"]]}, w=300)
+    assert [o for o in ops if o["op"] == "table"][0]["cell_text_colors"][(1, 1)] == "positive"
+    ops, _ = _render("table", {"rows": rows, "delta_cols": [], "prev_cols": []}, w=600)
+    assert not [o for o in ops if o["op"] == "table"][0]["cell_text_colors"]
+    # the picto column shifts nothing: indexes stay relative to the data columns
+    ops, _ = _render("table", {"rows": rows, "icons": ["search", "share"]}, w=600)
+    c = [o for o in ops if o["op"] == "table"][0]["cell_text_colors"]
+    assert c[(1, 3)] == "muted" and c[(1, 4)] == "positive"

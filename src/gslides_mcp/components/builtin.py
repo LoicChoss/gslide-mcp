@@ -8,6 +8,8 @@ text styles only. Each ``render(props, theme, w, h)`` returns
 
 from __future__ import annotations
 
+import re
+
 from ..themes import Theme
 from . import Component, Prop, register, shift
 
@@ -467,6 +469,19 @@ def rendered_row_h(row_h: float, size: float) -> float:
     return max(float(row_h), size * 1.2 + 2 * CELL_INSET_Y)
 
 
+_DELTA_HEADER = re.compile(r"\bvs\b|[ée]vol|\bvar(iation)?\b|\bdelta\b|Δ|\bdiff|\b%\s*[NP]\s*[-–]\s*1\b", re.IGNORECASE)
+_PREV_HEADER = re.compile(r"\b[NP]\s*[-–]\s*1\b|pr[ée]c[ée]dent", re.IGNORECASE)
+_SIGNED = re.compile(r"^[+\-−]\s*\d")
+
+
+def _is_delta_col(rows: list, jj: int, first: int, stop: int, header: list[str]) -> bool:
+    """A « vs N-1 » column: its header says so, or most of its data cells are signed values."""
+    if jj < len(header) and _DELTA_HEADER.search(header[jj]):
+        return True
+    cells = [str(r[jj]).strip() for r in rows[first:stop] if jj < len(r) and str(r[jj]).strip() not in ("", "-", "–")]
+    return len(cells) >= 2 and sum(1 for c in cells if _SIGNED.match(c)) >= 0.6 * len(cells)
+
+
 def _table(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     from .workshop import _num, threshold_color
 
@@ -516,7 +531,20 @@ def _table(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
     widths = col_w or [w / n_c] * n_c
     cell_text_colors: dict = {}
     cell_runs: dict = {}
-    for j in p["delta_cols"] or []:
+    header_cells = [str(c) for c in rows[0]] if p["header"] else []
+    delta_cols = p["delta_cols"]
+    if delta_cols is None:  # auto: « vs N-1 », « Évol. », « Var. », « Δ »… or a column of signed values
+        delta_cols = [jj - lead for jj in range(lead, n_c) if _is_delta_col(rows, jj, first, last if total else last + 1, header_cells)]
+    prev_cols = p["prev_cols"]
+    if prev_cols is None:  # auto: « Clics N-1 », « P-1 », « période précédente »: the previous period, muted
+        prev_cols = [jj - lead for jj in range(lead, n_c) if jj < len(header_cells) and _PREV_HEADER.search(header_cells[jj])
+                     and (jj - lead) not in delta_cols]
+    for j in prev_cols:
+        jj = int(j) + lead
+        for i in range(first, len(rows)):
+            if jj < len(rows[i]):
+                cell_text_colors[(i, jj)] = "muted"
+    for j in delta_cols:
         jj = int(j) + lead
         for i in range(first, len(rows) - (1 if total else 0)):
             txt = str(rows[i][jj]).strip() if jj < len(rows[i]) else ""
@@ -579,7 +607,7 @@ def _table(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
 
 
 register(Component(
-    name="table", description="Tableau charté : en-tête accent ou sombre, première colonne en gras (avec sous-ligne grise et pastille de couleur en option), lignes alternées, filets fins, ligne de total ; pictos par ligne, colonnes de variation colorées par signe, zéros en alerte, valeurs en pilule colorée par seuil.",
+    name="table", description="Tableau charté : en-tête accent ou sombre, première colonne en gras (avec sous-ligne grise et pastille de couleur en option), lignes alternées, filets fins, ligne de total ; pictos par ligne, colonnes de variation colorées par signe et colonnes N-1 / P-1 en gris (reconnues sur l'en-tête), zéros en alerte, valeurs en pilule colorée par seuil.",
     props=[
         Prop("rows", "list", "Lignes (la première est l'en-tête), listes de chaînes.", required=True),
         Prop("col_w", "list", "Largeurs de colonnes en pt (défaut : réparties)."),
@@ -592,7 +620,10 @@ register(Component(
         Prop("icons", "list", "Un picto (asset) ou null par ligne de données : ajoute une colonne étroite en tête (logos de canaux)."),
         Prop("icon_w", "number", "Taille des pictos.", default=16),
         Prop("icon_tint", "color", "Teinte des pictos du dossier d'assets (pictos blancs) ; vide = couleurs d'origine."),
-        Prop("delta_cols", "list", "Index (0-based, hors colonne picto) des colonnes « vs N-1 » : + en positif, - en négatif."),
+        Prop("delta_cols", "list", "Index (0-based, hors colonne picto) des colonnes de variation : + en positif, - en négatif. Défaut (null) : détection automatique "
+                                   "sur l'en-tête (« vs N-1 », « Évol. », « Var. », « Δ ») ou sur des valeurs signées ; [] pour désactiver."),
+        Prop("prev_cols", "list", "Index des colonnes de la période précédente (valeurs « N-1 », « P-1 »), affichées en gris pour laisser la période courante ressortir. "
+                                  "Défaut (null) : détection sur l'en-tête (« Clics N-1 », « P-1 », « précédent ») ; [] pour désactiver."),
         Prop("header_fill", "color", "Fond de l'en-tête : accent (menthe) ou ink (navy, texte blanc).", default="accent"),
         Prop("total_fill", "color", "Fond de la ligne de total : accent ou surface (gris).", default="accent"),
         Prop("subs", "list", "Sous-ligne grise sous le nom de chaque ligne de données (null = aucune)."),

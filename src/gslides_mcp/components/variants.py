@@ -297,10 +297,10 @@ VARIANTS: dict[str, list[dict]] = {
                    "icons": ["search", "star", "video", "share"], "icon_tint": "ink", "header_fill": "ink", "total_fill": "surface", "total_row": True,
                    "align": [None, "END", "END", "END", "END"]}},
         {"title": "colonne « vs N-1 » colorée par signe, sans total",
-         "when": "Comparaison période à période (N vs N-1, avant / après) : `delta_cols` colore les variations en vert / corail selon le signe ; pas de total quand les lignes ne s'additionnent pas.",
+         "when": "Comparaison période à période (N vs N-1, avant / après) : les colonnes « vs N-1 » sont reconnues sur l'en-tête et colorées par signe (vert / corail), les colonnes de valeurs N-1 passent en gris ; `delta_cols` / `prev_cols` pour forcer ; pas de total quand les lignes ne s'additionnent pas.",
          "props": {"rows": [["Famille", "Dépenses", "vs N-1", "Collecte GA4", "vs N-1", "ROAS"], ["Search Marque", "46 811 €", "+52,18 %", "179 083 €", "+172,10 %", "3,83"],
                             ["Search Hors marque", "36 152 €", "+25,59 %", "7 100 €", "-70,94 %", "0,20"], ["PMax", "22 296 €", "+138,61 %", "10 440 €", "+156,83 %", "0,47"]],
-                   "delta_cols": [2, 4], "align": [None, "END", "END", "END", "END", "END"]}},
+                   "align": [None, "END", "END", "END", "END", "END"]}},
         {"title": "CPA en pilules par seuil, cumul en menthe",
          "when": "Suivi mensuel avec une métrique à juger (CPA, CPL, ROAS) : `pill_cols` met la colonne en pilules colorées par seuil, ligne de cumul menthe ; l'exemple principal combine tout (pastilles, sous-lignes, zéros, n/a).",
          "props": {"rows": [["Mois", "Impr.", "Clics", "CTR", "Coût", "Conv.", "CPA"], ["Janvier", "8 981", "946", "10,53 %", "694,28 €", "20", "34,71 €"],
@@ -395,7 +395,7 @@ VARIANTS["pie"] = VARIANTS.get("pie", []) + [_native_chart(
 
 VARIANTS["table"].append({
     "title": "alimentée par Sheets (lecture, pas de liaison)",
-    "when": "Quand les chiffres vivent dans un classeur (formules, cumuls) : le MCP Sheets écrit ou lit la plage, gslide la rend en table chartée. L'API Slides n'offre pas de tableau relié : pour actualiser, relire la plage et réinsérer la table.",
+    "when": "Quand les chiffres vivent dans un classeur (formules, cumuls) : le MCP Sheets écrit ou lit la plage, gslide la rend en table chartée. Les colonnes « N-1 » / « P-1 » passent en gris et les « vs N-1 » / « Évol. » en couleur par signe, reconnues sur l'en-tête. Pas de tableau relié dans l'API Slides : pour actualiser, relire la plage et réinsérer la table.",
     "props": {"rows": [["Canal", "Impr.", "Clics", "Conv.", "Coût"], ["Recherche Google", "86 085", "4 530", "147", "18 024 €"], ["Discover", "1 729 943", "31 683", "50", "3 445 €"],
                        ["YouTube", "115 432", "811", "5", "442 €"], ["Gmail", "21 147", "586", "1", "74 €"], ["Total", "1 952 607", "37 610", "203", "21 985 €"]],
               "header_fill": "ink", "total_fill": "surface", "total_row": True, "align": [None, "END", "END", "END", "END"]},
