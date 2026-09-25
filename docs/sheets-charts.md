@@ -41,8 +41,11 @@ graphiques natifs », one sheet per chart):
 - a combo's `line_width` is one integer per series, `0` for the column series
   (the API refuses a line style on a column);
 - `pie_labels` (Google's labelled legend) does not show once the chart is embedded
-  in Slides: use `legend: right`. The API puts no percentages on slices — keep the
-  drawn `donut` when the shares must be read on the chart;
+  in Slides: use `legend: right`. Slice labels (« Libellé de secteur → Pourcentage »)
+  exist only in the Sheets editor: `PieChartSpec` has no field for them, a chart
+  read back after setting them by hand shows nothing, and an `updateChartSpec`
+  (any `manage_chart update`) replaces the spec and drops them. Set them by hand
+  as the last step, or keep the drawn `donut` when the shares must be read on the chart;
 - a table has no live link in Slides: read the range formatted (`read_range`
   `formatted: true, format: json`) and render it with the `table` component.
 

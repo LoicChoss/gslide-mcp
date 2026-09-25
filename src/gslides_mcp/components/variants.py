@@ -376,7 +376,7 @@ VARIANTS["chart_combo"].append(_native_chart(
 
 VARIANTS["donut"].append(_native_chart(
     "natif Sheets, relié (doughnut)",
-    "Répartition reliée au classeur : doughnut avec pie_hole 0,55, légende à droite, 400 × 400 px. Limites de l'API Sheets : pas de pourcentages sur les parts (garder le donut dessiné quand les % doivent se lire), couleurs des parts prises dans le thème du classeur à partir d'accent2 (menthe, cyan, corail…) et non par régie ; pie_labels (légende sur les parts) ne s'affiche pas une fois embarqué dans Slides. Plusieurs répartitions = plusieurs graphiques côte à côte (l'équivalent de donut_row).",
+    "Répartition reliée au classeur : doughnut avec pie_hole 0,55, légende à droite, 400 × 400 px. Limites de l'API Sheets : les pourcentages sur les parts ne se règlent qu'à la main dans Sheets (Personnaliser → Libellé de secteur → Pourcentage ; l'API ne l'expose pas et un manage_chart update remet ce réglage à zéro) — garder le donut dessiné quand les % doivent se lire sans intervention ; couleurs des parts prises dans le thème du classeur à partir d'accent2 (menthe, cyan, corail…) et non par régie ; pie_labels (légende sur les parts) ne s'affiche pas une fois embarqué dans Slides. Plusieurs répartitions = plusieurs graphiques côte à côte (l'équivalent de donut_row).",
     {"segments": [{"label": "Google", "value": 62, "color": "regie_google"}, {"label": "Meta", "value": 25, "color": "regie_meta"}, {"label": "Bing", "value": 13, "color": "regie_bing"}],
      "labels": True, "legend_pos": "bottom", "title": "Répartition des dépenses"},
     [["Régie", "Dépenses"], ["Google", 62], ["Meta", 25], ["Bing", 13]],
@@ -384,7 +384,7 @@ VARIANTS["donut"].append(_native_chart(
 
 VARIANTS["pie"] = VARIANTS.get("pie", []) + [_native_chart(
     "natif Sheets, relié (pie)",
-    "Camembert relié au classeur : pie plein, légende à droite ; mêmes limites que le doughnut (pas de % sur les parts, couleurs du thème à partir d'accent2, pie_labels invisible dans Slides).",
+    "Camembert relié au classeur : pie plein, légende à droite ; mêmes limites que le doughnut (% sur les parts seulement à la main dans Sheets, couleurs du thème à partir d'accent2, pie_labels invisible dans Slides).",
     {"segments": [{"label": "Mobile", "value": 68}, {"label": "Desktop", "value": 27}, {"label": "Tablette", "value": 5}]},
     [["Appareil", "Sessions"], ["Mobile", 68], ["Desktop", 27], ["Tablette", 5]],
     {"chart_type": "pie", "domain": "A1:A4", "series": ["B1:B4"], "legend": "right", "title": "Sessions par appareil", "width": 400, "height": 400})]
