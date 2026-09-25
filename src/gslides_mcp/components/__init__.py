@@ -50,7 +50,7 @@ class Component:
     source: str = "builtin"
     tags: list[str] = field(default_factory=list)
     use: str = ""             # when to use it, and the close alternatives
-    variants: list[dict] = field(default_factory=list)  # [{title, props}]: other typical settings, shown in the catalogue
+    variants: list[dict] = field(default_factory=list)  # [{title, when, props}]: other typical settings, shown in the catalogue
 
     def schema(self) -> dict:
         out = {
@@ -63,7 +63,7 @@ class Component:
             "example": {"props": self.example},
         }
         if self.variants:
-            out["variants"] = [{"title": v["title"], "props": v["props"]} for v in self.variants]
+            out["variants"] = [{"title": v["title"], "when": v.get("when", ""), "props": v["props"]} for v in self.variants]
         return out
 
 

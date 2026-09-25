@@ -39,7 +39,7 @@ USES: dict[str, str] = {
     "palette": "Slides identité et accessibilité : nuancier de la charte, contrastes RGAA avec ratio (« Aa » fond/texte) ; pour un tableau de critères → table.",
 
     # --- données ---------------------------------------------------------------------
-    "table": "Budget, planning, SLA, comparatif de solutions, KPI par canal : tout tableau charté avec en-tête, première colonne en gras, ligne de total ; pour colorer les cellules par intensité → heatmap ; pour des ✓ / ✗ → checklist ou compare_cards.",
+    "table": "Budget, planning, SLA, comparatif de solutions, KPI par canal : tout tableau charté avec en-tête, première colonne en gras, ligne de total. Quatre réglages prêts dans `variants` (lire leur `when`) : simple, pictos de canaux, colonnes vs N-1, pilules par seuil ; l'exemple principal montre pastilles + sous-lignes + pilules. Pour colorer les cellules par intensité → heatmap ; pour des ✓ / ✗ → checklist ou compare_cards.",
     "heatmap": "Matrice chiffrée à lire par intensité (positions par requête et par mois, scores par critère et par concurrent, 60 points de contrôle) ; sans échelle de couleur → table.",
     "serp": "Illustrer une page de résultats Google : résultat actuel vs résultat cible, rich snippet avec étoiles, title/description recommandés ; pour une capture réelle dans un navigateur → browser.",
 

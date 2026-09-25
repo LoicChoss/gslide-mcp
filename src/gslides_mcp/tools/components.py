@@ -79,8 +79,11 @@ def list_components(theme: str | None = None) -> dict:
     Each entry gives ``description`` (what it draws), ``use`` (when to pick
     it, with the close alternatives — a component fits several intents, so
     read ``use`` before choosing), the props (type, default, choices,
-    required), an example call and its source: ``builtin`` (Python) or
-    ``recipe`` (JSON saved with ``save_component``). Themes carry the
+    required), an example call, optional ``variants`` (other ready-made
+    settings of the same component: ``title`` = what it looks like,
+    ``when`` = the situation it fits, ``props`` = the call to copy) and
+    its source: ``builtin`` (Python) or ``recipe`` (JSON saved with
+    ``save_component``). Themes carry the
     brand — colors, font, text styles — so the same component renders in
     any charter.
 

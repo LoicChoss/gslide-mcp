@@ -6,7 +6,7 @@ All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachang
 
 ### Added
 
-- Catalogue `variants`: a component can declare other typical settings (`[{title, props}]`, exposed by `list_components`); `table` declares four (simple accent table, picto column with navy header, « vs N-1 » delta columns, CPA pills with mint total).
+- Catalogue `variants`: a component can declare other typical settings (`[{title, when, props}]`, exposed by `list_components`; `when` says which situation the variant fits and the `use` sentence points at them); `table` declares four (simple accent table, picto column with navy header, « vs N-1 » delta columns, CPA pills with mint total).
 - `media_plan.objective_eyebrow`; theme token `mint_pale` (#BFF5E6) and roles `heat_1…heat_4` on the charter palette.
 
 ### Changed

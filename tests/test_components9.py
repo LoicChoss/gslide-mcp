@@ -180,8 +180,10 @@ def test_fit_text_size_and_fit_labels():
 def test_table_declares_catalogue_variants_with_valid_props():
     from gslides_mcp import components
     comp = components.get("table")
-    assert len(comp.variants) >= 4 and all(v["title"] and v["props"]["rows"] for v in comp.variants)
-    assert "variants" in comp.schema() and len(comp.schema()["variants"]) == len(comp.variants)
+    assert len(comp.variants) >= 4 and all(v["title"] and v["when"] and v["props"]["rows"] for v in comp.variants)
+    schema = comp.schema()
+    assert len(schema["variants"]) == len(comp.variants) and all(set(v) == {"title", "when", "props"} for v in schema["variants"])
+    assert "variants" in comp.use  # the use sentence points the model at them
     for v in comp.variants:
         ops, h = _render("table", v["props"], w=600)
         assert h > 0 and any(o["op"] == "table" for o in ops)
