@@ -80,7 +80,7 @@ To build the bundle locally (requires Node.js):
 
 ```sh
 npx @anthropic-ai/mcpb validate manifest.json
-npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.7.0.mcpb
+npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.8.0.mcpb
 ```
 
 `.mcpbignore` keeps docs, examples, virtualenvs and any local `credentials.json` / `token.json` out of the archive.
@@ -129,6 +129,7 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.7.0.mcpb
 | | `edit_table` | Insert/delete rows and columns |
 | | `set_table_cell` | Write markdown into one cell (resets the cell's style: see `refill_text`) |
 | | `resize_table` | Minimum row heights and column widths of an existing table |
+| | `sync_deck` | Update a bilan deck from its spreadsheet's « Liaisons » tab — texts, tables, visuals, linked charts, in place; `dry_run` first (see [docs/bilan-sync.md](docs/bilan-sync.md)) |
 | | `sync_table` | Keep an existing table in line with a spreadsheet range (read-only): changed cells rewritten in place, style `slides` / `sheets` / `charter`, rows and columns `fit`, image slots realigned, `dry_run` |
 | **Content** | `write_text_markdown` | Write bold/italic/bullets in one call via gslides-api's markdown writer |
 | | `batch_write_markdown` | Batch version of `write_text_markdown` (~N× faster for multi-element updates) |
