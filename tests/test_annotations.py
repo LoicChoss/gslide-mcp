@@ -15,7 +15,7 @@ READ_ONLY = [
 ]
 DESTRUCTIVE = [
     "delete_slides", "delete_elements", "relayout_slide", "manage_comments", "edit_table",
-    "batch_apply", "raw_request", "delete_component",
+    "batch_apply", "raw_request", "delete_component", "rename_element",
 ]
 IDEMPOTENT = [
     "set_text", "set_speaker_notes", "set_background", "set_slide_hidden", "set_fill", "set_outline",

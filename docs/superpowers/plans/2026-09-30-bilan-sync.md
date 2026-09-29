@@ -22,7 +22,7 @@ Origin: Loïc's Apps Script bilan updater (tables from ranges with Sheets format
 ## API behaviours to verify live (each task says where)
 
 - V1 (verified 2026-09-30 on the test deck): `replaceImage` works in the same batch right after `createImage`. `createImage` shrinks the element to the picture's aspect (`screen-demo` in 300 × 100 → 177.5 × 100), hence the placeholder at the box's aspect. After `replaceImage` the element's `size` is the new picture's natural size: CENTER_CROP keeps the frame (non-uniform scale + crop), CENTER_INSIDE shrinks the element to the picture (uniform scale, centred — 100 × 100 → 100 × 56.3). Restoring the frame's transform just before a CENTER_INSIDE replacement gives the frame back exactly. So a slot stores its frame in its alt-text description (`slot:x,y,w,h`, pt) and every replacement restores it first.
-- V2: where `duplicateObject` puts the copy in the z-order (on top, or just above the original).
+- V2 (verified 2026-09-30): `duplicateObject` puts the copy **on top** of the slide; `SEND_BACKWARD` moves an element one step back. So a rename is one batch: duplicate, delete, then as many SEND_BACKWARD as computed from the original order.
 - V3: whether `insertTableRows` copies the reference row's cell fill and text style.
 - V4: `spreadsheets.get` with `ranges` + `includeGridData` works with the `drive` scope, locally and hosted.
 - V5: whether a table's `tableRows[].rowHeight` read back reflects rows grown by their text (needed to realign images over a row).

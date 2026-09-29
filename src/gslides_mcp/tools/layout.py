@@ -1002,3 +1002,98 @@ def _speaker_notes_text(slide: dict) -> str:
         if el.get("objectId") == shape_id:
             return _plain_text(el)
     return ""
+
+
+def _all_object_ids(node, sink: set[str]) -> set[str]:
+    """Every objectId in the presentation: pages, elements, group children, notes, layouts, masters."""
+    if isinstance(node, dict):
+        if isinstance(node.get("objectId"), str):
+            sink.add(node["objectId"])
+        for value in node.values():
+            _all_object_ids(value, sink)
+    elif isinstance(node, list):
+        for value in node:
+            _all_object_ids(value, sink)
+    return sink
+
+
+@mcp.tool(annotations=DESTRUCTIVE)
+def rename_element(presentation: str, renames: list[dict]) -> dict:
+    """Give slide elements readable ids (``yt_top_table``) — one batch, same look, same place.
+
+    Slides cannot change an objectId: each element is duplicated under the
+    new id, the original deleted, and the copy — which Google puts on top
+    of the slide — sent back to the original's place in the stacking order.
+    Readable ids make a « Liaisons » tab (element → spreadsheet range)
+    maintainable on a deck that was designed by hand. A Drive copy of the
+    deck (``clone_deck``) keeps the ids.
+
+    Only elements placed directly on a slide: an element inside a group is
+    refused (ungroup it first), and so is a group (its children would get
+    new random ids). Comments anchored to the element are lost; a linked
+    Sheets chart keeps its link.
+
+    Args:
+        renames: ``[{element, new_id}]``; ``new_id`` 5–50 chars, starts with
+            a letter or ``_``, ``[A-Za-z0-9_-]``, unused in the presentation.
+
+    Returns: ``{renamed: [{element, new_id, slide_id}], z_moves}``.
+
+    Example: ``rename_element(deck, [{"element": "g3f88324cdba_0_17", "new_id": "yt_top_table"}])``
+    """
+    if not renames:
+        raise ValueError("renames is empty: give [{element, new_id}]")
+    pid = parse_pres_id(presentation)
+    svc = slide_service()
+    pres = svc.presentations().get(presentationId=pid).execute()
+    used = _all_object_ids(pres, set())
+    top_level = {el["objectId"]: slide for slide in pres.get("slides", []) for el in slide.get("pageElements", [])}
+
+    olds: set[str] = set()
+    news: set[str] = set()
+    for n, r in enumerate(renames, 1):
+        old, new = r.get("element"), r.get("new_id")
+        if not old or not new:
+            raise ValueError(f"rename #{n} needs 'element' and 'new_id': {r!r}")
+        validate_object_id(new)
+        if old in olds or new in news:
+            raise ValueError(f"rename #{n}: {old!r} or {new!r} appears twice")
+        olds.add(old)
+        news.add(new)
+        if new in used:
+            raise ValueError(f"rename #{n}: {new!r} is already used in the presentation")
+        if old not in top_level:
+            el, _slide = find_element(pres, old)
+            if el is None:
+                raise ValueError(f"rename #{n}: element not found: {old!r}")
+            raise ValueError(f"rename #{n}: {old!r} is inside a group: ungroup it first, or keep its id")
+        el = next(e for e in top_level[old]["pageElements"] if e["objectId"] == old)
+        if "elementGroup" in el:
+            raise ValueError(f"rename #{n}: {old!r} is a group: its children would get new random ids")
+
+    reqs: list[dict] = []
+    order = {s["objectId"]: [e["objectId"] for e in s.get("pageElements", [])] for s in pres.get("slides", [])}
+    target = {sid: list(ids) for sid, ids in order.items()}
+    renamed = []
+    for r in renames:
+        old, new = r["element"], r["new_id"]
+        sid = top_level[old]["objectId"]
+        reqs.append({"duplicateObject": {"objectId": old, "objectIds": {old: new}}})
+        reqs.append({"deleteObject": {"objectId": old}})
+        order[sid].remove(old)
+        order[sid].append(new)  # Google puts the copy on top of the slide (verified live)
+        target[sid][target[sid].index(old)] = new
+        renamed.append({"element": old, "new_id": new, "slide_id": sid})
+    moves = 0
+    for sid, want in target.items():
+        current = order[sid]
+        for t, oid in enumerate(want):
+            if oid not in news:
+                continue
+            c = current.index(oid)
+            for _ in range(c - t):  # one element back per request
+                reqs.append({"updatePageElementsZOrder": {"pageElementObjectIds": [oid], "operation": "SEND_BACKWARD"}})
+            moves += c - t
+            current.insert(t, current.pop(c))
+    svc.presentations().batchUpdate(presentationId=pid, body={"requests": reqs}).execute()
+    return {"renamed": renamed, "z_moves": moves}
