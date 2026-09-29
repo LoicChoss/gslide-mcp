@@ -117,7 +117,10 @@ def _infer_topic(slide: dict) -> str:
 
     # Priority 1: alt_title on any element
     for el in elements:
-        alt = (el.get("title") or el.get("description") or "").strip()
+        desc = (el.get("description") or "").strip()
+        if desc.startswith("slot:"):
+            desc = ""  # an image slot's frame (draw / replace_images), not a topic
+        alt = (el.get("title") or "").strip() or desc
         if alt:
             return alt[:_TOPIC_MAX_CHARS]
 

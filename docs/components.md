@@ -313,6 +313,8 @@ table     x y w rows [col_w] [row_h] [header {fill, color, bold}] [banding]
           [first_col_bold] [align] [borders {color, weight, position} | null]
           [row_fills] [bold_rows] [size]
 image     x y w h  drive_file_id | url | asset [tint] [cover] [contain]
+          [slot [fit inside|crop] [slot_fill] [slot_line]]   slot: the box is the frame, the
+          picture can be swapped later with replace_images (empty = placeholder)
 ```
 
 `asset` is a name in the Drive assets folder or a local path (see

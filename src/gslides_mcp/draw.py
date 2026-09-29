@@ -18,9 +18,11 @@ Ops:
     table     x y w rows=[[…],…] [col_w] [row_h] [row_heights=[…]] [header] [banding] [first_col_bold]
               [align=[…]] [borders{color,weight}|None] [size] [style]
               [row_fills{i:color}] [bold_rows] [cell_fills{(i,j):color}] [cell_text_colors] [cell_runs{(i,j):runs}]
-    image     x y w h  drive_file_id | url | asset [tint] [cover] [contain]   (asset = name in the
+    image     x y w h  drive_file_id | url | asset [tint] [cover] [contain] [slot] [fit]   (asset = name in the
               Drive assets folder; cover crops the source to the box like object-fit: cover,
-              contain shrinks and centres the box to the source's aspect)
+              contain shrinks and centres the box to the source's aspect; slot keeps the box as
+              the element's frame — an empty-slot placeholder, the picture swapped in with fit
+              inside | crop — so replace_images can change it later)
 
 What the Slides API cannot do, and how ops cope: no freeform geometry, so
 polylines are straight segments, arcs are 1° thick-line chords, rings / pies
@@ -125,6 +127,25 @@ def _plan_shows(shares: list[tuple], plan: list[tuple]) -> bool:
         if want[k] != got[k]:
             return False
     return True
+
+
+SLOT_FRAME_PREFIX = "slot:"
+
+
+def slot_frame_text(x: float, y: float, w: float, h: float) -> str:
+    """Alt-text description recording an image slot's frame, in page points."""
+    return f"{SLOT_FRAME_PREFIX}{x:.1f},{y:.1f},{w:.1f},{h:.1f}"
+
+
+def parse_slot_frame(text: str | None) -> tuple[float, float, float, float] | None:
+    """The frame recorded by ``slot_frame_text``, or None."""
+    if not text or not text.startswith(SLOT_FRAME_PREFIX):
+        return None
+    try:
+        x, y, w, h = (float(v) for v in text[len(SLOT_FRAME_PREFIX):].split(","))
+    except ValueError:
+        return None
+    return (x, y, w, h) if w > 0 and h > 0 else None
 
 
 def _emu(pt: float) -> int:
@@ -608,7 +629,52 @@ class _Canvas:
                 "fields": "tableBorderFill,weight,dashStyle",
             }})
 
+    def _hex6(self, value) -> str:
+        c = self.theme.color(value)
+        return "{:02x}{:02x}{:02x}".format(*(round(c[k] * 255) for k in ("red", "green", "blue")))
+
+    def _drive_url(self, ref: str, tint=None) -> str:
+        if self.resolve_asset is None:
+            raise ValueError("image op with 'asset' or 'slot' needs an asset resolver (insert_component / draw provide one)")
+        resolved = self.resolve_asset(ref, tint)
+        file_id = resolved[0] if isinstance(resolved, tuple) else resolved
+        return f"https://drive.google.com/uc?export=view&id={file_id}"
+
+    def _slot(self, op: dict) -> None:
+        """An image created from an empty-slot placeholder with the box's exact aspect.
+
+        ``createImage`` fits a picture into the given size keeping *its* aspect, so a
+        picture placed directly would shrink the element to its own shape. The
+        placeholder has the box's aspect: the element's frame is the box, and the
+        real picture (``asset`` / ``url``) goes in with ``replaceImage``, which
+        keeps the frame — now and on every later replacement.
+        """
+        from .assets import slot_ref
+
+        oid = self.new_id()
+        x, y, w, h = op["x"], op["y"], op["w"], op["h"]
+        ref = slot_ref(w, h, self._hex6(op.get("slot_fill", "surface")), self._hex6(op.get("slot_line", "divider")))
+        self.reqs.append({"createImage": {
+            "objectId": oid, "url": self._drive_url(ref),
+            "elementProperties": _elem_props(self.page, x + self.ox, y + self.oy, w, h),
+        }})
+        # CENTER_INSIDE shrinks the element to the picture: the frame is kept in the alt text,
+        # and every replace_images puts it back before swapping the picture
+        self.reqs.append({"updatePageElementAltText": {
+            "objectId": oid, "description": slot_frame_text(x + self.ox, y + self.oy, w, h),
+        }})
+        self.ids.append(oid)
+        source = self._drive_url(str(op["asset"]), op.get("tint")) if op.get("asset") else op.get("url")
+        if source:
+            self.reqs.append({"replaceImage": {
+                "imageObjectId": oid, "url": source,
+                "imageReplaceMethod": "CENTER_CROP" if op.get("fit") == "crop" else "CENTER_INSIDE",
+            }})
+
     def image(self, op: dict) -> None:
+        if op.get("slot"):
+            self._slot(op)
+            return
         oid = self.new_id()
         natural = None  # (w, h) of the source when the resolver knows it
         if op.get("asset"):

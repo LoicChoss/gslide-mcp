@@ -443,3 +443,63 @@ def test_partial_ring_without_an_exact_plan_falls_back_to_spokes():
     reqs, _ = _run([{"op": "ring", "cx": 50, "cy": 50, "r": 40, "thickness": 10, "start": 180, "span": 180,
                      "segments": [{"value": 120, "color": "mint"}, {"value": 50, "color": "navy"}, {"value": 10, "color": "#F2F4F4"}]}])
     assert _of(reqs, "createLine") and not _arcs(reqs)[0]
+
+
+# --- image slots -------------------------------------------------------------------
+
+SLOT_COLOURS = {"slot_fill": "#F2F4F4", "slot_line": "#C8D0D0"}
+
+
+def test_image_slot_without_a_picture_is_the_placeholder_at_the_exact_box():
+    seen = []
+
+    def resolve(name, tint=None):
+        seen.append(name)
+        return "fid_" + name.replace(":", "_"), (400, 224)
+
+    reqs, ids = draw.ops_to_requests("s", [{"op": "image", "x": 10, "y": 20, "w": 100, "h": 56, "slot": True,
+                                            **SLOT_COLOURS}], THEME, resolve_asset=resolve)
+    (create,) = _of(reqs, "createImage")
+    assert seen == ["slot:400x224:f2f4f4:c8d0d0"]
+    assert create["url"].endswith("id=fid_slot_400x224_f2f4f4_c8d0d0")
+    size = create["elementProperties"]["size"]
+    assert size["width"]["magnitude"] == 100 * PT and size["height"]["magnitude"] == 56 * PT
+    assert not _of(reqs, "replaceImage") and ids == [create["objectId"]]
+    (alt,) = _of(reqs, "updatePageElementAltText")
+    assert alt == {"objectId": create["objectId"], "description": "slot:10.0,20.0,100.0,56.0"}
+    assert draw.parse_slot_frame(alt["description"]) == (10.0, 20.0, 100.0, 56.0)
+
+
+def test_image_slot_with_a_picture_swaps_it_in_and_keeps_the_frame():
+    resolve = lambda name, tint=None: ("fid_" + name, (10, 10))  # noqa: E731
+    reqs, _ = draw.ops_to_requests("s", [{"op": "image", "x": 0, "y": 0, "w": 100, "h": 56, "slot": True,
+                                          "asset": "post-video", "fit": "crop", **SLOT_COLOURS}], THEME, resolve_asset=resolve)
+    (create,) = _of(reqs, "createImage")
+    (swap,) = _of(reqs, "replaceImage")
+    assert swap == {"imageObjectId": create["objectId"], "imageReplaceMethod": "CENTER_CROP",
+                    "url": "https://drive.google.com/uc?export=view&id=fid_post-video"}
+    reqs, _ = draw.ops_to_requests("s", [{"op": "image", "x": 0, "y": 0, "w": 100, "h": 56, "slot": True,
+                                          "url": "https://x/y.png", **SLOT_COLOURS}], THEME, resolve_asset=resolve)
+    assert _of(reqs, "replaceImage")[0]["imageReplaceMethod"] == "CENTER_INSIDE"
+    assert _of(reqs, "replaceImage")[0]["url"] == "https://x/y.png"
+
+
+def test_image_slot_needs_an_asset_resolver():
+    with pytest.raises(ValueError, match="resolver"):
+        draw.ops_to_requests("s", [{"op": "image", "x": 0, "y": 0, "w": 10, "h": 10, "slot": True, **SLOT_COLOURS}], THEME)
+
+
+def test_slot_frame_text_round_trips_and_rejects_other_alt_texts():
+    assert draw.parse_slot_frame(draw.slot_frame_text(1, 2.25, 30, 40)) == (1.0, 2.2, 30.0, 40.0)
+    for text in (None, "", "Logo du client", "slot:1,2,3", "slot:1,2,0,4", "slot:a,b,c,d"):
+        assert draw.parse_slot_frame(text) is None
+
+
+def test_summarize_topic_skips_slot_frames():
+    from gslides_mcp.tools.library import _infer_topic
+
+    slide = {"pageElements": [
+        {"objectId": "img", "description": "slot:1.0,2.0,3.0,4.0", "image": {}},
+        {"objectId": "t", "description": "Bilan Meta", "shape": {}},
+    ]}
+    assert _infer_topic(slide) == "Bilan Meta"

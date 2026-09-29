@@ -21,7 +21,7 @@ Origin: Loïc's Apps Script bilan updater (tables from ranges with Sheets format
 
 ## API behaviours to verify live (each task says where)
 
-- V1: `replaceImage` in the same batch right after `createImage` keeps the created box (slot frame).
+- V1 (verified 2026-09-30 on the test deck): `replaceImage` works in the same batch right after `createImage`. `createImage` shrinks the element to the picture's aspect (`screen-demo` in 300 × 100 → 177.5 × 100), hence the placeholder at the box's aspect. After `replaceImage` the element's `size` is the new picture's natural size: CENTER_CROP keeps the frame (non-uniform scale + crop), CENTER_INSIDE shrinks the element to the picture (uniform scale, centred — 100 × 100 → 100 × 56.3). Restoring the frame's transform just before a CENTER_INSIDE replacement gives the frame back exactly. So a slot stores its frame in its alt-text description (`slot:x,y,w,h`, pt) and every replacement restores it first.
 - V2: where `duplicateObject` puts the copy in the z-order (on top, or just above the original).
 - V3: whether `insertTableRows` copies the reference row's cell fill and text style.
 - V4: `spreadsheets.get` with `ranges` + `includeGridData` works with the `drive` scope, locally and hosted.
@@ -53,14 +53,14 @@ Live checks use the pattern in memory « live-test-via-connector »: repo code r
 
 ### Task 4: `draw` image slots
 - Modify: `src/gslides_mcp/draw.py` (image op), `docs/components.md` (ops list)
-- Behaviour: an image op with `slot: true` is created from the slot placeholder of its exact box (fill `surface`, line `divider`, overridable with `slot_fill` / `slot_line`), so the element's frame is the box whatever picture comes later; when the op also has `asset` / `url`, a `replaceImage` in the same batch puts the picture in with `fit` (`inside` → CENTER_INSIDE, default; `crop` → CENTER_CROP). Without a source the placeholder stays: an empty slot that `replace_images` can fill later.
-- Test: `tests/test_draw.py` — slot without source: one createImage from the slot asset; with source: createImage then replaceImage on the same id with the right method.
+- Behaviour: an image op with `slot: true` is created from the slot placeholder of its exact box (fill `surface`, line `divider`, overridable with `slot_fill` / `slot_line`), so the element's frame is the box; its alt-text description records the frame (`slot:x,y,w,h`, page pt); when the op also has `asset` / `url`, a `replaceImage` in the same batch puts the picture in with `fit` (`inside` → CENTER_INSIDE, default; `crop` → CENTER_CROP). Without a source the placeholder stays: an empty slot that `replace_images` can fill later. `summarize_deck` ignores `slot:` alt texts when it guesses a slide's topic.
+- Test: `tests/test_draw.py` — slot without source: one createImage from the slot asset and the alt text with the frame; with source: then replaceImage on the same id with the right method; `summarize_deck` topic skips `slot:`.
 - Live check V1 on the test deck (create the test deck here: « gslides-mcp · test bilan sync · 2026-09 », plus its spreadsheet, in the same Drive folder).
 - Commit: `feat(draw): image slots keep their frame and take any picture later`
 
 ### Task 5: `replace_images`
 - Modify: `src/gslides_mcp/tools/images.py`; `tests/test_annotations.py` (IDEMPOTENT)
-- Behaviour: new tool `replace_images(presentation, images=[{element, source, fit?}])`, one batch of `replaceImage`: the element keeps its id, frame, z-order and alt text. `source` is a URL (http/https, ≤ 2 kB, checked to serve PNG / JPEG / GIF with the existing raster probe), an assets-folder name or `drive:<id>`; empty or null puts the slot placeholder back (sized from the element's frame). Refuses an element that is not an image (a shape or table: say to re-insert it as a slot), a duplicate element, an unreachable or non-raster URL — all before writing, naming the element.
+- Behaviour: new tool `replace_images(presentation, images=[{element, source, fit?}])`, one batch: for each image, its frame (the `slot:` alt text when the current box still sits inside it, else the current box, then recorded in the alt text) is restored with `updatePageElementTransform` when the box differs, then `replaceImage` — the element keeps its id, frame and z-order, month after month, even with CENTER_INSIDE. A rotated or sheared element is replaced without restoring (reported). `source` is a URL (http/https, ≤ 2 kB, checked to serve PNG / JPEG / GIF with the existing raster probe), an assets-folder name or `drive:<id>`; empty or null puts the slot placeholder back (sized from the element's frame). Refuses an element that is not an image (a shape or table: say to re-insert it as a slot), a duplicate element, an unreachable or non-raster URL — all before writing, naming the element.
 - Test: `tests/test_images.py` (new) — requests per source kind; empty source → slot asset with CENTER_CROP; refusals send nothing (raster probe monkeypatched).
 - Commit: `feat(images): replace_images swaps pictures and keeps each element`
 
