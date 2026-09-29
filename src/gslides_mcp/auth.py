@@ -242,3 +242,8 @@ def slide_service():
 def drive_service():
     """Shortcut: googleapiclient discovery Resource for drive v3."""
     return client().drive_service
+
+
+def sheets_service():
+    """Shortcut: googleapiclient discovery Resource for sheets v4 (read-only use; the drive scope covers it)."""
+    return client().sheet_service

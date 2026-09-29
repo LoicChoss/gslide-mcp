@@ -291,6 +291,59 @@ class _FakeDriveReplies:
         return self.d._call("replies.create", r, fileId=fileId, commentId=commentId, body=body, fields=fields)
 
 
+# --- Sheets ---------------------------------------------------------------
+
+class FakeSheets:
+    """spreadsheets.get with includeGridData: canned responses keyed by the requested range."""
+
+    def __init__(self):
+        self.calls: list[dict] = []
+        self.responses: dict[str, dict] = {}
+
+    def spreadsheets(self):
+        return _FakeSpreadsheets(self)
+
+
+class _FakeSpreadsheets:
+    def __init__(self, s): self.s = s
+    def get(self, spreadsheetId, ranges=None, includeGridData=None, fields=None):
+        self.s.calls.append({"spreadsheetId": spreadsheetId, "ranges": ranges, "includeGridData": includeGridData})
+        rng = (ranges or [""])[0]
+        if rng not in self.s.responses:
+            return _Exec(error=make_http_error(400, f"Unable to parse range: {rng}"))
+        return _Exec(self.s.responses[rng])
+
+
+def cell(text="", number=None, fill=None, color=None, bold=False, italic=False, h=None, font="Arial", size=10):
+    """One CellData as spreadsheets.get returns it (effective format always present)."""
+    v: dict = {"formattedValue": text} if text != "" else {}
+    if number is not None:
+        v["effectiveValue"] = {"numberValue": number}
+    elif text:
+        v["effectiveValue"] = {"stringValue": text}
+    fmt: dict = {"backgroundColor": fill or {"red": 1, "green": 1, "blue": 1},
+                 "textFormat": {"foregroundColor": color or {}, "bold": bold, "italic": italic,
+                                "fontFamily": font, "fontSize": size}}
+    if h:
+        fmt["horizontalAlignment"] = h
+    v["effectiveFormat"] = fmt
+    return v
+
+
+def grid_response(rows, start=(0, 0), title="Données", merges=(), theme=None):
+    """A spreadsheets.get response for one range: rows of CellData, optional merges (absolute GridRanges)."""
+    resp: dict = {"sheets": [{
+        "properties": {"title": title, "sheetId": 7},
+        "merges": [dict(m, sheetId=7) for m in merges],
+        "data": [{"startRow": start[0], "startColumn": start[1],
+                  "rowData": [{"values": list(r)} for r in rows]}],
+    }]}
+    if theme:
+        resp["properties"] = {"spreadsheetTheme": {"themeColors": [
+            {"colorType": k, "color": {"rgbColor": v}} for k, v in theme.items()]}}
+    return resp
+
+
 # --- fixtures -------------------------------------------------------------
 
 def _patch_everywhere(monkeypatch, name: str, value) -> None:
@@ -338,3 +391,13 @@ def fake_download(monkeypatch):
 
     monkeypatch.setattr(qa, "_download_to", _fake)
     return urls
+
+
+@pytest.fixture
+def fake_sheets(monkeypatch) -> FakeSheets:
+    import gslides_mcp.sheets_source as source
+
+    sh = FakeSheets()
+    monkeypatch.setattr(source, "sheets_service", lambda: sh)
+    _patch_everywhere(monkeypatch, "sheets_service", lambda: sh)
+    return sh
