@@ -123,6 +123,20 @@ def _loc(cell) -> dict:
     return {"cellLocation": {"rowIndex": cell[0], "columnIndex": cell[1]}} if cell else {}
 
 
+def covered_cells(table: dict) -> dict[tuple[int, int], tuple[int, int]]:
+    """Cells hidden by a merge → the head cell that holds their text."""
+    out: dict[tuple[int, int], tuple[int, int]] = {}
+    for i, row in enumerate(table.get("tableRows", [])):
+        for j, cell in enumerate(row.get("tableCells", [])):
+            loc = cell.get("location") or {}
+            r, c = loc.get("rowIndex", i), loc.get("columnIndex", j)
+            for a in range(r, r + cell.get("rowSpan", 1)):
+                for b in range(c, c + cell.get("columnSpan", 1)):
+                    if (a, b) != (r, c):
+                        out[(a, b)] = (r, c)
+    return out
+
+
 def _cell_text(table: dict, r: int, c: int) -> dict | None:
     try:
         return table["tableRows"][r]["tableCells"][c].get("text") or {}
@@ -218,7 +232,9 @@ def refill_text(presentation: str, edits: list[dict], up_color: str | None = Non
 
     Args:
         edits: ``{element, text}`` for a shape (text box, placeholder, card),
-            ``{element, row, column, text}`` for a table cell (0-based).
+            ``{element, row, column, text}`` for a table cell (0-based; a
+            cell hidden by a merge is refused, write its head cell; ``""``
+            leaves a styled space so the row keeps its height).
             Plain text, ``\\n`` for a new line; no markdown (use
             ``write_text_markdown`` for bold parts). Optional ``delta``:
             ``"auto"`` (default, as above), ``true`` (colour by sign
@@ -269,6 +285,9 @@ def refill_text(presentation: str, edits: list[dict], up_color: str | None = Non
             n_r, n_c = el["table"].get("rows", 0), el["table"].get("columns", 0)
             if not (0 <= r < n_r and 0 <= c < n_c):
                 raise ValueError(f"edit #{n + 1}: cell ({r}, {c}) is outside table {oid} ({n_r}x{n_c}, 0-based)")
+            head = covered_cells(el["table"]).get((r, c))
+            if head:
+                raise ValueError(f"edit #{n + 1}: cell ({r}, {c}) of {oid} is merged into {head}: write that cell instead")
             text = _cell_text(el["table"], r, c)
             if text is None:
                 raise ValueError(f"edit #{n + 1}: cell ({r}, {c}) of {oid} is merged into another cell")
@@ -316,6 +335,8 @@ def refill_text(presentation: str, edits: list[dict], up_color: str | None = Non
     report = []
     for e, oid, el, cell, text, delta in resolved:
         new = str(e["text"])
+        if cell and not new:
+            new = " "  # an empty cell falls back to Slides' 18 pt default paragraph and its row grows
         loc = _loc(cell)
         style = first_style(text)
         style_from = "self"

@@ -135,6 +135,24 @@ def test_refill_empty_text_only_clears(deck):
     assert [next(iter(r)) for r in deck.batches[0]] == ["deleteText"]
 
 
+def test_refill_empty_cell_keeps_a_styled_space(deck):
+    # an empty cell falls back to Slides' 18 pt default paragraph and its row grows
+    refill.refill_text("PRES1", [{"element": "tbl_b", "row": 1, "column": 1, "text": ""}])
+    batch = deck.batches[0]
+    assert [next(iter(r)) for r in batch][:3] == ["deleteText", "insertText", "updateTextStyle"]
+    assert _by_kind(batch, "insertText")[0]["text"] == " "
+    assert _by_kind(batch, "updateTextStyle")[0]["style"] == {"fontSize": {"magnitude": 9, "unit": "PT"}}
+
+
+def test_refill_refuses_a_cell_covered_by_a_merge(deck, pres):
+    rows = pres["slides"][2]["pageElements"][0]["table"]["tableRows"]
+    rows[1]["tableCells"][0]["rowSpan"] = 2  # « Google » now covers (2, 0)
+    with pytest.raises(ValueError, match=r"merged into \(1, 0\)"):
+        refill.refill_text("PRES1", [{"element": "tbl_b", "row": 2, "column": 0, "text": "x"}])
+    assert deck.batches == []
+    assert refill.covered_cells(pres["slides"][2]["pageElements"][0]["table"]) == {(2, 0): (1, 0)}
+
+
 @pytest.mark.parametrize("edit, match", [
     ({"element": "nope", "text": "x"}, "not found"),
     ({"element": "tbl_b", "text": "x"}, "row and column"),
