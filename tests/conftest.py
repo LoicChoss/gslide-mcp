@@ -299,13 +299,26 @@ class FakeSheets:
     def __init__(self):
         self.calls: list[dict] = []
         self.responses: dict[str, dict] = {}
+        self.values: dict[str, list[list[str]]] = {}  # range -> formatted values, for values.batchGet
 
     def spreadsheets(self):
         return _FakeSpreadsheets(self)
 
 
+class _FakeValues:
+    def __init__(self, s): self.s = s
+    def batchGet(self, spreadsheetId, ranges=None, valueRenderOption=None, majorDimension=None):
+        self.s.calls.append({"spreadsheetId": spreadsheetId, "batchGet": list(ranges or [])})
+        missing = [r for r in ranges or [] if r not in self.s.values]
+        if missing:
+            return _Exec(error=make_http_error(400, f"Unable to parse range: {missing[0]}"))
+        return _Exec({"valueRanges": [{"range": r, "values": self.s.values[r]} for r in ranges]})
+
+
 class _FakeSpreadsheets:
     def __init__(self, s): self.s = s
+    def values(self):
+        return _FakeValues(self.s)
     def get(self, spreadsheetId, ranges=None, includeGridData=None, fields=None):
         self.s.calls.append({"spreadsheetId": spreadsheetId, "ranges": ranges, "includeGridData": includeGridData})
         rng = (ranges or [""])[0]

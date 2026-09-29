@@ -75,6 +75,28 @@ def _cell(v: dict, theme: dict[str, dict]) -> dict:
     }
 
 
+def read_values(spreadsheet: str, ranges: list[str]) -> list[list[list[str]]]:
+    """Displayed values of several ranges in one call (``values.batchGet``), in the order asked.
+
+    Enough for texts, image sources and tables that keep the deck's look;
+    ``read_cells`` adds the formats when the sheet's look is wanted.
+    """
+    if not ranges:
+        return []
+    resp = sheets_service().spreadsheets().values().batchGet(
+        spreadsheetId=spreadsheet_id(spreadsheet), ranges=list(ranges),
+        valueRenderOption="FORMATTED_VALUE", majorDimension="ROWS",
+    ).execute()
+    return [[[str(v) for v in row] for row in vr.get("values", [])] for vr in resp.get("valueRanges", [])]
+
+
+def as_cells(values: list[list[str]]) -> dict:
+    """A ``read_values`` grid in ``read_cells``'s shape (text only), padded to the widest row."""
+    width = max((len(r) for r in values), default=0)
+    return {"rows": [[{"text": v} for v in r] + [{"text": ""} for _ in range(width - len(r))] for r in values],
+            "merges": []}
+
+
 def read_cells(spreadsheet: str, rng: str) -> dict:
     """The range's cells as ``{sheet, rows: [[cell, …], …], merges: [(r, c, rs, cs)]}``.
 
