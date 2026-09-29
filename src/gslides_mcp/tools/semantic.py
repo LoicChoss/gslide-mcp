@@ -73,8 +73,9 @@ def swap_client(
         2. Run any ``extra_pairs`` (e.g. team-size swaps, industry vocab) in
            the same batchUpdate.
         3. If ``new_logo_url`` is provided, find the old client's logo on the
-           cover (and any ``logo_slides`` you list), delete it, insert the
-           new logo at the same geometry. Picks the smallest-area image
+           cover (and any ``logo_slides`` you list) and swap the picture in
+           place (``replace_images``): same element, frame and stacking
+           order, the new logo fitted inside. Picks the smallest-area image
            element on each target slide whose width/height match a
            "logo-shaped" footprint (small, near a corner) — the cover hero
            image and section-divider photography are left alone.
@@ -148,47 +149,23 @@ def swap_client(
         normalized = [last_idx if s == "-1" else s for s in logo_slides]
         target_sids = resolve_slide_ids(svc, pid, normalized)
 
+        from .images import replace_images  # images imports this module: import here
+
+        found = []
         for sid in target_sids:
             slide = next(s for s in pres["slides"] if s["objectId"] == sid)
             logo_el = _find_logo_element(slide)
             if not logo_el:
                 logo_swaps.append({"slide": sid, "swapped": False, "reason": "no logo-shaped image found"})
                 continue
-            geom = _element_geometry_pt(logo_el)
-            # Delete old, insert new at same geometry (text/title preserved
-            # only on shape elements; images don't carry alt-title here)
-            svc.presentations().batchUpdate(
-                presentationId=pid,
-                body={"requests": [
-                    {"deleteObject": {"objectId": logo_el["objectId"]}},
-                    {"createImage": {
-                        "url": new_logo_url,
-                        "elementProperties": {
-                            "pageObjectId": sid,
-                            "size": {
-                                "width": {"magnitude": geom["w_emu"], "unit": "EMU"},
-                                "height": {"magnitude": geom["h_emu"], "unit": "EMU"},
-                            },
-                            "transform": {
-                                "scaleX": 1, "scaleY": 1,
-                                "translateX": geom["x_emu"], "translateY": geom["y_emu"],
-                                "unit": "EMU",
-                            },
-                        },
-                    }},
-                ]},
-            ).execute()
-            logo_swaps.append({
-                "slide": sid,
-                "swapped": True,
-                "deleted_id": logo_el["objectId"],
-                "geometry_pt": {
-                    "x": round(geom["x_emu"] / PT_TO_EMU, 1),
-                    "y": round(geom["y_emu"] / PT_TO_EMU, 1),
-                    "w": round(geom["w_emu"] / PT_TO_EMU, 1),
-                    "h": round(geom["h_emu"] / PT_TO_EMU, 1),
-                },
-            })
+            found.append((sid, logo_el))
+        if found:
+            # in place: same element, id, frame and stacking order (the frame is kept for the next swap)
+            done = replace_images(pid, [{"element": el["objectId"], "source": new_logo_url} for _sid, el in found])
+            for (sid, el), entry in zip(found, done["replaced"]):
+                x, y, w, h = entry["frame"]
+                logo_swaps.append({"slide": sid, "swapped": True, "element": el["objectId"],
+                                   "geometry_pt": {"x": x, "y": y, "w": w, "h": h}})
 
     # 4: optional Drive rename
     drive_renamed = False
