@@ -10,12 +10,15 @@ needed afterwards.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import os
+import tempfile
 
 from googleapiclient.http import MediaFileUpload
 
 from ..app import ADDITIVE, mcp
-from ..auth import drive_service, slide_service
+from ..auth import drive_service, remote_mode, slide_service
 from ..util import PT_TO_EMU, parse_pres_id, resolve_slide_ids, validate_object_id
 
 _MAX_BYTES = 50 * 1024 * 1024  # Slides API limit for image sources
@@ -49,12 +52,13 @@ def _sniff(path: str) -> str:
 def insert_image_local(
     presentation: str,
     slide: str,
-    path: str,
-    x_pt: float,
-    y_pt: float,
-    width_pt: float,
-    height_pt: float,
+    path: str = "",
+    x_pt: float = 0,
+    y_pt: float = 0,
+    width_pt: float = 100,
+    height_pt: float = 100,
     object_id: str | None = None,
+    image_base64: str | None = None,
 ) -> dict:
     """Insert a local image file (PNG, JPEG, GIF; ≤ 50 MB) on a slide.
 
@@ -65,7 +69,9 @@ def insert_image_local(
 
     Args:
         slide: 1-based index or objectId.
-        path: local file path.
+        path: local file path (not available on the hosted server).
+        image_base64: the image bytes, base64-encoded, instead of ``path``;
+            the only way to send a file to the hosted server.
         x_pt, y_pt, width_pt, height_pt: geometry in points.
         object_id: optional custom element objectId (5–50 chars).
 
@@ -75,7 +81,46 @@ def insert_image_local(
     Example: ``insert_image_local(deck, 2, "~/Downloads/logo.png", 40, 40, 120, 60)``
     """
     validate_object_id(object_id)
-    path = os.path.expanduser(path)
+    if image_base64:
+        tmp = _write_base64(image_base64)
+        try:
+            return _insert_file(presentation, slide, tmp, x_pt, y_pt, width_pt, height_pt, object_id)
+        finally:
+            os.unlink(tmp)
+    if remote_mode():
+        # A path would name a file on the server, not on the caller's machine.
+        raise ValueError("on the hosted server, send the image as image_base64 (path is not accepted)")
+    if not path:
+        raise ValueError("pass path or image_base64")
+    return _insert_file(
+        presentation, slide, os.path.expanduser(path), x_pt, y_pt, width_pt, height_pt, object_id
+    )
+
+
+def _write_base64(data: str) -> str:
+    """Decode base64 image bytes into a temporary file; returns its path."""
+    if len(data) > _MAX_BYTES * 4 // 3 + 4:
+        raise ValueError("image_base64 is over 50 MB; Slides accepts images up to 50 MB")
+    try:
+        raw = base64.b64decode(data.split(",", 1)[-1] if data.startswith("data:") else data, validate=True)
+    except (binascii.Error, ValueError):
+        raise ValueError("image_base64 is not valid base64") from None
+    fd, tmp = tempfile.mkstemp(prefix="gslides_upload_")
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(raw)
+    return tmp
+
+
+def _insert_file(
+    presentation: str,
+    slide: str,
+    path: str,
+    x_pt: float,
+    y_pt: float,
+    width_pt: float,
+    height_pt: float,
+    object_id: str | None,
+) -> dict:
     mime = _sniff(path)
     pid = parse_pres_id(presentation)
     svc = slide_service()

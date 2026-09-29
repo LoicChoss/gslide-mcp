@@ -15,7 +15,7 @@ import uuid
 from collections import Counter
 
 from googleapiclient.errors import HttpError
-from mcp.server.fastmcp import Image
+from fastmcp.utilities.types import Image
 
 from ..app import ADDITIVE, DESTRUCTIVE, READ_ONLY, mcp
 from ..auth import slide_service

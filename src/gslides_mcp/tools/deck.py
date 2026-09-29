@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..app import ADDITIVE, DESTRUCTIVE, READ_ONLY, mcp
-from ..auth import slide_service, drive_service
+from ..auth import remote_mode, slide_service, drive_service
 from ..util import parse_pres_id, emu_to_pt
 
 
@@ -309,6 +309,10 @@ def _resolve_slide_index(pres: dict, slide: str) -> int:
 def export_pres(presentation: str, format: str = "pptx") -> dict:
     """Export the presentation via Drive. Returns local file path.
 
+    On the hosted server the file would land on the server, so this returns
+    ``url`` instead: a Google download link that works for anyone who can
+    open the deck, signed in to their browser.
+
     Args:
         format: 'pptx' or 'pdf'.
     """
@@ -322,6 +326,8 @@ def export_pres(presentation: str, format: str = "pptx") -> dict:
     }
     if format not in mime:
         raise ValueError(f"format must be pptx or pdf, got {format!r}")
+    if remote_mode():
+        return {"url": f"https://docs.google.com/presentation/d/{pid}/export/{format}", "format": format}
 
     drv = drive_service()
     req = drv.files().export_media(fileId=pid, mimeType=mime[format])

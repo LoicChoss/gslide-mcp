@@ -1,0 +1,21 @@
+# Only pyproject, uv.lock, README, LICENSE and src/ go into the image.
+# Credentials must never reach the build context.
+apikey/
+token.json
+credentials*.json
+appscript_url
+.env
+.env.*
+
+.git/
+.github/
+.venv/
+**/__pycache__/
+.pytest_cache/
+dist/
+tests/
+docs/
+examples/
+scripts/
+assets/
+appscript/

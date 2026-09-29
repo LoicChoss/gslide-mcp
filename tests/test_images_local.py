@@ -95,3 +95,29 @@ def test_delete_failure_but_permission_revoked(fake_slides, fake_drive, png):
     assert out["drive_file_id"] == "drive_file_1"
     assert "no longer public" in out["warning"]
     assert ("permissions.delete", {"fileId": "drive_file_1", "permissionId": "anyoneWithLink"}) in fake_drive.calls
+
+
+def test_base64_image_goes_through_a_temp_file_that_is_removed(fake_slides, fake_drive, png, monkeypatch):
+    import base64
+    import os
+
+    made = []
+    real = images._write_base64
+    monkeypatch.setattr(images, "_write_base64", lambda d: made.append(real(d)) or made[-1])
+    data = base64.b64encode(open(png, "rb").read()).decode()
+    out = images.insert_image_local("PRES1", "1", image_base64=data, width_pt=10, height_pt=10)
+    assert out["mime_type"] == "image/png"
+    assert _names(fake_drive) == ["files.create", "permissions.create", "files.delete"]
+    assert made and not os.path.exists(made[0])
+
+
+def test_hosted_server_never_reads_a_server_path(fake_slides, fake_drive, png, monkeypatch):
+    monkeypatch.setenv("GSLIDES_MCP_TRANSPORT", "http")
+    with pytest.raises(ValueError, match="image_base64"):
+        images.insert_image_local("PRES1", "1", png, width_pt=10, height_pt=10)
+    assert fake_drive.calls == []
+
+
+def test_invalid_base64_is_refused(fake_slides, fake_drive):
+    with pytest.raises(ValueError, match="not valid base64"):
+        images.insert_image_local("PRES1", "1", image_base64="***", width_pt=10, height_pt=10)

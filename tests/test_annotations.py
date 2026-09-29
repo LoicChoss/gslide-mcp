@@ -1,5 +1,7 @@
 """Every tool carries MCP annotations; the hints match what the tool does."""
 
+import asyncio
+
 import pytest
 
 import gslides_mcp.tools  # noqa: F401  — registers the tools
@@ -22,7 +24,7 @@ IDEMPOTENT = [
 
 
 def _annotations():
-    return {t.name: t.annotations for t in mcp._tool_manager.list_tools()}
+    return {t.name: t.annotations for t in asyncio.run(mcp.list_tools())}
 
 
 def test_every_tool_is_annotated():

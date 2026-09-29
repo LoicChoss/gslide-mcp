@@ -28,6 +28,7 @@ dependencies = [
     "pydantic>=2",
     "Pillow>=10",
     "certifi",
+    "fastmcp>=3.4,<4",
 ]
 
 [project.urls]
@@ -40,3 +41,8 @@ gslides-mcp = "gslides_mcp.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/gslides_mcp"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

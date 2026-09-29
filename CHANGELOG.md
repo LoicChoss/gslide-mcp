@@ -2,6 +2,18 @@
 
 All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/) (0.x: minor bumps may change tool signatures).
 
+## [Unreleased]
+
+### Added
+
+- **Hosted, multi-user mode** ([docs/hosting.md](docs/hosting.md)): `GSLIDES_MCP_TRANSPORT=http` serves streamable HTTP at `/mcp`; the server runs the OAuth flow itself (Google, Web application client) so a person only adds the URL in Claude and signs in with their Google account. Every call uses that person's token; there is no fallback to a token on disk. `Dockerfile` and a CI/CD workflow (tests, GHCR image, Coolify redeploy).
+- Cross-deck copy through `scripts.run` (`GSLIDES_MCP_APPSCRIPT_ID`, script 0.5 `api()`), running as the caller; the hosted server refuses the web app, which runs as its deployer.
+- `insert_image_local`: `image_base64`. On the hosted server `path` is refused and `export_pres` returns a Google download `url`.
+
+### Changed
+
+- Built on `fastmcp` 3; sync tools run in a thread pool, so each thread keeps its own API clients (httplib2 is not thread-safe) and token.json is read once.
+
 ## [0.7.0] — 2026-09-25
 
 ### Added

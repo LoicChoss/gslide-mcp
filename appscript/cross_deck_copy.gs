@@ -22,13 +22,41 @@
  *
  * Subsequent edits to this file: re-deploy via Manage Deployments → edit →
  * new version. The URL stays the same.
+ *
+ * Hosted, multi-user server (GSLIDES_MCP_TRANSPORT=http): deploy as an
+ * API executable instead, so each copy runs as the signed-in user:
+ *   1. Project Settings → Google Cloud Platform (GCP) project → Change
+ *      project → the number of the project that holds the server's OAuth
+ *      client (the Apps Script API must be enabled there).
+ *   2. Deploy → New deployment → type: API executable → Who has access:
+ *      Anyone within <your domain>.
+ *   3. Project Settings → copy the Script ID and set
+ *      GSLIDES_MCP_APPSCRIPT_ID=<script id> on the server.
+ * The server then calls api() through scripts.run with the user's token.
  */
 
-var VERSION = "0.4";
+var VERSION = "0.5";
 
 // Successful copy results are remembered for this long, keyed by the
 // caller's requestId, so a replayed request returns the same answer.
 var REPLAY_CACHE_SECONDS = 21600; // 6h, the CacheService maximum
+
+/**
+ * Entry point for scripts.run (API executable). Same ops as doPost, but the
+ * result is returned as-is and the script runs as the calling user.
+ */
+function api(body) {
+  body = body || {};
+  var op = body.op || "copy";
+  if (op === "copy") {
+    return _replaySafe_(body.requestId, function () {
+      return copySlide_(body);
+    });
+  } else if (op === "ping") {
+    return {ok: true, version: VERSION};
+  }
+  throw new Error("unknown op: " + op);
+}
 
 function doPost(e) {
   try {
@@ -64,8 +92,8 @@ function _replaySafe_(requestId, fn) {
     return fn();
   }
   var key = "req:" + String(requestId).slice(0, 64);
-  var cache = CacheService.getScriptCache();
-  var lock = LockService.getScriptLock();
+  var cache = CacheService.getUserCache();
+  var lock = LockService.getUserLock(); // per user: one person's copies queue, not the team's
   lock.waitLock(60000); // a replay may arrive while the first run is still going
   try {
     var hit = cache.get(key);

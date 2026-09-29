@@ -8,6 +8,9 @@ On first run (no token.json), an interactive OAuth browser flow is launched.
 The resulting token is saved to <cred_dir>/token.json (mode 0o600) and reused
 on subsequent starts (with automatic refresh when expired).
 
+Over HTTP (``GSLIDES_MCP_TRANSPORT=http``) there is no token.json: each request
+carries the signed-in user's Google token and the client is built from it.
+
 All user-facing messages go to sys.stderr — stdout is the JSON-RPC channel.
 """
 
@@ -16,6 +19,8 @@ from __future__ import annotations
 import functools
 import os
 import sys
+import threading
+from collections import OrderedDict
 from pathlib import Path
 
 from gslides_api.client import GoogleAPIClient
@@ -143,25 +148,90 @@ def _load_or_refresh_creds(cred_directory: Path):
     return creds
 
 
-@functools.lru_cache(maxsize=1)
-def client() -> GoogleAPIClient:
-    """Persistent factory client. Holds OAuth + slide/drive Resources.
+def remote_mode() -> bool:
+    """True when the server runs over HTTP for several users (``GSLIDES_MCP_TRANSPORT=http``)."""
+    return os.environ.get("GSLIDES_MCP_TRANSPORT", "stdio").lower() == "http"
 
-    First call may take ~1s (OAuth refresh + service build). Subsequent calls
-    return the cached client instantly.
+
+def request_token() -> str | None:
+    """Google access token of the user behind the current HTTP request, if any.
+
+    The OAuth proxy swaps the token Claude holds for the user's upstream Google
+    token (refreshing it when needed), so this is always a live Google token.
     """
-    d = cred_dir()
+    from fastmcp.server.dependencies import get_access_token
 
+    tok = get_access_token()
+    return tok.token if tok is not None else None
+
+
+# googleapiclient Resources sit on httplib2, which is not thread-safe, and
+# FastMCP runs sync tools in a thread pool. So each worker thread keeps its own
+# clients, keyed by the credentials they carry ("local", or a user's token).
+_tls = threading.local()
+_PER_THREAD_MAX = 8
+
+
+def _thread_client(key: str, make_creds) -> GoogleAPIClient:
+    clients: OrderedDict[str, GoogleAPIClient] = getattr(_tls, "clients", None)
+    if clients is None:
+        clients = _tls.clients = OrderedDict()
+    c = clients.get(key)
+    if c is not None:
+        clients.move_to_end(key)
+        return c
     # Build the services from OUR credentials object. gslides-api's own
     # initialize_credentials() would reload token.json with its wider scope
     # list (it adds spreadsheets); the first refresh then trips Google's
     # "invalid_scope" — typically an hour after the server started, once the
     # access token issued at startup expires. Passing the credentials in
     # keeps every later refresh on the scopes the token was granted.
-    creds = _load_or_refresh_creds(d)
     c = GoogleAPIClient(auto_flush=True)
-    c.set_credentials(creds)
+    c.set_credentials(make_creds())
+    clients[key] = c
+    while len(clients) > _PER_THREAD_MAX:  # user tokens rotate hourly
+        clients.popitem(last=False)
     return c
+
+
+def client() -> GoogleAPIClient:
+    """API client for the caller: the signed-in user over HTTP, token.json over stdio.
+
+    Over HTTP there is no fallback to a token on disk: a request without a user
+    token is refused, so one person can never act with another's credentials.
+    """
+    if remote_mode():
+        import google.oauth2.credentials
+
+        token = request_token()
+        if not token:
+            raise RuntimeError("gslides-mcp: no signed-in Google user on this request")
+        return _thread_client(
+            token, lambda: google.oauth2.credentials.Credentials(token=token, scopes=SCOPES)
+        )
+    return _thread_client("local", _local_creds)
+
+
+def access_token() -> str | None:
+    """Live Google access token of the caller (for raw HTTPS calls outside the API client)."""
+    if remote_mode():
+        return request_token()
+    import google.auth.transport.requests
+
+    creds = _local_creds()
+    with _LOCAL_REFRESH_LOCK:
+        if not creds.valid:
+            creds.refresh(google.auth.transport.requests.Request())
+    return creds.token
+
+
+_LOCAL_REFRESH_LOCK = threading.Lock()
+
+
+@functools.lru_cache(maxsize=1)
+def _local_creds():
+    """token.json credentials, loaded (and refreshed or OAuth'd) once per process."""
+    return _load_or_refresh_creds(cred_dir())
 
 
 def slide_service():

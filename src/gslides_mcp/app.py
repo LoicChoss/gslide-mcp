@@ -9,7 +9,7 @@ defaults: ``destructiveHint`` is *true* unless stated, so additive writers say
 ``destructiveHint=False`` explicitly.
 """
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 mcp = FastMCP("gslides-mcp")

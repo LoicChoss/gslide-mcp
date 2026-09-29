@@ -11,6 +11,11 @@ deployment steps. The MCP reads the deployed URL from either:
     - file ``~/.gslides-mcp/appscript_url`` (one-line text)
 
 If neither is set, the tool raises with deployment instructions.
+
+Hosted (``GSLIDES_MCP_TRANSPORT=http``), the web app is never used: it runs as
+whoever deployed it, so every user would copy with that person's rights. The
+script is deployed as an API executable instead (``GSLIDES_MCP_APPSCRIPT_ID``)
+and called through ``scripts.run`` with the signed-in user's token.
 """
 
 from __future__ import annotations
@@ -28,6 +33,7 @@ from pathlib import Path
 import certifi
 
 from ..app import ADDITIVE, READ_ONLY, mcp
+from ..auth import access_token, remote_mode
 from ..util import parse_pres_id
 
 
@@ -68,8 +74,20 @@ _OPENER = urllib.request.build_opener(
 )
 
 
+def _appscript_id() -> str | None:
+    """Script ID of the API-executable deployment, if configured."""
+    sid = os.environ.get("GSLIDES_MCP_APPSCRIPT_ID", "").strip()
+    return sid or None
+
+
 def _appscript_url() -> str:
     """Resolve the deployed web-app URL or raise with setup help."""
+    if remote_mode():
+        raise RuntimeError(
+            "cross-deck copy on the hosted server needs the Apps Script deployed "
+            "as an API executable: set GSLIDES_MCP_APPSCRIPT_ID (see "
+            "appscript/cross_deck_copy.gs)."
+        )
     url = os.environ.get("GSLIDES_MCP_APPSCRIPT_URL")
     if url:
         return url.strip()
@@ -187,27 +205,47 @@ def _script_supports_replay(url: str) -> bool:
 
 
 def _maybe_token() -> str | None:
-    """Load a fresh OAuth access token for outbound Apps Script calls.
-
-    The MCP's GoogleAPIClient doesn't expose its credentials attribute, so we
-    re-read the token.json directly and refresh if expired. Same creds that
-    were OAuth'd for Slides + Drive — Apps Script Workspace-scoped
-    deployments accept them as identity proof.
-    """
-    from google.oauth2.credentials import Credentials
-    from google.auth.transport.requests import Request as GAuthRequest
-
-    from ..auth import cred_dir
-    token_path = cred_dir() / "token.json"
-    if not token_path.exists():
+    """Fresh OAuth access token of the caller for outbound Apps Script calls."""
+    try:
+        return access_token()
+    except Exception:
         return None
-    creds = Credentials.from_authorized_user_file(str(token_path))
-    if not creds.valid:
-        try:
-            creds.refresh(GAuthRequest())
-        except Exception:
-            return None
-    return creds.token
+
+
+_SCRIPTS_RUN = "https://script.googleapis.com/v1/scripts/{}:run"
+
+
+def _run_script(script_id: str, payload: dict, timeout: float = 180.0) -> dict:
+    """Call ``api(payload)`` through scripts.run, as the calling user.
+
+    No relay hop here: the result comes back on the same response, so a copy
+    is never replayed. Errors raised in the script arrive as ``error`` with
+    the message in ``details[0].errorMessage``.
+    """
+    token = access_token()
+    if not token:
+        raise RuntimeError("cross-deck copy: no Google token for this request")
+    body = json.dumps({"function": "api", "parameters": [payload]}).encode("utf-8")
+    req = urllib.request.Request(
+        _SCRIPTS_RUN.format(urllib.parse.quote(script_id, safe="")),
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": _USER_AGENT,
+            "Authorization": f"Bearer {token}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CTX) as resp:
+            out = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        msg = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"scripts.run HTTP {e.code}: {msg[:500]}") from None
+    if "error" in out:
+        details = (out["error"].get("details") or [{}])[0]
+        raise RuntimeError(f"appscript error: {details.get('errorMessage') or out['error']}")
+    return out.get("response", {}).get("result") or {}
 
 
 @mcp.tool(annotations=ADDITIVE)
@@ -238,7 +276,6 @@ def copy_slide_cross_deck(
     First call after server start: ~2-4s (Apps Script cold-start). Steady
     state: ~700ms-1.5s per slide.
     """
-    url = _appscript_url()
     payload: dict = {
         "op": "copy",
         "srcId": parse_pres_id(src_presentation),
@@ -250,6 +287,10 @@ def copy_slide_cross_deck(
     # requestId lets a v0.4+ script answer a replayed POST from cache instead
     # of appending the slide a second time (see _RELAY_ATTEMPTS).
     payload["requestId"] = uuid.uuid4().hex
+    script_id = _appscript_id()
+    if script_id:
+        return _run_script(script_id, payload)
+    url = _appscript_url()
     result = _post_json(url, payload, retry=_script_supports_replay(url))
     if "error" in result:
         raise RuntimeError(f"appscript error: {result['error']}")
@@ -264,8 +305,12 @@ def cross_deck_ping() -> dict:
     version. Use this to debug deployment before relying on
     ``copy_slide_cross_deck``.
 
-    Returns: ``{ok: True, version: "0.4", url: "..."}`` on success.
+    Returns: ``{ok: True, version: "0.5", url: "..."}`` on success
+    (``script_id`` instead of ``url`` for an API-executable deployment).
     """
+    script_id = _appscript_id()
+    if script_id:
+        return {"script_id": script_id, **_run_script(script_id, {"op": "ping"})}
     url = _appscript_url()
     result = _post_json(url, {"op": "ping"})
     return {"url": url, **result}

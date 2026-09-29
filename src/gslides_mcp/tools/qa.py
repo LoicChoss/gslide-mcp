@@ -12,7 +12,7 @@ import tempfile
 import urllib.request
 
 import certifi
-from mcp.server.fastmcp import Image
+from fastmcp.utilities.types import Image
 
 from ..app import READ_ONLY, mcp
 from ..auth import slide_service
