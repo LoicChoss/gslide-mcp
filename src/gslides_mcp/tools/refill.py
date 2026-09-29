@@ -258,11 +258,25 @@ def refill_text(presentation: str, edits: list[dict], up_color: str | None = Non
             {"element": "tbl_regies", "row": 2, "column": 5, "text": "-0,12 €", "delta": "inverse"},
         ])
     """
-    if not edits:
-        raise ValueError("edits is empty: give {element, text} or {element, row, column, text} items")
     pid = parse_pres_id(presentation)
     svc = slide_service()
     pres = svc.presentations().get(presentationId=pid).execute()
+    reqs, out = plan_refill(pres, edits, up_color, down_color)
+    if reqs:
+        svc.presentations().batchUpdate(presentationId=pid, body={"requests": reqs}).execute()
+    return out
+
+
+def plan_refill(pres: dict, edits: list[dict], up_color: str | None = None,
+                down_color: str | None = None) -> tuple[list[dict], dict]:
+    """``refill_text``'s requests and result for ``edits`` on a presentation already read; nothing is sent.
+
+    Everything is checked before any request is built, so a wrong edit
+    raises and nothing is written. ``sync_table`` and ``sync_deck`` plan
+    their text changes through here.
+    """
+    if not edits:
+        raise ValueError("edits is empty: give {element, text} or {element, row, column, text} items")
     theme = themes.load(DEFAULT_THEME)
 
     # resolve targets first: nothing is written when one edit is wrong
@@ -385,9 +399,7 @@ def refill_text(presentation: str, edits: list[dict], up_color: str | None = Non
                                                       "style": ps, "fields": ",".join(ps)}})
         report.append(entry)
 
-    if reqs:
-        svc.presentations().batchUpdate(presentationId=pid, body={"requests": reqs}).execute()
     out: dict = {"edited": len(report), "edits": report}
     if reported_colors:
         out["colors"] = {**reported_colors, "source": "+".join(sorted(used_sources))}
-    return out
+    return reqs, out
