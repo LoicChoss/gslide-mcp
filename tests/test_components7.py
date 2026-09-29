@@ -102,11 +102,13 @@ def test_ad_scoreboard_transposed_table_with_image_row_and_placeholders():
     assert t["rows"][-1][0] == "CPA" and len(t["rows"]) == 6
     assert t["header"]["fill"] == "ink" and t["cell_fills"][(1, 0)] == "surface" and t["cell_fills"][(5, 0)] == "surface"
     assert t["row_heights"][1] == 56 + 8 and t["row_heights"][2] >= t["row_h"]
-    (img,) = _of(ops, "image")
-    assert img["asset"] == "post-video" and img["contain"] and t["row_heights"][0] < img["y"] < t["row_heights"][0] + 8
+    img, empty = _of(ops, "image", "slot")  # every visual cell is an image slot, filled or not
+    assert img["asset"] == "post-video" and img["slot"] and img["fit"] == "inside"
+    assert t["row_heights"][0] < img["y"] < t["row_heights"][0] + 8
     assert t["col_w"][0] < img["x"] < t["col_w"][0] + t["col_w"][1]
-    (ph,) = _of(ops, "box", "placeholder")
-    assert ph["line"]["dash"] == "DASH" and ph["x"] > img["x"]
+    assert empty["slot"] and not empty.get("asset") and not empty.get("url") and empty["x"] > img["x"]
+    assert (empty["w"], empty["h"], empty["y"]) == (img["w"], img["h"], img["y"])
+    assert not _of(ops, "box", "placeholder")
     (note,) = _of(ops, "text", "top_note")
     assert note["text"] == "Top annonce : Carrousel defisc" and note["align"] == "END" and note["y"] >= sum(t["row_heights"])
     assert height == pytest.approx(note["y"] + note["h"])
