@@ -1,11 +1,11 @@
 ---
 name: gslides-prez
-description: Utiliser dès que l'utilisateur veut produire une présentation Google Slides (reco, AO, bilan, audit, prez client) à partir d'un Google Slides type ou template, avec le MCP gslides-mcp (connecteur Slides Periscope, hébergé ou local), ou modifier un deck déjà copié ou déjà produit ainsi (« j'ai déjà copié, tu peux modifier »), ou remettre à la charte un deck existant (« refais-moi ce deck dans notre template », « reprends ces slides proprement »). Aussi quand il donne une URL docs.google.com/presentation et parle de « faire une prez », « des slides », « un deck », ou veut des graphiques ou des tableaux reliés à un Google Sheets dans ses slides (MCP Google Sheets + MCP gslides-mcp), y compris un bilan récurrent dont les chiffres vivent dans un classeur.
+description: Utiliser dès que l'utilisateur veut produire une présentation Google Slides (reco, AO, bilan, audit, prez client) à partir d'un Google Slides type ou template, avec le connecteur Péri Slides MCP (gslides-mcp, hébergé ou local), ou modifier un deck déjà copié ou déjà produit ainsi (« j'ai déjà copié, tu peux modifier »), ou remettre à la charte un deck existant (« refais-moi ce deck dans notre template », « reprends ces slides proprement »). Aussi quand il donne une URL docs.google.com/presentation et parle de « faire une prez », « des slides », « un deck », ou veut des graphiques ou des tableaux reliés à un Google Sheets dans ses slides (Péri Sheets MCP + Péri Slides MCP), y compris un bilan récurrent dont les chiffres vivent dans un classeur.
 ---
 
-# Présentation Google Slides depuis un deck type (MCP gslides-mcp + MCP Google Sheets)
+# Présentation Google Slides depuis un deck type (Péri Slides MCP + Péri Sheets MCP)
 
-Le deck type porte la charte (masters, layouts, décors). On construit **sur une copie vidée** de ce deck, avec ses layouts et les composants chartés du MCP. Les chiffres qui vivent dans un classeur passent par le **MCP Google Sheets** et arrivent dans les slides reliés.
+Le deck type porte la charte (masters, layouts, décors). On construit **sur une copie vidée** de ce deck, avec ses layouts et les composants chartés du MCP. Les chiffres qui vivent dans un classeur passent par **Péri Sheets MCP** et arrivent dans les slides reliés.
 
 **Trois règles absolues**
 
@@ -19,12 +19,12 @@ Violer la lettre de ces règles, c'est violer leur esprit.
 
 ## Environnement : hébergé ou local
 
-Les deux MCP existent en **connecteurs hébergés** pour l'équipe (chacun connecté avec son compte Google @periscope.digital) et en **serveurs locaux** chez qui les a installés. Les outils portent les mêmes noms ; quelques différences en hébergé :
+Les deux MCP existent en **connecteurs hébergés** pour l'équipe, nommés **Péri Slides MCP** (outils Slides : `clone_deck`, `insert_component`…) et **Péri Sheets MCP** (outils Sheets : `read_range`, `manage_chart`…), chacun connecté avec son compte Google @periscope.digital, et en **serveurs locaux** chez qui les a installés. Les outils portent les mêmes noms en local et en hébergé ; quelques différences en hébergé :
 
 - **Pas de fichier local.** Le serveur ne voit pas le disque de l'utilisateur : une prop image (`icon`, `logo`, `photo`, `image`, l'`asset` de `draw`) prend un nom du dossier d'assets (`list_assets()`) ou `drive:<id>` d'un fichier Drive, jamais un chemin. Pour une image que l'utilisateur a sur son poste : il la dépose dans le dossier d'assets ou dans son Drive, ou `insert_image_local` avec `image_base64`. `export_pres` renvoie un lien de téléchargement, pas un fichier.
 - **Catalogue en lecture seule.** `save_component` et `delete_component` n'existent pas en hébergé, et aucun outil ne modifie le thème `periscope` : le catalogue et la charte évoluent en local, par la personne qui maintient le MCP. Côté Sheets, les outils de suppression (`clear_values`, `delete_sheet`, `delete_dimensions`…) sont désactivés : un outil absent est voulu, on ne le contourne pas.
 - **Appels en file.** Le serveur sert un nombre limité d'appels à la fois pour toute l'équipe : un appel lent attend son tour, ce n'est pas une panne. Ne pas lancer vingt captures en parallèle.
-- **Outils Sheets absents** (connecteur non ajouté) : les graphiques se font en version dessinée, et on le dit dans le plan (« natif Sheets impossible ici : le connecteur Sheets n'est pas branché »). Tableaux : `rows` écrites à la main depuis les chiffres fournis.
+- **Outils Sheets absents** (Péri Sheets MCP non ajouté ou non connecté) : les graphiques se font en version dessinée, et on le dit dans le plan (« natif Sheets impossible ici : ajoute Péri Sheets MCP dans tes connecteurs pour des graphiques reliés »). Même logique si Péri Slides MCP manque : rien ne se construit, on demande de l'ajouter. Tableaux : `rows` écrites à la main depuis les chiffres fournis.
 
 ## 0. Cadrage (un seul message, trois blocs)
 
@@ -40,14 +40,14 @@ Si un classeur est donné : `get_spreadsheet` (titres exacts des feuilles) et `r
 
 Appeler `list_assets()` pour connaître les pictos, logos et photos disponibles (noms sans extension : `bolt`, `people`, `screen-demo`…) avant de proposer un `icon`, un `logo` ou une `photo`. Puis appeler `list_components()` **une fois, avant d'écrire le plan** : c'est le seul endroit où sont les noms de props, les exemples et le champ `use` (quand l'utiliser, alternatives proches). Choisir chaque composant d'après `use`, pas d'après son nom : `compare_cards` oppose ✗/✓, `team_grid` montre des personnes, des agences partenaires vont dans `logo_grid`. Chaque entrée porte aussi des **`variants`** : d'autres réglages prêts du même composant, avec `title` (à quoi ça ressemble), `when` (la situation) et `props` (l'appel à copier). Lire les `when` avant de choisir : une `table` a sa variante simple, pictos de canaux, « vs N-1 » et pilules par seuil ; une `card` ses fonds mint / outline / acid / plain ; un `chart_bars` sa version horizontale et sa version « mensuel avec séparateur de période ». Le catalogue visuel (une slide par composant puis une par variante) est le deck `1cPrerkVnlbxs5QtKjlILoBDO-MczFd-WViffUEUfi1E` : y renvoyer l'utilisateur quand il hésite entre deux rendus.
 
-**Graphiques : dessiné ou natif Sheets.** Les composants `chart_*`, `donut`, `pie` dessinent le graphique dans Slides à partir des `props` : rapide, charte garantie, pourcentages sur les parts, mais figé. Leur variante « natif Sheets, relié » (bloc `native` de la variante) construit le même graphique dans un Google Sheets avec le **MCP Google Sheets** et l'embarque relié avec `insert_sheets_chart`. Choisir ainsi :
+**Graphiques : dessiné ou natif Sheets.** Les composants `chart_*`, `donut`, `pie` dessinent le graphique dans Slides à partir des `props` : rapide, charte garantie, pourcentages sur les parts, mais figé. Leur variante « natif Sheets, relié » (bloc `native` de la variante) construit le même graphique dans un Google Sheets avec **Péri Sheets MCP** et l'embarque relié avec `insert_sheets_chart`. Choisir ainsi :
 
 | Situation | Choix |
 |---|---|
 | Chiffres déjà dans un classeur, deck récurrent (bilan mensuel), utilisateur qui veut retoucher les données | **natif Sheets** : on change les cellules, `refresh_sheets_charts` met les slides à jour |
 | Parts d'un camembert à lire en % sur le graphique | **dessiné** (`donut` / `pie`) : l'API Sheets ne sait pas afficher les % sur les parts |
 | Chiffres ponctuels d'un brief, AO, pas de classeur | **dessiné** |
-| Connecteur Sheets absent | **dessiné**, et le dire |
+| Péri Sheets MCP absent | **dessiné**, et le dire |
 
 Dans le plan, dire pour chaque graphique lequel des deux et pourquoi ; en natif, indiquer le classeur (celui de l'utilisateur, ou un nouveau nommé comme le deck) et la feuille. **Tableaux** : il n'existe pas de tableau relié dans Slides ; un tableau « depuis le classeur » est lu avec `read_range` puis inséré avec le composant `table`, et se réinsère à chaque mise à jour.
 
@@ -55,7 +55,7 @@ Plan numéroté : par slide → titre, objectif, **layout** (titre / contenu / a
 
 ## 2. Rédaction
 
-Contenu définitif slide par slide : titres, textes markdown des placeholders, props des composants **copiées sur la structure de `example` du catalogue ou de la variante retenue** (`variants[k].props` : mêmes clés : `cards`, `items`, `people`, `phases`…, jamais de clé de mémoire). Dans une `table`, les colonnes de la période précédente (« Clics N-1 », « P-1 ») et de variation (« vs N-1 », « Évol. ») sont reconnues sur l'en-tête : nommer les colonnes ainsi suffit, pas de `delta_cols` à calculer. Pour un graphique natif, rédiger aussi les **données du classeur** (une ligne d'en-tête, catégories en première colonne, une série par colonne, formules bienvenues pour les totaux et les variations) : c'est ce que le MCP Sheets écrira. Chiffres au format français `12 400`, `+8 %` ; message clé en `==surligné==`. Jamais de tiret cadratin « — » : utiliser « : » ou une virgule. Validation.
+Contenu définitif slide par slide : titres, textes markdown des placeholders, props des composants **copiées sur la structure de `example` du catalogue ou de la variante retenue** (`variants[k].props` : mêmes clés : `cards`, `items`, `people`, `phases`…, jamais de clé de mémoire). Dans une `table`, les colonnes de la période précédente (« Clics N-1 », « P-1 ») et de variation (« vs N-1 », « Évol. ») sont reconnues sur l'en-tête : nommer les colonnes ainsi suffit, pas de `delta_cols` à calculer. Pour un graphique natif, rédiger aussi les **données du classeur** (une ligne d'en-tête, catégories en première colonne, une série par colonne, formules bienvenues pour les totaux et les variations) : c'est ce que Péri Sheets MCP écrira. Chiffres au format français `12 400`, `+8 %` ; message clé en `==surligné==`. Jamais de tiret cadratin « — » : utiliser « : » ou une virgule. Validation.
 
 ## 3. Construction sur la copie vide
 
@@ -64,7 +64,7 @@ Contenu définitif slide par slide : titres, textes markdown des placeholders, p
 3. `build_from_outline(P, outline=[{layout, fills}, …])` : une seule écriture, tout est résolu avant. Sur une slide à composant ou à graphique, remplir le titre et laisser les autres placeholders vides.
 4. `delete_slides(P, <ids à retirer>)` : en création, toutes les slides d'origine, pour que la copie ne contienne que nos slides (l'API accepte 0 slide, mais créer avant de supprimer) ; en reprise, uniquement celles demandées. Vérifier avec `list_slides(P)`. Pour insérer au milieu d'un deck existant : `insertion_index` (0-based) de `build_from_outline`, ou `move_slide` ensuite.
 5. Composants, slide par slide : `get_page(P, slide, compact=True)` pour la géométrie du titre et des placeholders vides ; `insert_component` sous le titre (x = gauche du titre, y = bas du titre + 20 pt, width = largeur du titre ou de la zone libre). `list_layouts` donne aussi `content_area` par layout (la zone libre sous le titre, au-dessus du pied de page) : un bon défaut, à croiser avec `get_page` d'une slide réelle puisque la géométrie du layout peut différer de celle des slides. Chaîner avec le `height_pt` renvoyé. Supprimer les placeholders restés vides (`delete_elements`) pour éviter les « Cliquez pour ajouter ». Sur fond sombre : `dark: true` ou variant `dark`.
-6. **Graphiques natifs Sheets** (MCP Sheets d'abord, gslides ensuite) :
+6. **Graphiques natifs Sheets** (Péri Sheets MCP d'abord, Péri Slides MCP ensuite) :
    1. Classeur : celui que l'utilisateur désigne (URL) s'il a accepté qu'on y écrive, sinon `create_spreadsheet` nommé comme le deck, avec une feuille par graphique (`sheets: ["bars", "donut", …]`). Toujours `get_spreadsheet` pour les titres exacts des feuilles : jamais « Sheet1 » ni « Feuille 1 » supposés.
    2. `set_theme` une fois par classeur : `preset: "periscope"` (Barlow, couleurs charte) ou `preset: "periscope_regies"` quand les camemberts sont par régie (accent2 Google, accent3 Meta, accent4 Bing, accent5 Instagram, accent6 GA4). Camemberts et donuts prennent les accents **à partir d'accent2 dans l'ordre des lignes** : écrire les lignes dans l'ordre Google, Meta, Bing, Instagram, GA4. Une régie absente décale les couleurs des suivantes : pour un autre ordre ou une liste incomplète, passer `colors: {accent2: …, accent3: …}` en plus du preset, dans l'ordre des lignes. Un seul thème par classeur, donc un seul ordre pour tous ses camemberts.
    3. `write_values` des données (`input: "typed"` pour que les nombres et les dates soient compris comme si on les tapait ; le serveur refuse d'écraser des cellules non vides sans `overwrite` : lire le refus, ne pas forcer à l'aveugle), puis `format_cells` avec `number_format: "number:#,##0"` (ou `currency:#,##0" €"`) sur les colonnes de valeurs : les étiquettes et l'axe du graphique suivent le format des cellules.
@@ -143,7 +143,7 @@ Cadrage comme en création (deck type, layouts titre / contenu), plus le deck **
 |---|---|
 | Cadrage (lecture seule) | `list_layouts`, `screenshot_layouts`, `list_assets`, `list_components` (champ `use`, props, `example`), `list_slides`, `list_sheets_charts`, `screenshot_range` sur le type pour s'inspirer · Sheets : `get_spreadsheet`, `read_range`, `find_in_spreadsheet` |
 | Construction (copie) | `clone_deck`, `screenshot_layout(annotate=True)`, `build_from_outline`, `create_slide_from_layout`, `delete_slides`, `get_page(compact)`, `insert_component`, `draw`, `delete_elements`, `write_text_markdown`, `set_speaker_notes` |
-| Graphiques natifs (MCP Sheets puis gslides) | `create_spreadsheet`, `get_spreadsheet`, `set_theme` (`periscope` / `periscope_regies`), `write_values`, `format_cells`, `manage_chart`, `screenshot_chart`, `read_range` · `insert_sheets_chart`, `list_sheets_charts`, `refresh_sheets_charts`, `transform_element` |
+| Graphiques natifs (Péri Sheets MCP puis Péri Slides MCP) | `create_spreadsheet`, `get_spreadsheet`, `set_theme` (`periscope` / `periscope_regies`), `write_values`, `format_cells`, `manage_chart`, `screenshot_chart`, `read_range` · `insert_sheets_chart`, `list_sheets_charts`, `refresh_sheets_charts`, `transform_element` |
 | Refonte (source en lecture seule) | `harvest_deck_assets`, `inspect_slide`, `suggest_components`, `list_layouts` (`content_area`), puis la construction |
 | Contrôle | `screenshot_range`, `screenshot`, `overlap_check`, `screenshot_chart`, `transform_element`, `inspect_slide` |
 | Capitalisation | recette JSON proposée au mainteneur (`save_component` en local seulement), `periscope.md`, pièges de ce fichier |
