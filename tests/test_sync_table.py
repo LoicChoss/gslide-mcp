@@ -88,3 +88,55 @@ def test_refusals_come_before_any_write(deck, kw, match):
     with pytest.raises(ValueError, match=match):
         sync.sync_table("PRES1", args.pop("table"), "SHEET1", RANGE, **args)
     assert deck.batches == []
+
+
+# --- style="sheets" / "charter" ---------------------------------------------------------------
+
+NAVY = {"red": 0.0, "green": 0.169, "blue": 0.235}
+WHITE = {"red": 1.0, "green": 1.0, "blue": 1.0}
+
+
+def _for_cell(batch, kind, r, c):
+    return [q[kind] for q in batch if kind in q
+            and q[kind].get("cellLocation", q[kind].get("tableRange", {}).get("location")) == {"rowIndex": r, "columnIndex": c}]
+
+
+def test_sheets_style_copies_the_source_formatting(deck, fake_sheets):
+    fake_sheets.responses[RANGE] = grid_response([
+        [cell("Régie", fill=NAVY, color=WHITE, bold=True, h="CENTER"), cell("Dépenses"), cell("vs N-1")],
+        [cell("Google"), cell("50 000 €", number=50000), cell("-7 %", number=-0.07)],
+    ])
+    out = sync.sync_table("PRES1", "tbl_b", "SHEET1", RANGE, style="sheets")
+    (batch,) = deck.batches
+    (fill,) = _for_cell(batch, "updateTableCellProperties", 0, 0)
+    assert fill["tableCellProperties"]["tableCellBackgroundFill"]["solidFill"]["color"]["rgbColor"] == NAVY
+    (text,) = _for_cell(batch, "updateTextStyle", 0, 0)
+    assert text["style"]["bold"] is True and text["style"]["foregroundColor"]["opaqueColor"]["rgbColor"] == WHITE
+    assert text["style"]["fontFamily"] == "Arial" and text["style"]["fontSize"] == {"magnitude": 10, "unit": "PT"}
+    assert _for_cell(batch, "updateParagraphStyle", 0, 0)[0]["style"] == {"alignment": "CENTER"}
+    assert _for_cell(batch, "updateParagraphStyle", 1, 1)[0]["style"] == {"alignment": "END"}  # a number, general
+    assert _for_cell(batch, "updateParagraphStyle", 1, 0)[0]["style"] == {"alignment": "START"}
+    # only the overlap is touched: the table's rows 2-3 are left alone
+    assert not _for_cell(batch, "updateTextStyle", 2, 0)
+    assert out["style"] == "sheets" and out["changed"] == 2
+
+
+def test_charter_style_applies_the_table_component_look(deck, fake_sheets):
+    fake_sheets.responses[RANGE] = _src([["Régie", "Dépenses", "vs N-1"], ["Google", "50 000 €", "-7 %"],
+                                         ["Meta", "12 000 €", "-8 %"], ["Bing", "", "+2 %"]])
+    out = sync.sync_table("PRES1", "tbl_b", "SHEET1", RANGE, style="charter", charter={"header_fill": "ink", "total_row": True})
+    (batch,) = deck.batches
+    kinds = {next(iter(q)) for q in batch}
+    assert "createTable" not in kinds and "updateTableColumnProperties" not in kinds and "updateTableRowProperties" not in kinds
+    assert all(q[next(iter(q))]["objectId"] == "tbl_b" for q in batch)
+    assert any(q["insertText"]["text"] == "–" for q in batch if "insertText" in q)  # empty cell → na_text
+    header = [q["updateTableCellProperties"] for q in batch if "updateTableCellProperties" in q
+              and q["updateTableCellProperties"]["tableRange"]["location"] == {"rowIndex": 0, "columnIndex": 0}]
+    assert header  # the header row gets its fill
+    assert out["style"] == "charter"
+
+
+def test_charter_refuses_props_that_would_add_elements(deck):
+    with pytest.raises(ValueError, match="icons"):
+        sync.sync_table("PRES1", "tbl_b", "SHEET1", RANGE, style="charter", charter={"icons": ["search"]})
+    assert deck.batches == []
