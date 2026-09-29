@@ -121,12 +121,48 @@ function chartPng_(req) {
     }
     for (var j = 0; j < charts.length; j++) {
       if (charts[j].getChartId() === wanted) {
-        var blob = charts[j].getAs("image/png");
+        var blob = chartBlob_(charts[j]);
         return {png: Utilities.base64Encode(blob.getBytes()), sheet: sheets[i].getName()};
       }
     }
   }
   throw new Error("chart not found: " + wanted);
+}
+
+/**
+ * The chart as a PNG blob.
+ *
+ * getAs is the "Download as PNG" rendering, and it throws "Service
+ * Spreadsheets failed" on every combo chart. Slides draws combos, so a
+ * combo, and only a combo, is drawn into a throwaway presentation and read
+ * back from there; the presentation goes to the trash whatever happens.
+ * Any other failure is thrown as it was.
+ * Scopes: presentations and drive, both already in the manifest.
+ */
+function chartBlob_(chart) {
+  try {
+    return chart.getAs("image/png");
+  } catch (e) {
+    if (!isCombo_(chart)) {
+      throw e;
+    }
+    var pres = SlidesApp.create("chart render (temporary)");
+    try {
+      var image = pres.getSlides()[0].insertSheetsChartAsImage(chart);
+      return image.getAs("image/png");
+    } finally {
+      DriveApp.getFileById(pres.getId()).setTrashed(true);
+    }
+  }
+}
+
+/** Whether a chart is a combo; false when the type cannot be read. */
+function isCombo_(chart) {
+  try {
+    return chart.modify().getChartType() === Charts.ChartType.COMBO;
+  } catch (ignored) {
+    return false;
+  }
 }
 
 /**

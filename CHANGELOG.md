@@ -7,7 +7,7 @@ All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachang
 ### Added
 
 - **Hosted, multi-user mode** ([docs/hosting.md](docs/hosting.md)): `GSLIDES_MCP_TRANSPORT=http` serves streamable HTTP at `/mcp`; the server runs the OAuth flow itself (Google, Web application client) so a person only adds the URL in Claude and signs in with their Google account. Every call uses that person's token; there is no fallback to a token on disk. `Dockerfile`, CI (tests and image build); Coolify builds and deploys on each push to main.
-- Cross-deck copy through `scripts.run` (`GSLIDES_MCP_APPSCRIPT_ID`, script 0.6 `api()`, which also serves `chart_png` for google-sheets-mcp), running as the caller; the hosted server refuses the web app, which runs as its deployer.
+- Cross-deck copy through `scripts.run` (`GSLIDES_MCP_APPSCRIPT_ID`, script 0.6 `api()`, which also serves `chart_png` for google-sheets-mcp; combo charts, which `getAs` refuses, are rendered through a throwaway presentation), running as the caller; the hosted server refuses the web app, which runs as its deployer.
 - `insert_image_local`: `image_base64`. The assets folder defaults to the team folder (`GSLIDES_MCP_ASSETS_FOLDER` still overrides it). On the hosted server `path` is refused and `export_pres` returns a Google download `url`.
 
 ### Security
