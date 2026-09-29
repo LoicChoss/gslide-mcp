@@ -1,5 +1,5 @@
 ---
-name: gslides-prez
+name: peri-slides-prez
 description: Utiliser dès que l'utilisateur veut produire une présentation Google Slides (reco, AO, bilan, audit, prez client) à partir d'un Google Slides type ou template, avec le connecteur Péri Slides MCP (gslides-mcp, hébergé ou local), ou modifier un deck déjà copié ou déjà produit ainsi (« j'ai déjà copié, tu peux modifier »), ou remettre à la charte un deck existant (« refais-moi ce deck dans notre template », « reprends ces slides proprement »). Aussi quand il donne une URL docs.google.com/presentation et parle de « faire une prez », « des slides », « un deck », ou veut des graphiques ou des tableaux reliés à un Google Sheets dans ses slides (Péri Sheets MCP + Péri Slides MCP), y compris un bilan récurrent dont les chiffres vivent dans un classeur.
 ---
 
