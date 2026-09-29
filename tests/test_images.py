@@ -51,7 +51,7 @@ def _of(batch, kind):
 def test_url_into_a_fresh_image_records_its_frame_then_replaces(deck):
     out = images.replace_images("PRES1", [{"element": "fresh", "source": "https://cdn.test/ad.png"}])
     (batch,) = deck.batches
-    assert _kinds(batch) == ["updatePageElementAltText", "replaceImage"]
+    assert _kinds(batch) == ["replaceImage", "updatePageElementAltText"]  # replaceImage clears the alt text
     assert _of(batch, "updatePageElementAltText")[0] == {"objectId": "fresh", "description": "slot:40.0,40.0,100.0,100.0"}
     assert _of(batch, "replaceImage")[0] == {"imageObjectId": "fresh", "url": "https://cdn.test/ad.png",
                                              "imageReplaceMethod": "CENTER_INSIDE"}
@@ -62,7 +62,7 @@ def test_url_into_a_fresh_image_records_its_frame_then_replaces(deck):
 def test_a_shrunken_slot_gets_its_frame_back_before_the_new_picture(deck):
     out = images.replace_images("PRES1", [{"element": "slotted", "source": "post-video"}])
     (batch,) = deck.batches
-    assert _kinds(batch) == ["updatePageElementTransform", "replaceImage"]
+    assert _kinds(batch) == ["updatePageElementTransform", "replaceImage", "updatePageElementAltText"]
     t = _of(batch, "updatePageElementTransform")[0]
     assert t["objectId"] == "slotted" and t["applyMode"] == "ABSOLUTE"
     assert t["transform"]["scaleX"] == pytest.approx(100 * PT / 49000)
@@ -75,7 +75,7 @@ def test_a_shrunken_slot_gets_its_frame_back_before_the_new_picture(deck):
 def test_a_slot_moved_by_hand_takes_its_current_box_as_frame(deck):
     images.replace_images("PRES1", [{"element": "moved", "source": "post-video", "fit": "crop"}])
     (batch,) = deck.batches
-    assert _kinds(batch) == ["updatePageElementAltText", "replaceImage"]
+    assert _kinds(batch) == ["replaceImage", "updatePageElementAltText"]
     assert _of(batch, "updatePageElementAltText")[0]["description"] == "slot:300.0,300.0,100.0,56.3"
     assert _of(batch, "replaceImage")[0]["imageReplaceMethod"] == "CENTER_CROP"
 

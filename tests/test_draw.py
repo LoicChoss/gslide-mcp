@@ -478,6 +478,8 @@ def test_image_slot_with_a_picture_swaps_it_in_and_keeps_the_frame():
     (swap,) = _of(reqs, "replaceImage")
     assert swap == {"imageObjectId": create["objectId"], "imageReplaceMethod": "CENTER_CROP",
                     "url": "https://drive.google.com/uc?export=view&id=fid_post-video"}
+    # replaceImage clears the alt text: the frame is written after it
+    assert [next(iter(r)) for r in reqs] == ["createImage", "replaceImage", "updatePageElementAltText"]
     reqs, _ = draw.ops_to_requests("s", [{"op": "image", "x": 0, "y": 0, "w": 100, "h": 56, "slot": True,
                                           "url": "https://x/y.png", **SLOT_COLOURS}], THEME, resolve_asset=resolve)
     assert _of(reqs, "replaceImage")[0]["imageReplaceMethod"] == "CENTER_INSIDE"

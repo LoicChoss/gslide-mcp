@@ -669,11 +669,6 @@ class _Canvas:
             "objectId": oid, "url": self._drive_url(ref),
             "elementProperties": _elem_props(self.page, x + self.ox, y + self.oy, w, h),
         }})
-        # CENTER_INSIDE shrinks the element to the picture: the frame is kept in the alt text,
-        # and every replace_images puts it back before swapping the picture
-        self.reqs.append({"updatePageElementAltText": {
-            "objectId": oid, "description": slot_frame_text(x + self.ox, y + self.oy, w, h),
-        }})
         self.ids.append(oid)
         source = self._drive_url(str(op["asset"]), op.get("tint")) if op.get("asset") else op.get("url")
         if source:
@@ -681,6 +676,12 @@ class _Canvas:
                 "imageObjectId": oid, "url": source,
                 "imageReplaceMethod": "CENTER_CROP" if op.get("fit") == "crop" else "CENTER_INSIDE",
             }})
+        # CENTER_INSIDE shrinks the element to the picture: the frame is kept in the alt text, and
+        # every replace_images puts it back before a swap. replaceImage clears the alt text, so it
+        # is written after it (both verified live).
+        self.reqs.append({"updatePageElementAltText": {
+            "objectId": oid, "description": slot_frame_text(x + self.ox, y + self.oy, w, h),
+        }})
 
     def image(self, op: dict) -> None:
         if op.get("slot"):

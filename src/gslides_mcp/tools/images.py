@@ -232,7 +232,8 @@ def replace_images(presentation: str, images: list[dict]) -> dict:
     box it must fit — recorded in its alt text (``slot:x,y,w,h``) by image
     slots and, for any other image, taken from its current box the first
     time. The frame is put back before every swap, because Google's
-    CENTER_INSIDE shrinks the element to the picture it receives.
+    CENTER_INSIDE shrinks the element to the picture it receives, and
+    written again after it, because replaceImage clears the alt text.
 
     Args:
         images: ``[{element, source, fit?}]``.
@@ -319,9 +320,7 @@ def replace_images(presentation: str, images: list[dict]) -> dict:
     for oid, el, box, sheared, stored, frame, url, method, shown in planned:
         entry = {"element": oid, "source": shown, "fit": "crop" if method == "CENTER_CROP" else "inside",
                  "frame": [round(v, 1) for v in frame], "frame_recorded": False, "frame_restored": False}
-        if stored != frame:
-            reqs.append({"updatePageElementAltText": {"objectId": oid, "description": slot_frame_text(*frame)}})
-            entry["frame_recorded"] = True
+        entry["frame_recorded"] = stored != frame
         if sheared:
             entry["note"] = "rotated or sheared image: swapped without restoring its frame"
         elif any(abs(a - b) > 0.05 for a, b in zip(box, frame)):
@@ -333,6 +332,8 @@ def replace_images(presentation: str, images: list[dict]) -> dict:
             }}})
             entry["frame_restored"] = True
         reqs.append({"replaceImage": {"imageObjectId": oid, "url": url, "imageReplaceMethod": method}})
+        # replaceImage clears the alt text (verified live): the frame is written again after it
+        reqs.append({"updatePageElementAltText": {"objectId": oid, "description": slot_frame_text(*frame)}})
         report.append(entry)
     svc.presentations().batchUpdate(presentationId=pid, body={"requests": reqs}).execute()
     return {"replaced": report}
