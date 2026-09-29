@@ -21,7 +21,7 @@ import json
 from pathlib import Path
 
 from ..app import ADDITIVE, READ_ONLY, mcp
-from ..auth import slide_service, drive_service
+from ..auth import drive_service, remote_mode, slide_service
 from ..util import parse_pres_id
 
 
@@ -258,6 +258,9 @@ def build_template_library(
     exception propagates and no output file is written. Remove that deck from
     the list and retry.
     """
+    if output_path is not None and remote_mode():
+        # A path names a file on the shared server, not on the caller's machine.
+        raise ValueError("output_path is not available on the hosted server; use the returned JSON")
     summaries = [summarize_deck(d) for d in decks]
 
     result: dict = {
