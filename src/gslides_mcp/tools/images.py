@@ -262,14 +262,25 @@ def replace_images(presentation: str, images: list[dict]) -> dict:
             {"element": "yt_top_slot_3", "source": ""},
         ])
     """
+    pid = parse_pres_id(presentation)
+    svc = slide_service()
+    pres = svc.presentations().get(presentationId=pid).execute()
+    reqs, out = plan_replace_images(pres, images)
+    svc.presentations().batchUpdate(presentationId=pid, body={"requests": reqs}).execute()
+    return out
+
+
+def plan_replace_images(pres: dict, images: list[dict]) -> tuple[list[dict], dict]:
+    """``replace_images``'s requests and result on a presentation already read; nothing is sent.
+
+    Every image is checked (element, source, URL probe) before any request
+    is built. ``sync_deck`` plans its visuals through here.
+    """
     from .. import themes
     from ..draw import parse_slot_frame, slot_frame_text
 
     if not images:
         raise ValueError("images is empty: give [{element, source, fit?}]")
-    pid = parse_pres_id(presentation)
-    svc = slide_service()
-    pres = svc.presentations().get(presentationId=pid).execute()
     theme = None
 
     planned = []
@@ -335,5 +346,4 @@ def replace_images(presentation: str, images: list[dict]) -> dict:
         # replaceImage clears the alt text (verified live): the frame is written again after it
         reqs.append({"updatePageElementAltText": {"objectId": oid, "description": slot_frame_text(*frame)}})
         report.append(entry)
-    svc.presentations().batchUpdate(presentationId=pid, body={"requests": reqs}).execute()
-    return {"replaced": report}
+    return reqs, {"replaced": report}

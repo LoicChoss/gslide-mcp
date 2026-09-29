@@ -1,4 +1,4 @@
-"""Bilan sync: slide tables that follow a spreadsheet range (``sync_table``).
+"""Bilan sync: tables that follow a spreadsheet range (``sync_table``), a deck that follows its « Liaisons » tab (``sync_deck``).
 
 The spreadsheet is read with its formatting (``sheets_source``) and mapped
 cell by cell onto an existing table: only cells whose text changed are
@@ -21,6 +21,7 @@ from ..app import IDEMPOTENT, mcp
 from ..auth import drive_service, slide_service
 from ..util import PT_TO_EMU, find_element, parse_pres_id
 from . import refill
+from .images import plan_replace_images
 
 _STYLES = ("slides", "sheets", "charter")
 # charter props that would add elements or change the table's geometry: not for a table that stays
@@ -536,3 +537,168 @@ def sync_table(
         svc.presentations().batchUpdate(presentationId=pid, body={"requests": reqs}).execute()
     return report
 
+
+# --- sync_deck ------------------------------------------------------------------------------
+
+_KINDS = {"texte": ("shape",), "tableau": ("table",), "image": ("image",)}
+
+
+def _linked_charts(pres: dict) -> list[dict]:
+    return [el for s in pres.get("slides", []) for el in refill.walk(s.get("pageElements", [])) if "sheetsChart" in el]
+
+
+def _bilan_spreadsheet(pres: dict) -> str:
+    """The spreadsheet behind the deck's linked charts, when there is exactly one."""
+    ids = sorted({el["sheetsChart"].get("spreadsheetId") for el in _linked_charts(pres)} - {None})
+    if len(ids) == 1:
+        return ids[0]
+    if not ids:
+        raise ValueError("the deck has no linked Sheets chart to find its spreadsheet from: pass spreadsheet=")
+    raise ValueError(f"the deck's linked charts come from {len(ids)} spreadsheets ({', '.join(ids)}): pass spreadsheet=")
+
+
+def _first(values: list[list[str]]) -> str:
+    return values[0][0] if values and values[0] else ""
+
+
+def _plan_bindings(pres: dict, sheet: str, good: list[dict], errors: list[dict]) -> dict:
+    """Read every source and plan every binding on ``pres``; errors are appended per row. Returns the plans."""
+    fast = [b for b in good if b["type"] != "tableau" or b["options"].get("style", "slides") != "sheets"]
+    try:
+        values = dict(zip((id(b) for b in fast), sheets_source.read_values(sheet, [b["source"] for b in fast])))
+    except HttpError:
+        values = {}  # one range is unreadable: read them one by one to say which
+        for b in fast:
+            try:
+                values[id(b)] = sheets_source.read_values(sheet, [b["source"]])[0]
+            except HttpError as exc:
+                errors.append({"row": b["row"], "element": b["element"], "error": f"range {b['source']!r} unreadable ({exc.resp.status})"})
+    plans: dict = {"tables": [], "texts": [], "images": []}
+    for b in good:
+        el, _slide = find_element(pres, b["element"])
+        where = {"row": b["row"], "element": b["element"]}
+        if el is None:
+            errors.append({**where, "error": "element not found in the deck"})
+            continue
+        if not any(k in el for k in _KINDS[b["type"]]):
+            errors.append({**where, "error": f"a {b['type']} binding needs a {' or '.join(_KINDS[b['type']])} element"})
+            continue
+        opts = b["options"]
+        try:
+            if b["type"] == "tableau":
+                if opts.get("style") == "sheets":
+                    src = sheets_source.read_cells(sheet, b["source"])
+                elif id(b) in values:
+                    src = sheets_source.as_cells(values[id(b)])
+                else:
+                    continue  # unreadable range, already reported
+                reqs, report = plan_table_sync(pres, b["element"], src, opts.get("style", "slides"), None,
+                                               opts.get("rows", "keep"), opts.get("columns", "keep"))
+                if opts.get("row_height"):
+                    n = len(src["rows"]) if opts.get("rows") == "fit" else el["table"].get("rows", 0)
+                    reqs.append({"updateTableRowProperties": {
+                        "objectId": b["element"], "rowIndices": list(builtins.range(n)),
+                        "tableRowProperties": {"minRowHeight": {"magnitude": opts["row_height"], "unit": "PT"}},
+                        "fields": "minRowHeight"}})
+                plans["tables"].append((b, reqs, report))
+            elif id(b) not in values:
+                continue
+            elif b["type"] == "texte":
+                new = _first(values[id(b)])
+                old = refill._plain(el["shape"].get("text") or {})
+                edit = {"element": b["element"], "text": new, "delta": opts.get("delta", "auto")}
+                refill.plan_refill(pres, [edit])  # checks it now, planned again after the tables
+                plans["texts"].append((b, edit, old, new))
+            else:
+                source = _first(values[id(b)])
+                item = {"element": b["element"], "source": source, "fit": opts.get("fit", "inside")}
+                _reqs, planned = plan_replace_images(pres, [item])
+                target = next(q["replaceImage"]["url"] for q in _reqs if "replaceImage" in q)
+                same = (el.get("image") or {}).get("sourceUrl") == target and not planned["replaced"][0]["frame_restored"]
+                plans["images"].append((b, item, same))
+        except (ValueError, HttpError) as exc:
+            errors.append({**where, "error": str(exc)})
+    return plans
+
+
+@mcp.tool(annotations=IDEMPOTENT)
+def sync_deck(presentation: str, spreadsheet: str | None = None, dry_run: bool = False,
+              only: list[str] | None = None) -> dict:
+    """Update a bilan deck from its spreadsheet's « Liaisons » tab — texts, tables, visuals, linked charts, in place.
+
+    The tab (format: docs/bilan-sync.md) has one row per deck element:
+    ``type`` (texte, tableau, image), ``élément`` (its id), ``source`` (a
+    named range or 'Sheet'!A1:B2), ``options``. Every binding is checked
+    before the first write — element present and of the right kind, range
+    readable, image source usable — and any error stops the run, reported
+    with its row in the tab. Then: tables (``sync_table``: their rows and
+    columns may change), visuals (``replace_images``) and texts
+    (``refill_text``: style kept, variations coloured by sign), then the
+    deck's charts linked to that spreadsheet are refreshed. Elements that
+    already match are left alone, so a second run changes nothing.
+
+    Args:
+        spreadsheet: id or URL; default: the spreadsheet behind the deck's
+            linked charts, when there is exactly one.
+        dry_run: check and report what would change, write nothing — run it
+            first and show the report.
+        only: kinds to run (``["tableau"]``, ``["texte", "image"]``).
+
+    Returns: ``{spreadsheet, written, bindings: [{row, type, element,
+    status, …}], charts_refreshed, errors}`` — ``status`` is ``changed``,
+    ``unchanged`` or ``would change`` (dry run).
+
+    Example: ``sync_deck(deck, dry_run=True)`` then ``sync_deck(deck)``.
+    """
+    from .. import bindings as tab
+
+    pid = parse_pres_id(presentation)
+    svc = slide_service()
+    pres = svc.presentations().get(presentationId=pid).execute()
+    sheet = sheets_source.spreadsheet_id(spreadsheet) if spreadsheet else _bilan_spreadsheet(pres)
+    good, errors = tab.read_bindings(sheet)
+    if only:
+        kinds = {tab._TYPES.get(str(k).lower()) for k in only}
+        if None in kinds:
+            raise ValueError(f"only takes texte, tableau, image; got {only!r}")
+        good = [b for b in good if b["type"] in kinds]
+    plans = _plan_bindings(pres, sheet, good, errors)
+    charts = [el["objectId"] for el in _linked_charts(pres) if el["sheetsChart"].get("spreadsheetId") == sheet]
+    out: dict = {"spreadsheet": sheet, "written": False, "errors": sorted(errors, key=lambda e: e["row"]),
+                 "charts_refreshed": 0, "bindings": []}
+    verb = "would change" if dry_run else "changed"
+    for b, reqs, report in plans["tables"]:
+        entry = {"row": b["row"], "type": "tableau", "element": b["element"],
+                 "status": verb if reqs else "unchanged", "changed_cells": report["changed"]}
+        if report.get("notes"):
+            entry["notes"] = report["notes"]
+        out["bindings"].append(entry)
+    for b, _edit, old, new in plans["texts"]:
+        out["bindings"].append({"row": b["row"], "type": "texte", "element": b["element"],
+                                "status": "unchanged" if old == new.strip() else verb, "old": old, "new": new})
+    for b, item, same in plans["images"]:
+        out["bindings"].append({"row": b["row"], "type": "image", "element": b["element"],
+                                "status": "unchanged" if same else verb, "source": item["source"] or "slot"})
+    out["bindings"].sort(key=lambda e: e["row"])
+    if errors or dry_run:
+        if not errors:
+            out["charts_to_refresh"] = len(charts)
+        return out
+
+    table_reqs = [q for _b, reqs, _r in plans["tables"] for q in reqs]
+    if table_reqs:
+        svc.presentations().batchUpdate(presentationId=pid, body={"requests": table_reqs}).execute()
+        pres = svc.presentations().get(presentationId=pid).execute()  # visuals and texts see the new tables
+    later: list[dict] = []
+    edits = [edit for _b, edit, old, new in plans["texts"] if old != new.strip()]
+    if edits:
+        later += refill.plan_refill(pres, edits)[0]
+    swaps = [item for _b, item, same in plans["images"] if not same]
+    if swaps:
+        later += plan_replace_images(pres, swaps)[0]
+    later += [{"refreshSheetsChart": {"objectId": c}} for c in charts]
+    if later:
+        svc.presentations().batchUpdate(presentationId=pid, body={"requests": later}).execute()
+    out["written"] = bool(table_reqs or later)
+    out["charts_refreshed"] = len(charts)
+    return out
