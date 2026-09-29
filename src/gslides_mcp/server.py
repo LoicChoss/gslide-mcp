@@ -10,13 +10,18 @@ user signs in with their own Google account. Settings (environment):
     GOOGLE_CLIENT_ID           OAuth client of type "Web application", whose
     GOOGLE_CLIENT_SECRET       redirect URI is <base url>/auth/callback
     GSLIDES_MCP_GOOGLE_DOMAIN  optional: preselect accounts of this Workspace domain
+    GSLIDES_MCP_REDIRECT_HOSTS hosts an MCP client may register an https redirect
+                               on (default claude.ai,claude.com; loopback always)
+    GSLIDES_MCP_MAX_IN_FLIGHT  tool calls served at once across everyone (default 8)
     GSLIDES_MCP_HOST / _PORT   bind address (default 0.0.0.0:8000)
     FASTMCP_HOME               where sign-in sessions are kept (encrypted); a volume
 """
 
+import asyncio
 import os
 import sys
 
+from fastmcp.server.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -30,6 +35,32 @@ def _require(name: str) -> str:
     if not value:
         sys.exit(f"gslides-mcp: {name} is required when GSLIDES_MCP_TRANSPORT=http")
     return value
+
+
+def redirect_patterns() -> list[str]:
+    """Redirect URIs a client may register: Claude's hosts and loopback only.
+
+    Registration is open (MCP clients need it), so without this list anybody
+    could register their own redirect and collect a colleague's sign-in.
+    """
+    raw = os.environ.get("GSLIDES_MCP_REDIRECT_HOSTS", "claude.ai,claude.com")
+    hosts = [h.strip().lower() for h in raw.split(",") if h.strip()]
+    return [f"https://{h}/*" for h in hosts] + ["http://localhost:*", "http://127.0.0.1:*"]
+
+
+class MaxInFlight(Middleware):
+    """At most ``limit`` tool calls at once across everyone; the rest wait.
+
+    Each call can hold large Google responses and thumbnails in memory, so this
+    is what bounds the shared server's memory.
+    """
+
+    def __init__(self, limit: int):
+        self._sem = asyncio.Semaphore(limit)
+
+    async def on_call_tool(self, context, call_next):
+        async with self._sem:
+            return await call_next(context)
 
 
 def google_auth():
@@ -62,6 +93,7 @@ def google_auth():
             "https://www.googleapis.com/auth/spreadsheets",
         ],
         extra_authorize_params=extra or None,
+        allowed_client_redirect_uris=redirect_patterns(),
     )
 
 
@@ -86,6 +118,7 @@ def main() -> None:
         return
     mcp.auth = google_auth()
     hide_local_only_tools()
+    mcp.add_middleware(MaxInFlight(max(1, int(os.environ.get("GSLIDES_MCP_MAX_IN_FLIGHT", "8")))))
     mcp.run(
         transport="http",
         host=os.environ.get("GSLIDES_MCP_HOST", "0.0.0.0"),

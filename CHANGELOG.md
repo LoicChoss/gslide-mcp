@@ -14,6 +14,8 @@ All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachang
 
 - Hosted mode never reads a server file named by a caller: an image prop given a path (`card.icon`, `draw` `asset`…) is refused instead of uploading that file to the assets folder. Theme and component names are checked before they become file paths, so `delete_component` can no longer remove other files. Recipe expressions refuse huge exponents and repetitions, which could stall the shared process. `save_component` and `delete_component` are local-only: the hosted server does not offer them. `build_template_library` refuses `output_path` there (it wrote any file on the server).
 
+- Client registration only accepts redirects to Claude's hosts and loopback (`GSLIDES_MCP_REDIRECT_HOSTS`), so nobody can register their own redirect and collect a colleague's sign-in. At most `GSLIDES_MCP_MAX_IN_FLIGHT` (8) tool calls run at once across everyone.
+
 ### Changed
 
 - Built on `fastmcp` 3; sync tools run in a thread pool, so each thread keeps its own API clients (httplib2 is not thread-safe) and token.json is read once.

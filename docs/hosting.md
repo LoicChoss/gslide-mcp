@@ -30,6 +30,8 @@ The image (`Dockerfile`) serves streamable HTTP on port 8000 at `/mcp`, with
 | `GSLIDES_MCP_APPSCRIPT_ID` | deployment ID (`AKfycb…`) of the cross-deck copy script (below) |
 | `GSLIDES_MCP_ASSETS_FOLDER` | Drive folder of named assets (default: the team folder); share it with the domain |
 | `GSLIDES_MCP_THEME` | default theme (`periscope` when unset) |
+| `GSLIDES_MCP_REDIRECT_HOSTS` | hosts a client may register an https redirect on (default `claude.ai,claude.com`; loopback always). Registration is open, as MCP clients need, so without this list anybody could register their own redirect and collect a colleague's sign-in. |
+| `GSLIDES_MCP_MAX_IN_FLIGHT` | tool calls served at once across everyone, the rest wait (default 8); bounds the server's memory |
 
 Mount a volume on `/data`: it keeps sign-in sessions (encrypted with a key
 derived from the client secret) and the shared themes and components. Without
