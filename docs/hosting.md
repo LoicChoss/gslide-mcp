@@ -55,4 +55,4 @@ is: local servers still use it.
 - `export_pres` returns a Google download `url` instead of a file path.
 - `insert_image_local` takes `image_base64`; a `path` would name a file on the
   server and is refused.
-- Themes and components saved with `save_component` are shared by the team.
+- `save_component` and `delete_component` are not offered: the catalogue is edited on a local server only. The hosted one serves the built-in components and the recipes on its volume.

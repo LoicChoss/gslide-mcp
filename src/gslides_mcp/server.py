@@ -65,6 +65,16 @@ def google_auth():
     )
 
 
+# The component catalogue is shared by everyone on the hosted server, so it is
+# edited locally only (stdio); the hosted server serves what is on its volume.
+LOCAL_ONLY_TOOLS = ("save_component", "delete_component")
+
+
+def hide_local_only_tools() -> None:
+    for name in LOCAL_ONLY_TOOLS:
+        mcp.local_provider.remove_tool(name)
+
+
 @mcp.custom_route("/health", methods=["GET"])
 async def health(_: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
@@ -75,6 +85,7 @@ def main() -> None:
         mcp.run()
         return
     mcp.auth = google_auth()
+    hide_local_only_tools()
     mcp.run(
         transport="http",
         host=os.environ.get("GSLIDES_MCP_HOST", "0.0.0.0"),
