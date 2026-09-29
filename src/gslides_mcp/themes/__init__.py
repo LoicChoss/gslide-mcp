@@ -13,6 +13,7 @@ added to the catalogue and may ``"extends"`` another theme.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from ..util import hex_to_rgb01
 
 BUILTIN_THEME_DIR = Path(__file__).parent
 USER_THEME_DIR = Path.home() / ".gslides-mcp" / "themes"
+_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 
 _STYLE_KEYS = ("size", "bold", "italic", "color", "font", "highlight")
 
@@ -109,6 +111,8 @@ def _read(path: Path) -> dict:
 
 
 def _find(name: str) -> Path | None:
+    if not _NAME.match(name):  # the name becomes a file path
+        return None
     for base in (USER_THEME_DIR, BUILTIN_THEME_DIR):
         p = base / f"{name}.json"
         if p.is_file():

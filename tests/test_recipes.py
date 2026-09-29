@@ -97,3 +97,11 @@ def test_delete_unregisters_and_removes_file(user_dir):
     assert "pill_row" not in components.names()
     with pytest.raises(ValueError, match="built-in"):
         recipes.delete("kpi")
+
+
+def test_delete_refuses_a_name_that_is_a_path():
+    import pytest
+    from gslides_mcp.components import recipes
+
+    with pytest.raises(ValueError, match="invalid component name"):
+        recipes.delete("../../fastmcp/session")

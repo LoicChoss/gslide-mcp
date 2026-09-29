@@ -164,3 +164,12 @@ def test_list_assets_tool_names_without_extension_nor_tints(fake_drive):
                                {"id": "f3", "name": "screen-demo.png", "mimeType": "image/png", "parents": [FOLDER]}]
     out = tool.list_assets()
     assert out["assets"] == ["bolt", "screen-demo"] and out["folder"] == FOLDER and "bolt__002b3c.png" in out["files"]
+
+
+@pytest.mark.parametrize("tint", [None, "#002B3C"])
+def test_hosted_server_never_uploads_a_server_file(fake_drive, tmp_path, monkeypatch, tint):
+    monkeypatch.setenv("GSLIDES_MCP_TRANSPORT", "http")
+    path = _png(tmp_path / "secret.png")
+    with pytest.raises(ValueError, match="Drive assets folder"):
+        assets.ensure_asset(path, tint=tint)
+    assert _names(fake_drive, "files.create") == []

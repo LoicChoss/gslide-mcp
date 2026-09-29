@@ -19,7 +19,7 @@ from pathlib import Path
 
 from googleapiclient.http import MediaFileUpload
 
-from .auth import drive_service
+from .auth import drive_service, remote_mode
 
 ENV_FOLDER = "GSLIDES_MCP_ASSETS_FOLDER"
 CACHE = Path.home() / ".gslides-mcp" / "assets.json"
@@ -118,7 +118,9 @@ def ensure_asset(ref: str, tint: str | None = None) -> str:
             return fid
         return _tinted_copy(fid, _norm_hex(tint))
     folder = folder_id()
-    is_path = os.path.isfile(ref)
+    # On the hosted server a path names a file on the server, not on the
+    # caller's machine: never read one, or any user could publish server files.
+    is_path = not remote_mode() and os.path.isfile(ref)
     base = os.path.basename(ref) if is_path else ref
     if os.path.splitext(base)[1].lower() not in _EXTS:
         base += ".png"
@@ -141,7 +143,7 @@ def ensure_asset(ref: str, tint: str | None = None) -> str:
             else:
                 raise ValueError(
                     f"asset {ref!r} not found in the Drive assets folder (files: "
-                    f"{', '.join(sorted(listing)) or 'none'}); pass a local path to upload it"
+                    f"{', '.join(sorted(listing)) or 'none'}); {_upload_hint()}"
                 )
             tmp = _tint(src, hex6, CACHE.parent / "tinted" / target)
             fid = _upload(drv, folder, str(tmp), target)
@@ -150,11 +152,17 @@ def ensure_asset(ref: str, tint: str | None = None) -> str:
         else:
             raise ValueError(
                 f"asset {ref!r} not found in the Drive assets folder (files: "
-                f"{', '.join(sorted(listing)) or 'none'}); pass a local path to upload it"
+                f"{', '.join(sorted(listing)) or 'none'}); {_upload_hint()}"
             )
     cache[key] = fid
     _cache_write(cache)
     return fid
+
+
+def _upload_hint() -> str:
+    if remote_mode():
+        return "add the file to the Drive assets folder, or pass drive:<file id>"
+    return "pass a local path to upload it"
 
 
 def _tinted_copy(fid: str, hex6: str) -> str:

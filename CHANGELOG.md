@@ -10,6 +10,10 @@ All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachang
 - Cross-deck copy through `scripts.run` (`GSLIDES_MCP_APPSCRIPT_ID`, script 0.6 `api()`, which also serves `chart_png` for google-sheets-mcp), running as the caller; the hosted server refuses the web app, which runs as its deployer.
 - `insert_image_local`: `image_base64`. The assets folder defaults to the team folder (`GSLIDES_MCP_ASSETS_FOLDER` still overrides it). On the hosted server `path` is refused and `export_pres` returns a Google download `url`.
 
+### Security
+
+- Hosted mode never reads a server file named by a caller: an image prop given a path (`card.icon`, `draw` `asset`…) is refused instead of uploading that file to the assets folder. Theme and component names are checked before they become file paths, so `delete_component` can no longer remove other files.
+
 ### Changed
 
 - Built on `fastmcp` 3; sync tools run in a thread pool, so each thread keeps its own API clients (httplib2 is not thread-safe) and token.json is read once.

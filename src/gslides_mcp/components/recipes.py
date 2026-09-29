@@ -228,6 +228,8 @@ def save(recipe: dict) -> Path:
 
 
 def delete(name: str) -> None:
+    if not _NAME_RE.match(str(name)):  # the name becomes a file path
+        raise ValueError(f"invalid component name {name!r}")
     if name in _REGISTRY and _REGISTRY[name].source == "builtin":
         raise ValueError(f"{name!r} is a built-in component and can't be deleted")
     path = USER_COMPONENT_DIR / f"{name}.json"
