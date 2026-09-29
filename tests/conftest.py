@@ -215,6 +215,30 @@ class _FakeDriveFiles:
                             supportsAllDrives=supportsAllDrives)
     def delete(self, fileId, supportsAllDrives=None):
         return self.d._call("files.delete", "", fileId=fileId)
+    def get(self, fileId, fields=None, supportsAllDrives=None):
+        f = next((f for f in self.d.store_files if f["id"] == fileId), None)
+        if f is None:
+            self.d.calls.append(("files.get", {"fileId": fileId, "fields": fields}))
+            return _Exec(error=make_http_error(404, f"File not found: {fileId}"))
+        return self.d._call("files.get", {k: v for k, v in f.items() if k != "bytes"}, fileId=fileId, fields=fields)
+    def copy(self, fileId, body=None, fields=None, supportsAllDrives=None):
+        key = f"files.copy#{len([c for c in self.d.calls if c[0] == 'files.copy']) + 1}"
+        if key in self.d.fail:  # fail one given attempt, e.g. {"files.copy#1": HttpError}
+            self.d.calls.append(("files.copy", {"fileId": fileId, "body": copy.deepcopy(body)}))
+            return _Exec(error=self.d.fail.pop(key))
+        self.d._seq += 1
+        fid = f"copy_{self.d._seq}"
+        self.d.store_files.append({"id": fid, "name": (body or {}).get("name"), "mimeType": "application/vnd.google-apps.presentation",
+                                   "parents": (body or {}).get("parents") or ["my_drive_root"]})
+        return self.d._call("files.copy", {"id": fid, "parents": self.d.store_files[-1]["parents"]},
+                            fileId=fileId, body=copy.deepcopy(body), fields=fields, supportsAllDrives=supportsAllDrives)
+    def update(self, fileId, body=None, addParents=None, removeParents=None, fields=None, supportsAllDrives=None):
+        f = next((f for f in self.d.store_files if f["id"] == fileId), None)
+        if f is not None:
+            parents = [p for p in f.get("parents", []) if p not in (removeParents or "").split(",")]
+            f["parents"] = parents + ([addParents] if addParents else [])
+        return self.d._call("files.update", {"id": fileId, "parents": (f or {}).get("parents", [])},
+                            fileId=fileId, addParents=addParents, removeParents=removeParents)
     def list(self, q="", fields=None, pageSize=None, supportsAllDrives=None, includeItemsFromAllDrives=None, pageToken=None):
         import re
         folder = re.search(r"'([^']+)' in parents", q)

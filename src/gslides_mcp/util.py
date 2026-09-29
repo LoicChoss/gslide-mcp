@@ -11,12 +11,19 @@ INCH_TO_EMU = 914_400
 SUBTLE_BASE_EMU = 100_000  # for ROUND_RECTANGLE subtle-radius trick (~5px visual)
 
 _PRES_ID_RE = re.compile(r"/presentation/d/([a-zA-Z0-9_-]+)")
+_DRIVE_ID_RE = re.compile(r"/(?:d|folders)/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)")
 
 
 def parse_pres_id(value: str) -> str:
     """Accept a bare presentation ID or a full Google Slides URL."""
     m = _PRES_ID_RE.search(value)
     return m.group(1) if m else value
+
+
+def parse_drive_id(value: str) -> str:
+    """A bare Drive id, or the id in a Slides / Sheets / Docs / Drive file or folder URL."""
+    m = _DRIVE_ID_RE.search(value)
+    return (m.group(1) or m.group(2)) if m else value.strip()
 
 
 def hex_to_rgb01(hex_str: str) -> tuple[float, float, float]:

@@ -2,56 +2,173 @@
 
 from __future__ import annotations
 
-from ..app import ADDITIVE, DESTRUCTIVE, READ_ONLY, mcp
+from googleapiclient.errors import HttpError
+
+from ..app import ADDITIVE, DESTRUCTIVE, IDEMPOTENT, READ_ONLY, mcp
 from ..auth import remote_mode, slide_service, drive_service
-from ..util import parse_pres_id, emu_to_pt
+from ..util import parse_drive_id, parse_pres_id, emu_to_pt
+
+_SLIDES_MIME = "application/vnd.google-apps.presentation"
+_FOLDER_MIME = "application/vnd.google-apps.folder"
+
+
+def _folder_name(drv, folder_id: str | None) -> str | None:
+    """The folder's title, or None when it cannot be read (not worth failing a copy over)."""
+    if not folder_id:
+        return None
+    try:
+        return drv.files().get(fileId=folder_id, fields="name", supportsAllDrives=True).execute().get("name")
+    except HttpError:
+        return None
+
+
+def _check_folder(drv, folder_id: str) -> str | None:
+    """Refuse early, with a clear message, a folder id that is not a folder."""
+    try:
+        meta = drv.files().get(fileId=folder_id, fields="id,name,mimeType", supportsAllDrives=True).execute()
+    except HttpError as exc:
+        raise ValueError(f"folder {folder_id!r} not found or not shared with you (HTTP {exc.resp.status})") from exc
+    if meta.get("mimeType") != _FOLDER_MIME:
+        raise ValueError(f"{folder_id!r} is not a folder ({meta.get('mimeType')}): pass a Drive folder id or URL")
+    return meta.get("name")
 
 
 @mcp.tool(annotations=ADDITIVE)
-def create_presentation(title: str) -> dict:
+def create_presentation(title: str, folder: str | None = None) -> dict:
     """Create a new blank Google Slides presentation.
 
+    Args:
+        folder: Drive folder id or URL (``drive.google.com/drive/folders/<id>``)
+            to create it in. Default: the root of the user's My Drive.
+
     Returns:
-        {presentation_id, url}
+        {presentation_id, url, folder_id, folder_name}
     """
-    body = {"title": title}
-    pres = slide_service().presentations().create(body=body).execute()
-    pid = pres["presentationId"]
+    if not folder:
+        pres = slide_service().presentations().create(body={"title": title}).execute()
+        pid = pres["presentationId"]
+        return {
+            "presentation_id": pid,
+            "url": f"https://docs.google.com/presentation/d/{pid}/edit",
+            "folder_id": None, "folder_name": None,
+        }
+    drv = drive_service()
+    folder_id = parse_drive_id(folder)
+    folder_name = _check_folder(drv, folder_id)
+    out = drv.files().create(
+        body={"name": title, "mimeType": _SLIDES_MIME, "parents": [folder_id]},
+        fields="id", supportsAllDrives=True,
+    ).execute()
+    pid = out["id"]
     return {
         "presentation_id": pid,
         "url": f"https://docs.google.com/presentation/d/{pid}/edit",
+        "folder_id": folder_id, "folder_name": folder_name,
     }
 
 
 @mcp.tool(annotations=ADDITIVE)
 def clone_deck(src: str, name: str, parent_folder_id: str | None = None) -> dict:
-    """Clone an existing Slides deck via Drive ``files.copy``.
+    """Clone an existing Slides deck via Drive ``files.copy``, next to the source by default.
 
     The canonical way to start from a known-good source — copy a deck and edit
     in place. Always passes ``supportsAllDrives=True`` so source decks living
     in Shared Drives copy cleanly. Without that flag the API returns a
     misleading 404 even when the caller has full Drive scope.
 
+    Where the copy lands: ``parent_folder_id`` when given; otherwise the
+    source deck's own folder. When that folder cannot take the copy (the
+    source is shared with you read-only, or sits in a folder you cannot
+    see), the copy goes to the root of My Drive and ``folder_note`` says so:
+    tell the user, and offer ``move_to_folder``.
+
     Args:
         src: source presentation ID or full Slides URL.
         name: title for the new copy.
-        parent_folder_id: optional Drive folder to place the copy in.
+        parent_folder_id: Drive folder id or URL to place the copy in.
 
     Returns:
-        {presentation_id, url}
+        {presentation_id, url, folder_id, folder_name, placed: "given" |
+        "source_folder" | "my_drive", folder_note?}
     """
     src_id = parse_pres_id(src)
+    drv = drive_service()
     body: dict = {"name": name}
+    placed = "my_drive"
     if parent_folder_id:
-        body["parents"] = [parent_folder_id]
-    out = drive_service().files().copy(
-        fileId=src_id, body=body, supportsAllDrives=True
-    ).execute()
+        body["parents"] = [parse_drive_id(parent_folder_id)]
+        placed = "given"
+    else:
+        try:
+            parents = drv.files().get(fileId=src_id, fields="parents", supportsAllDrives=True).execute().get("parents") or []
+        except HttpError:
+            parents = []  # the copy below reports a missing source properly
+        if parents:
+            body["parents"] = parents[:1]
+            placed = "source_folder"
+    note = None
+    try:
+        out = drv.files().copy(fileId=src_id, body=body, fields="id,parents", supportsAllDrives=True).execute()
+    except HttpError as exc:
+        if placed != "source_folder" or exc.resp.status not in (403, 404):
+            raise
+        # the source folder refuses the copy (read-only share): fall back to My Drive
+        body.pop("parents")
+        out = drv.files().copy(fileId=src_id, body=body, fields="id,parents", supportsAllDrives=True).execute()
+        placed = "my_drive"
+        note = ("the source deck's folder does not accept new files from you (HTTP "
+                f"{exc.resp.status}): the copy is in My Drive; move it with move_to_folder")
+    if placed == "my_drive" and note is None and not parent_folder_id:
+        note = "the source deck's folder is not visible to you: the copy is in My Drive; move it with move_to_folder"
     pid = out["id"]
-    return {
+    folder_id = (out.get("parents") or body.get("parents") or [None])[0]
+    result = {
         "presentation_id": pid,
         "url": f"https://docs.google.com/presentation/d/{pid}/edit",
+        "folder_id": folder_id,
+        "folder_name": _folder_name(drv, folder_id),
+        "placed": placed,
     }
+    if note:
+        result["folder_note"] = note
+    return result
+
+
+@mcp.tool(annotations=IDEMPOTENT)
+def move_to_folder(file: str, folder: str) -> dict:
+    """Move a Drive file (deck, spreadsheet, doc…) into another folder.
+
+    The file leaves its current folder(s) and lands in ``folder`` only: same
+    as dragging it in Drive, links and sharing unchanged. Works on any file
+    the user can edit, so a spreadsheet created for a deck's charts can be
+    put next to the deck (``folder`` = the deck's ``folder_id`` from
+    ``clone_deck`` / ``create_presentation``). Calling it again is harmless.
+
+    Args:
+        file: file id or URL (Slides, Sheets, Docs or Drive link).
+        folder: target Drive folder id or URL (``drive.google.com/drive/folders/<id>``).
+
+    Returns: ``{file_id, name, folder_id, folder_name, previous_folders}``.
+    """
+    drv = drive_service()
+    file_id = parse_drive_id(file)
+    folder_id = parse_drive_id(folder)
+    folder_name = _check_folder(drv, folder_id)
+    try:
+        meta = drv.files().get(fileId=file_id, fields="id,name,parents", supportsAllDrives=True).execute()
+    except HttpError as exc:
+        raise ValueError(f"file {file_id!r} not found or not shared with you (HTTP {exc.resp.status})") from exc
+    previous = meta.get("parents") or []
+    remove = ",".join(p for p in previous if p != folder_id)
+    if folder_id not in previous or remove:
+        kwargs: dict = {"fileId": file_id, "fields": "id,parents", "supportsAllDrives": True, "body": {}}
+        if folder_id not in previous:
+            kwargs["addParents"] = folder_id
+        if remove:
+            kwargs["removeParents"] = remove
+        drv.files().update(**kwargs).execute()
+    return {"file_id": file_id, "name": meta.get("name"), "folder_id": folder_id,
+            "folder_name": folder_name, "previous_folders": previous}
 
 
 @mcp.tool(annotations=READ_ONLY)
