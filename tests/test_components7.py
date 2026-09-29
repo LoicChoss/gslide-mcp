@@ -189,3 +189,36 @@ def test_every_component_has_a_use_and_its_example_renders_in_both_themes():
             ops, height = components.render(entry["name"], entry["example"]["props"], theme, 600)
             draw.ops_to_requests("s", ops, theme, prefix="cmp", resolve_asset=lambda name, tint=None: ("fid", (100, 100)))
             assert height > 0, entry["name"]
+
+
+# --- table image row, one-line header (bilan sync) ------------------------------------------
+
+def test_table_image_row_puts_slots_over_the_cells_of_that_row():
+    rows = [["Post", "A", "B", "C"], ["Visuel", "x", "", ""], ["Portée", "1", "2", "3"]]
+    ops, height = _render("table", {"rows": rows, "col_w": [100, 150, 150, 150], "image_row": {
+        "row": 1, "images": [None, "screen-demo", "", "https://cdn.test/c.png"], "height": 50, "fit": "crop"}}, w=550)
+    (t,) = _of(ops, "table")
+    slots = _of(ops, "image", "slot")
+    assert len(slots) == 3 and all(s["slot"] and s["fit"] == "crop" and s["h"] == 50 for s in slots)
+    assert slots[0]["asset"] == "screen-demo" and "asset" not in slots[1] and "url" not in slots[1]
+    assert slots[2]["url"] == "https://cdn.test/c.png"
+    assert [s["x"] for s in slots] == [104, 254, 404] and all(s["w"] == 142 for s in slots)
+    top = t["row_heights"][0]
+    assert t["row_heights"][1] >= 58 and all(top < s["y"] and s["y"] + 50 < top + t["row_heights"][1] for s in slots)
+    assert t["rows"][1] == ["Visuel", "", "", ""]  # no text under a picture
+    with pytest.raises(ValueError, match="outside the table"):
+        _render("table", {"rows": rows, "image_row": {"row": 9, "images": []}}, w=550)
+
+
+def test_one_line_header_shrinks_then_cuts_long_titles():
+    rows = [["Nom", "Carrousel défiscalisation automne", "Vidéo"], ["a", "1", "2"]]
+    ops, _ = _render("table", {"rows": rows, "col_w": [60, 90, 90], "one_line_header": True, "size": 10}, w=240)
+    (t,) = _of(ops, "table")
+    runs = t["cell_runs"]
+    (run,) = runs[(0, 1)][0]
+    assert run["size"] == 7 and run["text"].endswith("…") and len(run["text"]) < len(rows[0][1])
+    assert (0, 0) not in runs and (0, 2) not in runs  # short titles stay as they are
+    ops, _ = _render("table", {"rows": [["Nom", "Carrousel été"], ["a", "1"]], "col_w": [60, 70], "one_line_header": True, "size": 10}, w=130)
+    (t,) = _of(ops, "table")
+    (run,) = t["cell_runs"][(0, 1)][0]
+    assert 7 <= run["size"] < 10 and run["text"] == "Carrousel été"

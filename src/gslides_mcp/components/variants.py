@@ -355,6 +355,12 @@ VARIANTS: dict[str, list[dict]] = {
                             ["Avril", "10 077", "1 161", "11,52 %", "817,64 €", "59", "13,86 €"], ["Cumul", "39 595", "4 846", "12,24 %", "3 231,13 €", "183", "17,66 €"]],
                    "header_fill": "ink", "total_row": True, "align": [None, "END", "END", "END", "END", "END", "CENTER"],
                    "pill_cols": {"6": [{"max": 17, "color": "accent"}, {"max": 30, "color": "accent_alt"}, {"color": "coral"}]}}},
+        {"title": "une colonne par élément, vignette en tête",
+         "when": "Résultats par post, par annonce ou par produit : une colonne par élément avec sa vignette sous le nom, une ligne par métrique. Les vignettes sont des emplacements d'image (`image_row`) que replace_images change chaque mois sans rien déplacer ; `one_line_header` garde les noms sur une ligne. Pour des annonces avec note « Top annonce » → ad_scoreboard.",
+         "props": {"rows": [["Post", "Carrousel été", "Vidéo 15 s", "Story concours"], ["Visuel", "", "", ""], ["Portée", "48 200", "31 900", "12 400"],
+                            ["Engagement", "3,1 %", "4,6 %", "2,2 %"], ["Clics", "1 240", "980", "310"]],
+                   "image_row": {"row": 1, "images": [None, "screen-demo", "", ""], "height": 56}, "header_fill": "ink", "one_line_header": True,
+                   "align": [None, "CENTER", "CENTER", "CENTER"]}},
     ],
 }
 

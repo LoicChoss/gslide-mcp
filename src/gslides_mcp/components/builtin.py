@@ -474,6 +474,43 @@ _PREV_HEADER = re.compile(r"\b[NP]\s*[-–]\s*1\b|pr[ée]c[ée]dent", re.IGNOREC
 _SIGNED = re.compile(r"^[+\-−]\s*\d")
 
 
+def image_row_ops(widths: list[float], heights: list[float], row: int, images: list, height: float,
+                  fit: str = "inside") -> list[dict]:
+    """Image slots over the cells of one table row: per column an asset or URL, "" for an empty slot, None for none.
+
+    Slots keep their frame and take next month's picture with replace_images;
+    with a component ``name`` they are ``<name>_slot_1…n`` from left to right.
+    """
+    ops: list[dict] = []
+    y = sum(heights[:row]) + (heights[row] - height) / 2
+    x = 0.0
+    for j, cw in enumerate(widths):
+        img = images[j] if j < len(images) else None
+        if img is not None:
+            op = {"op": "image", "x": x + 4, "y": y, "w": cw - 8, "h": height, "slot": True, "fit": fit, "role": "slot"}
+            src = str(img)
+            if src.startswith(("http://", "https://")):
+                op["url"] = src
+            elif src:
+                op["asset"] = src
+            ops.append(op)
+        x += cw
+    return ops
+
+
+def _one_line(text: str, width: float, size: float, floor: float = 7.0) -> tuple[str, float]:
+    """(text, size) that holds on one line in ``width``: a smaller size down to ``floor``, then « … »."""
+    avail = max(width - 2 * INSET_X, 1.0)
+    per_char = 0.5  # the wrap estimate calibrated on thumbnails is 0.485 × size per character
+    if not text or len(text) * per_char * size <= avail:
+        return text, size
+    fit = avail / (len(text) * per_char)
+    if fit >= floor:
+        return text, round(fit, 1)
+    keep = max(1, int(avail / (per_char * floor)) - 1)
+    return text[:keep].rstrip() + "…", floor
+
+
 def _is_delta_col(rows: list, jj: int, first: int, stop: int, header: list[str]) -> bool:
     """A « vs N-1 » column: its header says so, or most of its data cells are signed values."""
     if jj < len(header) and _DELTA_HEADER.search(header[jj]):
@@ -589,6 +626,24 @@ def _table(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
             rows[i][jj] = ""
     header_fill = p["header_fill"]
     header = {"fill": header_fill, "color": "on_dark" if theme.is_dark(header_fill) else "on_accent", "bold": True} if p["header"] else None
+    slot_ops: list[dict] = []
+    image_row = p["image_row"]
+    if image_row:
+        r = int(image_row.get("row", 1))
+        if not 0 <= r < len(rows):
+            raise ValueError(f"image_row.row {r} is outside the table ({len(rows)} rows, 0 = header)")
+        images = ([None] if lead else []) + list(image_row.get("images") or [])
+        img_h = float(image_row.get("height") or 56)
+        heights[r] = max(heights[r], img_h + 8)
+        for jj, img in enumerate(images):
+            if img is not None and jj < len(rows[r]):
+                rows[r][jj] = ""  # no text under a picture
+        slot_ops = image_row_ops(widths, heights, r, images, img_h, image_row.get("fit") or "inside")
+    if p["one_line_header"] and p["header"]:
+        for jj, text in enumerate(rows[0]):
+            short, fitted = _one_line(str(text), widths[jj], size)
+            if fitted < size or short != str(text):
+                cell_runs[(0, jj)] = [[{"text": short, "size": fitted}]]
     total_fill = p["total_fill"]
     op: dict = {
         "op": "table", "x": 0, "y": 0, "w": w, "rows": rows, "col_w": col_w or None, "row_h": row_h, "row_heights": heights,
@@ -603,7 +658,7 @@ def _table(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
         "cell_text_colors": cell_text_colors,
         "cell_runs": cell_runs,
     }
-    return [op] + ops + pill_ops, sum(heights)
+    return [op] + ops + pill_ops + slot_ops, sum(heights)
 
 
 register(Component(
@@ -631,6 +686,10 @@ register(Component(
         Prop("zero_cols", "list", "Colonnes dont les zéros s'affichent en alerte (négatif)."),
         Prop("na_text", "str", "Texte des cellules vides ou « - » (en gris) ; '' = laisser tel quel.", default="–"),
         Prop("pill_cols", "dict", "Colonnes en pilule colorée par seuil : {\"7\": [{\"max\": 17, \"color\": \"accent\"}, {\"max\": 30, \"color\": \"accent_alt\"}, {\"color\": \"coral\"}]}."),
+        Prop("image_row", "dict", "Ligne de vignettes : {row (0 = en-tête), images: une par colonne, asset | URL | \"\" (emplacement vide) | null (pas d'image), "
+                                  "height (pt, 56 par défaut), fit (inside | crop)} ; chaque vignette est un emplacement d'image que replace_images change ensuite sans rien déplacer."),
+        Prop("one_line_header", "bool", "Garde chaque titre de colonne sur une ligne (police réduite jusqu'à 7 pt, puis « … ») : la hauteur de l'en-tête ne bouge pas d'un mois à l'autre.",
+             default=False),
     ],
     render=_table,
     example={"rows": [["Ligne", "Coût", "Clics", "CTR", "Contacts", "CPL"], ["Display", "499,39 €", "1 270", "0,17 %", "2", "249,69 €"],

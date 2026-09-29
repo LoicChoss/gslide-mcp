@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from ..themes import Theme
 from . import Component, Prop, get, register, shift, validate
-from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height, rendered_row_h
+from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height, rendered_row_h, image_row_ops
 
 DASH = {"color": "divider", "weight": 1, "dash": "DASH"}
 
@@ -239,16 +239,10 @@ def _ad_scoreboard(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
     }
     ops: list[dict] = [table]
     y = heights[0] + 4
-    for j, a in enumerate(ads):
-        # every visual cell is an image slot: an empty one shows the dashed placeholder, and
-        # replace_images can put next month's visual in without moving anything
-        img = {"op": "image", "x": first_w + j * cw + 4, "y": y, "w": cw - 8, "h": img_h, "slot": True, "fit": "inside",
-               "role": "slot"}
-        if a.get("image"):
-            img["asset"] = str(a["image"])
-        elif a.get("image_url"):
-            img["url"] = str(a["image_url"])
-        ops.append(img)
+    # every visual cell is an image slot (the table component's image row): an empty one shows the dashed
+    # placeholder, and replace_images puts next month's visual in without moving anything
+    ops += image_row_ops([first_w] + [cw] * len(ads), heights, 1,
+                         [None] + [str(a.get("image") or a.get("image_url") or "") for a in ads], img_h, "inside")
     height = sum(heights)
     if p["top_note"]:
         ops.append({"op": "text", "x": w / 2, "y": height + 14, "w": w / 2, "h": 12 + INSETS, "text": str(p["top_note"]), "style": "caption",
