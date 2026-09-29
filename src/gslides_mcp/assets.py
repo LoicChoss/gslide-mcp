@@ -6,7 +6,10 @@ Desktop bundle). ``ensure_asset("bolt")`` finds ``bolt.png`` there;
 ``ensure_asset("/path/logo.png")`` uploads it there the first time;
 ``tint="#002B3C"`` produces and stores a recolored variant
 (``bolt__002b3c.png``, transparency kept) — that is how one picto serves
-every theme. Resolved ids are cached in ``~/.gslides-mcp/assets.json``.
+every theme. ``slot:<w>x<h>:<fill>:<line>`` refs (``slot_ref``) are empty-slot
+placeholders generated at the box's aspect ratio, so an image slot keeps its
+frame whatever picture replaces it later. Resolved ids are cached in
+``~/.gslides-mcp/assets.json``.
 """
 
 from __future__ import annotations
@@ -108,8 +111,60 @@ def _tint(src_bytes: bytes, hex6: str, dst: Path) -> Path:
     return dst
 
 
+_SLOT = re.compile(r"^slot:(\d{1,4})x(\d{1,4}):([0-9a-f]{6}):([0-9a-f]{6})$")
+SLOT_PX_PER_PT = 4
+SLOT_MAX_PX = 1600
+
+
+def slot_ref(w_pt: float, h_pt: float, fill_hex: str, line_hex: str) -> str:
+    """Asset ref of an empty-slot placeholder with the box's aspect (4 px per pt, long side ≤ 1600 px)."""
+    w, h = max(float(w_pt), 1.0) * SLOT_PX_PER_PT, max(float(h_pt), 1.0) * SLOT_PX_PER_PT
+    k = min(1.0, SLOT_MAX_PX / max(w, h))
+    return f"slot:{max(8, round(w * k))}x{max(8, round(h * k))}:{_norm_hex(fill_hex)}:{_norm_hex(line_hex)}"
+
+
+def _slot_png(w: int, h: int, fill: str, line: str, dst: Path) -> Path:
+    """Flat fill with a dashed 1 pt border (3 pt dashes, 2 pt gaps at 4 px per pt)."""
+    from PIL import Image, ImageDraw
+
+    rgb = lambda hx: tuple(int(hx[i:i + 2], 16) for i in (0, 2, 4))  # noqa: E731
+    im = Image.new("RGBA", (w, h), rgb(fill) + (255,))
+    d = ImageDraw.Draw(im)
+    lw, dash, step = 4, 12, 20
+    for x in range(0, w, step):
+        d.rectangle([x, 0, min(x + dash, w) - 1, lw - 1], fill=rgb(line))
+        d.rectangle([x, h - lw, min(x + dash, w) - 1, h - 1], fill=rgb(line))
+    for y in range(0, h, step):
+        d.rectangle([0, y, lw - 1, min(y + dash, h) - 1], fill=rgb(line))
+        d.rectangle([w - lw, y, w - 1, min(y + dash, h) - 1], fill=rgb(line))
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    im.save(dst, "PNG")
+    return dst
+
+
+def _slot_file(w: str, h: str, fill: str, line: str) -> str:
+    """Drive id of the slot placeholder, generated and uploaded to the assets folder the first time."""
+    folder = folder_id()
+    target = f"slot-{w}x{h}-{fill}-{line}.png"
+    key = f"{folder}/{target}"
+    cache = _cache_read()
+    if key in cache:
+        return cache[key]
+    drv = drive_service()
+    fid = _list_folder(drv, folder).get(target)
+    if fid is None:
+        tmp = _slot_png(int(w), int(h), fill, line, CACHE.parent / "slots" / target)
+        fid = _upload(drv, folder, str(tmp), target)
+    cache[key] = fid
+    _cache_write(cache)
+    return fid
+
+
 def ensure_asset(ref: str, tint: str | None = None) -> str:
-    """Drive file id for an asset name, a local path or a ``drive:<id>`` ref, optionally tinted."""
+    """Drive file id for an asset name, a local path, a ``drive:<id>`` or ``slot:…`` ref, optionally tinted."""
+    slot = _SLOT.match(ref)
+    if slot:
+        return _slot_file(*slot.groups())
     if ref.startswith("drive:"):
         fid = ref[6:].strip()
         if not fid:
@@ -194,6 +249,9 @@ def _measure(data: bytes) -> tuple[int, int]:
 
 def asset_size(ref: str, tint: str | None = None, fid: str | None = None) -> tuple[int, int]:
     """(width, height) in pixels of an asset, cached next to its id."""
+    slot = _SLOT.match(ref)
+    if slot:
+        return int(slot.group(1)), int(slot.group(2))
     fid = fid or ensure_asset(ref, tint)
     cache = _cache_read()
     sizes = cache.setdefault("_sizes", {})

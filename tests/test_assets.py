@@ -173,3 +173,30 @@ def test_hosted_server_never_uploads_a_server_file(fake_drive, tmp_path, monkeyp
     with pytest.raises(ValueError, match="Drive assets folder"):
         assets.ensure_asset(path, tint=tint)
     assert _names(fake_drive, "files.create") == []
+
+
+# --- slot placeholders --------------------------------------------------------------------
+
+def test_slot_placeholder_is_generated_uploaded_shared_and_cached(fake_drive):
+    ref = assets.slot_ref(100, 56, "#F2F4F4", "#C8D0D0")
+    assert ref == "slot:400x224:f2f4f4:c8d0d0"
+    fid = assets.ensure_asset(ref)
+    create_kw = [kw for n, kw in fake_drive.calls if n == "files.create"][0]
+    assert create_kw["body"]["name"] == "slot-400x224-f2f4f4-c8d0d0.png"
+    assert create_kw["body"]["parents"] == [FOLDER]
+    with PILImage.open(create_kw["media_path"]) as im:
+        assert im.size == (400, 224)
+        assert im.getpixel((200, 112))[:3] == (0xF2, 0xF4, 0xF4)  # flat fill
+        assert im.getpixel((1, 1))[:3] == (0xC8, 0xD0, 0xD0)      # a dash starts in the corner
+    assert _names(fake_drive, "permissions.create")               # readable by Slides like any asset
+    assert assets.ensure_asset(ref) == fid
+    assert len(_names(fake_drive, "files.create")) == 1
+
+
+def test_slot_ref_caps_the_long_side_and_keeps_the_aspect():
+    assert assets.slot_ref(800, 100, "ffffff", "#000000") == "slot:1600x200:ffffff:000000"
+
+
+def test_slot_size_is_read_from_the_ref(fake_drive):
+    assert assets.asset_size("slot:400x224:f2f4f4:c8d0d0") == (400, 224)
+    assert fake_drive.calls == []
