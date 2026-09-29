@@ -25,7 +25,7 @@ Origin: Loïc's Apps Script bilan updater (tables from ranges with Sheets format
 - V2 (verified 2026-09-30): `duplicateObject` puts the copy **on top** of the slide; `SEND_BACKWARD` moves an element one step back. So a rename is one batch: duplicate, delete, then as many SEND_BACKWARD as computed from the original order.
 - V3 (verified 2026-09-30): `insertTableRows` copies the reference row's cell fill, text style and alignment. So new data rows are inserted **below the last data row** (never next to a total, whose look they would take); a table that grows pushes down what is under it: the component's own elements (same name prefix) are moved.
 - V4: `spreadsheets.get` with `ranges` + `includeGridData` works with the `drive` scope, locally and hosted.
-- V5: whether a table's `tableRows[].rowHeight` read back reflects rows grown by their text (needed to realign images over a row).
+- V5: whether a table's `tableRows[].rowHeight` read back reflects rows grown by their text. Not needed in the end: slots are realigned on the image row found from their own frame, and `one_line_header` keeps the header row from growing. Phase 2 verified live on the test deck (2026-09-30): a named scoreboard went from 3 to 4 ads and gained a metric row (`rows` and `columns` fit), the four visuals landed in their columns and the note under the table moved down.
 
 Live checks use the pattern in memory « live-test-via-connector »: repo code run against a real `get_page` JSON with a stub service, requests sent with the connector's `batch_apply`, then `screenshot`; after a release, the hosted connector runs the new tools directly.
 

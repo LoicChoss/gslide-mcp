@@ -24,8 +24,12 @@ The model orchestrates the two; the servers never talk to each other.
    slide follows. `list_sheets_charts(deck)` says what is linked to what.
 
 Tables are not linkable: Slides only links charts. Compute the table in Sheets
-(totals, deltas, ROAS), read it with the Sheets MCP `read_range`, and write it with
-the `table` component (`total_row`, `delta_cols`, `icons`).
+(totals, deltas, ROAS), insert it once with the `table` component (`total_row`,
+`delta_cols`, `icons`; `name` for readable ids), then keep it in line with
+`sync_table(deck, "<name>_table_1", spreadsheet, range)`: gslide-mcp reads the range
+(a named range follows the data) and rewrites the cells that changed in place —
+`style` slides / sheets / charter, `rows` and `columns` `fit` for a table whose
+size follows the data, image slots realigned. `dry_run=True` shows the changes first.
 
 ## Recipes in the catalogue
 
