@@ -12,7 +12,8 @@ from gslides_api.element.shape import ShapeElement
 
 from ..app import ADDITIVE, IDEMPOTENT, mcp
 from ..auth import client, slide_service
-from ..util import parse_pres_id, parse_range, rgb_color, resolve_slide_ids
+from ..util import find_element, parse_pres_id, parse_range, rgb_color, resolve_slide_ids
+from . import refill
 
 
 @mcp.tool(annotations=IDEMPOTENT)
@@ -136,7 +137,9 @@ def set_text(presentation: str, element: str, text: str) -> dict:
     """Replace plain text on an element. Use write_text_markdown for any styling.
 
     Use this when you genuinely just want plain text and don't want markdown
-    parsing. For styled content, prefer write_text_markdown.
+    parsing. For styled content, prefer write_text_markdown. To refill the
+    shapes and cells of a designed deck and keep each one's style,
+    ``refill_text`` (many edits, one call).
     """
     pid = parse_pres_id(presentation)
     svc = slide_service()
@@ -228,18 +231,30 @@ def replace_text(
     pairs: list[dict] | None = None,
     slides: list[str] | None = None,
     match_case: bool = False,
+    elements: list[str] | None = None,
+    dry_run: bool = False,
 ) -> dict:
     """Find-and-replace text across the deck, with optional scope and batching.
 
-    Three call shapes:
+    Call shapes:
         - Single pair, whole deck: ``replace_text(p, find='X', replace='Y')``
         - Single pair, slide-scoped: ``replace_text(p, find='X', replace='Y', slides=[1,3])``
+        - Element-scoped: ``replace_text(p, find='X', replace='Y', elements=['g1_title', 'tbl_1'])``
         - Batch pairs: ``replace_text(p, pairs=[{'find':'X','replace':'Y'}, ...])``
-          (each pair may set its own ``match_case``; can be combined with ``slides=``)
+          (each pair may set its own ``match_case``; can be combined with
+          ``slides=`` or ``elements=``)
 
-    NB: replaceAllText inherits the prior text's bold/italic/font/size/color.
-    If you need styled output, follow up with write_text_markdown on the
-    affected elements OR style_text with the explicit ranges.
+    Scope trap: ``slides=`` replaces EVERY occurrence on those slides — a
+    label « nouveau levier » also changes inside the analysis paragraph that
+    quotes it. When a phrase may appear in more than one place, run
+    ``dry_run=True`` first: it lists each match (slide, element, cell, the
+    words around it) and writes nothing; then pass ``elements=`` with only
+    the shapes / tables to change.
+
+    Style: the new text keeps the style of the text it replaces (Slides does
+    it for the deck and slide scopes; the element scope re-applies the
+    style of the first replaced character). For bold parts, follow up with
+    write_text_markdown; to rewrite a whole shape or cell, ``refill_text``.
 
     When occurrences = 0 for a pair, returns ``near_misses`` candidates from
     the deck text (top 3 strings within edit distance ≤2 or matching after
@@ -249,11 +264,15 @@ def replace_text(
     Args:
         slides: optional list of slide refs (1-based ints, str-ints, or
             objectIds) to scope replacements. None = whole deck.
+        elements: objectIds of the shapes and tables (every cell) to
+            replace in, and nowhere else. Not with ``slides``.
         pairs: list of ``{'find': str, 'replace': str, 'match_case': bool?}``
-            for batch operations. Each pair = one ``replaceAllText`` request
-            inside the same ``batchUpdate`` (one round trip).
+            for batch operations, applied in order in one ``batchUpdate``.
+        dry_run: list the matches (``where``) and write nothing.
 
-    Returns: ``{results: [{find, replace, occurrences, near_misses?}], total}``.
+    Returns: ``{results: [{find, replace, occurrences, where?, near_misses?}],
+    total[, dry_run]}`` — ``where`` (dry run and element scope) is
+    ``[{slide, element, row?, column?, count, context}]``.
     """
     pid = parse_pres_id(presentation)
     svc = slide_service()
@@ -274,6 +293,13 @@ def replace_text(
         if find is None or replace is None:
             raise ValueError("provide find= and replace=, or pairs=")
         work.append({"find": find, "replace": replace, "match_case": match_case})
+    if any(not w["find"] for w in work):
+        raise ValueError("find must not be empty")
+    if elements and slides:
+        raise ValueError("pass slides= or elements=, not both: elements already names where to replace")
+
+    if elements or dry_run:
+        return _replace_scanned(svc, pid, work, slides, elements, dry_run)
 
     page_object_ids: list[str] | None = None
     if slides:
@@ -313,6 +339,86 @@ def replace_text(
                     entry["near_misses"] = cands
 
     return {"results": results, "total": sum(r["occurrences"] for r in results)}
+
+
+def _replace_scanned(svc, pid: str, work: list[dict], slides, elements, dry_run: bool) -> dict:
+    """Element-scoped replace and dry runs: the matches are found here, not by replaceAllText.
+
+    Each text container (a shape, a table cell) is held as characters plus
+    the style of each; pairs apply in order, matches from the last to the
+    first so earlier indexes stay valid, and the batch replays the same
+    edits on the deck (indexes in UTF-16 units, as the API counts).
+    """
+    import re
+
+    pres = svc.presentations().get(presentationId=pid).execute()
+    slide_index = {s["objectId"]: i for i, s in enumerate(pres.get("slides", []), 1)}
+    targets: list[tuple[str, dict, tuple | None, dict]] = []  # (slide id, element, cell, text)
+    if elements:
+        for oid in elements:
+            el, slide = find_element(pres, oid)
+            if el is None:
+                raise ValueError(f"element not found: {oid!r}")
+            conts = refill.containers(el)
+            if not conts:
+                raise ValueError(f"{oid!r} holds no text (image, line, chart or group)")
+            targets += [(slide["objectId"], el, cell, text) for cell, text in conts]
+    else:
+        wanted = set(resolve_slide_ids(svc, pid, slides)) if slides else None
+        for s in pres.get("slides", []):
+            if wanted is not None and s["objectId"] not in wanted:
+                continue
+            for el in refill.walk(s.get("pageElements", [])):
+                targets += [(s["objectId"], el, cell, text) for cell, text in refill.containers(el)]
+
+    state = [refill.text_of(text) for _s, _el, _c, text in targets]
+    results = [{"find": w["find"], "replace": w["replace"], "occurrences": 0, "where": []} for w in work]
+    requests: list[dict] = []
+    for k, (sid, el, cell, _text) in enumerate(targets):
+        chars, styles = state[k]
+        loc = {"cellLocation": {"rowIndex": cell[0], "columnIndex": cell[1]}} if cell else {}
+        for w, res in zip(work, results):
+            flags = 0 if w["match_case"] else re.IGNORECASE
+            s = "".join(chars)
+            spans = [(m.start(), m.end()) for m in re.finditer(re.escape(w["find"]), s, flags)]
+            if not spans:
+                continue
+            a = spans[0][0]
+            ctx = s[max(0, a - 30):spans[0][1] + 30].replace("\n", " ⏎ ").strip()
+            spot = {"slide": slide_index.get(sid), "element": el["objectId"], "count": len(spans), "context": ctx}
+            if cell:
+                spot.update(row=cell[0], column=cell[1])
+            res["where"].append(spot)
+            res["occurrences"] += len(spans)
+            for start, end in reversed(spans):
+                u0 = refill.utf16_len("".join(chars[:start]))
+                u1 = u0 + refill.utf16_len("".join(chars[start:end]))
+                style = styles[start] if start < len(styles) else {}
+                requests.append({"deleteText": {"objectId": el["objectId"], **loc,
+                                                "textRange": {"type": "FIXED_RANGE", "startIndex": u0, "endIndex": u1}}})
+                if w["replace"]:
+                    requests.append({"insertText": {"objectId": el["objectId"], **loc, "text": w["replace"],
+                                                    "insertionIndex": u0}})
+                    st = refill.style_request(el["objectId"], style, loc, {
+                        "type": "FIXED_RANGE", "startIndex": u0, "endIndex": u0 + refill.utf16_len(w["replace"])})
+                    if st:
+                        requests.append(st)
+                chars[start:end] = list(w["replace"])
+                styles[start:end] = [style] * len(w["replace"])
+
+    if requests and not dry_run:
+        svc.presentations().batchUpdate(presentationId=pid, body={"requests": requests}).execute()
+    haystack = ["".join(c) for c, _st in (refill.text_of(t) for _s, _e, _c, t in targets)]
+    for res in results:
+        if res["occurrences"] == 0:
+            res.pop("where")
+            cands = _near_miss_candidates(res["find"], haystack)
+            if cands:
+                res["near_misses"] = cands
+    out = {"results": results, "total": sum(r["occurrences"] for r in results)}
+    if dry_run:
+        out["dry_run"] = True
+    return out
 
 
 def _gather_deck_text(svc, pid: str, page_object_ids: list[str] | None) -> list[str]:

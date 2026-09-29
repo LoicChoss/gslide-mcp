@@ -200,6 +200,11 @@ def set_table_cell(presentation: str, table_id: str, row: int, column: int, mark
     the same batch; the clear is skipped on empty cells, where a deleteText
     would fail the batch.
 
+    The writer resets the cell's text style (font, size, colour) to the
+    table's defaults: fine in a table you just made, wrong in a designed
+    one. To refill cells of an existing table and keep their look (and
+    colour « vs N-1 » values by sign), use ``refill_text``.
+
     Args:
         row, column: 0-based cell coordinates.
 

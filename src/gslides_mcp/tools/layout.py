@@ -43,7 +43,10 @@ def transform_element(
 ) -> dict:
     """Move and / or resize an element (shape, image, table, group, linked Sheets chart).
 
-    Move: absolute (x_pt, y_pt) or relative (dx_pt, dy_pt). Resize: width_pt and / or
+    Move, axis by axis: absolute (x_pt, y_pt) or relative (dx_pt, dy_pt). Each axis
+    stands alone: ``x_pt`` only moves horizontally and keeps the top edge, ``dy_pt``
+    only nudges vertically, ``x_pt`` + ``dy_pt`` mixes both; only ``x_pt`` with
+    ``dx_pt`` (or ``y_pt`` with ``dy_pt``) is refused. Resize: width_pt and / or
     height_pt, the displayed size in points. One dimension alone scales the element
     uniformly (the aspect is kept: a chart or an image is never squashed); pass both
     to set the aspect. Resizing alone keeps the position.
@@ -64,23 +67,16 @@ def transform_element(
     cur_tx = t.get("translateX", 0)
     cur_ty = t.get("translateY", 0)
 
-    if (x_pt is None) != (y_pt is None):
-        raise ValueError("x_pt and y_pt must be provided together")
-    if (dx_pt is None) != (dy_pt is None):
-        raise ValueError("dx_pt and dy_pt must be provided together")
     if x_pt is not None and dx_pt is not None:
-        raise ValueError("provide either absolute (x_pt, y_pt) OR relative (dx_pt, dy_pt), not both")
+        raise ValueError("x_pt and dx_pt both move horizontally: give one of them")
+    if y_pt is not None and dy_pt is not None:
+        raise ValueError("y_pt and dy_pt both move vertically: give one of them")
+    if all(v is None for v in (x_pt, y_pt, dx_pt, dy_pt, width_pt, height_pt)):
+        raise ValueError("provide coordinates (x_pt / y_pt, dx_pt / dy_pt) or a size (width_pt / height_pt)")
 
-    if x_pt is not None:
-        new_tx = int(x_pt * PT_TO_EMU)
-        new_ty = int(y_pt * PT_TO_EMU)
-    elif dx_pt is not None:
-        new_tx = int(cur_tx + dx_pt * PT_TO_EMU)
-        new_ty = int(cur_ty + dy_pt * PT_TO_EMU)
-    elif width_pt is None and height_pt is None:
-        raise ValueError("provide absolute or relative coordinates, or width_pt / height_pt")
-    else:
-        new_tx, new_ty = int(cur_tx), int(cur_ty)  # resize in place
+    # an axis left out keeps its position
+    new_tx = int(x_pt * PT_TO_EMU) if x_pt is not None else int(cur_tx + (dx_pt or 0) * PT_TO_EMU)
+    new_ty = int(y_pt * PT_TO_EMU) if y_pt is not None else int(cur_ty + (dy_pt or 0) * PT_TO_EMU)
     if width_pt is not None or height_pt is not None:
         # displayed size = base size × scale: change the scale, never the base size
         size = el.get("size", {})
