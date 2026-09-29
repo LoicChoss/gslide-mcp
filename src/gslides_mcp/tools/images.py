@@ -1,4 +1,4 @@
-"""insert_image_local: put a local PNG/JPEG/GIF on a slide.
+"""insert_image_local (a local PNG/JPEG/GIF on a slide) and replace_images (swap pictures in place).
 
 The Slides API only takes images by URL, so the file makes a short trip
 through Drive: upload, share read-only to anyone-with-the-link, createImage
@@ -17,9 +17,11 @@ import tempfile
 
 from googleapiclient.http import MediaFileUpload
 
-from ..app import ADDITIVE, mcp
+from .. import assets
+from ..app import ADDITIVE, IDEMPOTENT, mcp
 from ..auth import drive_service, remote_mode, slide_service
-from ..util import PT_TO_EMU, parse_pres_id, resolve_slide_ids, validate_object_id
+from ..util import PT_TO_EMU, find_element, parse_pres_id, resolve_slide_ids, validate_object_id
+from .semantic import _image_url_is_raster
 
 _MAX_BYTES = 50 * 1024 * 1024  # Slides API limit for image sources
 
@@ -186,3 +188,151 @@ def _insert_file(
         "object_id": new_id, "slide_id": sid, "mime_type": mime,
         "drive_file_id": leftover, "warning": warning,
     }
+
+
+# --- replace_images ----------------------------------------------------------------------
+
+_METHODS = {"inside": "CENTER_INSIDE", "crop": "CENTER_CROP"}
+_MAX_URL = 2048  # Slides API limit for an image URL
+_DEFAULT_THEME = os.environ.get("GSLIDES_MCP_THEME", "periscope")
+
+
+def _box_pt(el: dict) -> tuple[tuple[float, float, float, float], bool]:
+    """Displayed (x, y, w, h) of an element in points, in its own transform space, and whether it is sheared."""
+    t = el.get("transform", {})
+    size = el.get("size", {})
+    w = size.get("width", {}).get("magnitude", 0) * t.get("scaleX", 1) / PT_TO_EMU
+    h = size.get("height", {}).get("magnitude", 0) * t.get("scaleY", 1) / PT_TO_EMU
+    x, y = t.get("translateX", 0) / PT_TO_EMU, t.get("translateY", 0) / PT_TO_EMU
+    return (x, y, w, h), bool(t.get("shearX") or t.get("shearY"))
+
+
+def _inside(box, frame, tol: float = 0.5) -> bool:
+    x, y, w, h = box
+    fx, fy, fw, fh = frame
+    return x >= fx - tol and y >= fy - tol and x + w <= fx + fw + tol and y + h <= fy + fh + tol
+
+
+def _hex6(theme, value) -> str:
+    c = theme.color(value)
+    return "{:02x}{:02x}{:02x}".format(*(round(c[k] * 255) for k in ("red", "green", "blue")))
+
+
+def _drive_url(file_id: str) -> str:
+    return f"https://drive.google.com/uc?export=view&id={file_id}"
+
+
+@mcp.tool(annotations=IDEMPOTENT)
+def replace_images(presentation: str, images: list[dict]) -> dict:
+    """Swap the picture of existing image elements — one batch, each keeps its id, frame and z-order.
+
+    For visuals that change from one month to the next (top ads, captures,
+    logos) in a deck that stays: the element is the same object before and
+    after, so bindings and layout survive. Each image has a frame — the
+    box it must fit — recorded in its alt text (``slot:x,y,w,h``) by image
+    slots and, for any other image, taken from its current box the first
+    time. The frame is put back before every swap, because Google's
+    CENTER_INSIDE shrinks the element to the picture it receives.
+
+    Args:
+        images: ``[{element, source, fit?}]``.
+            ``source``: an image URL (http/https, 2 kB max, must serve PNG,
+            JPEG or GIF: checked before writing), a name of the assets
+            folder (``list_assets``) or ``drive:<file id>``; empty or null
+            puts the empty-slot placeholder back.
+            ``fit``: ``inside`` (default: the whole picture, centred, the
+            frame's edges may stay empty) or ``crop`` (fills the frame,
+            the picture is cut to its aspect).
+
+    Everything is checked before the batch: an element that is not an
+    image (a shape, a table: insert it again as an image slot), an element
+    listed twice, an unknown asset, a URL that does not serve a picture.
+    A rotated or sheared image is swapped without restoring its frame
+    (``note``).
+
+    Returns: ``{replaced: [{element, source, fit, frame, frame_recorded,
+    frame_restored, note?}]}``.
+
+    Example::
+
+        replace_images(deck, [
+            {"element": "yt_top_slot_1", "source": "https://…/creative.jpg"},
+            {"element": "yt_top_slot_2", "source": "drive:1AbC…", "fit": "crop"},
+            {"element": "yt_top_slot_3", "source": ""},
+        ])
+    """
+    from .. import themes
+    from ..draw import parse_slot_frame, slot_frame_text
+
+    if not images:
+        raise ValueError("images is empty: give [{element, source, fit?}]")
+    pid = parse_pres_id(presentation)
+    svc = slide_service()
+    pres = svc.presentations().get(presentationId=pid).execute()
+    theme = None
+
+    planned = []
+    seen: set[str] = set()
+    for n, item in enumerate(images, 1):
+        oid = item.get("element")
+        if not oid:
+            raise ValueError(f"image #{n} needs 'element' (and 'source'): {item!r}")
+        if oid in seen:
+            raise ValueError(f"image #{n}: {oid!r} is listed twice")
+        seen.add(oid)
+        el, _slide = find_element(pres, oid)
+        if el is None:
+            raise ValueError(f"image #{n}: element not found: {oid!r}")
+        if "image" not in el:
+            raise ValueError(f"image #{n}: {oid!r} is not an image (a shape or a table): a picture can only be "
+                             "swapped into an image; insert an image slot there instead")
+        fit = item.get("fit") or "inside"
+        if fit not in _METHODS:
+            raise ValueError(f"image #{n}: fit must be 'inside' or 'crop', got {fit!r}")
+        box, sheared = _box_pt(el)
+        stored = parse_slot_frame(el.get("description"))
+        frame = stored if stored and _inside(box, stored) else box
+        source = item.get("source")
+        if not source:
+            if theme is None:
+                theme = themes.load(_DEFAULT_THEME)
+            ref = assets.slot_ref(frame[2], frame[3], _hex6(theme, "surface"), _hex6(theme, "divider"))
+            url, method, shown = _drive_url(assets.ensure_asset(ref)), "CENTER_CROP", "slot"
+        elif str(source).startswith(("http://", "https://")):
+            if len(source) > _MAX_URL:
+                raise ValueError(f"image #{n} ({oid}): the URL is {len(source)} characters, over the 2 kB Slides accepts")
+            ok, ctype = _image_url_is_raster(source)
+            if not ok:
+                raise ValueError(f"image #{n} ({oid}): {source} does not serve a PNG, JPEG or GIF ({ctype}); "
+                                 "platform links expire: put the visual in Drive and pass drive:<id>")
+            url, method, shown = source, _METHODS[fit], source
+        else:
+            try:
+                url = _drive_url(assets.ensure_asset(str(source)))
+            except ValueError as exc:
+                raise ValueError(f"image #{n} ({oid}): {exc}") from None
+            method, shown = _METHODS[fit], str(source)
+        planned.append((oid, el, box, sheared, stored, frame, url, method, shown))
+
+    reqs: list[dict] = []
+    report = []
+    for oid, el, box, sheared, stored, frame, url, method, shown in planned:
+        entry = {"element": oid, "source": shown, "fit": "crop" if method == "CENTER_CROP" else "inside",
+                 "frame": [round(v, 1) for v in frame], "frame_recorded": False, "frame_restored": False}
+        if stored != frame:
+            reqs.append({"updatePageElementAltText": {"objectId": oid, "description": slot_frame_text(*frame)}})
+            entry["frame_recorded"] = True
+        if sheared:
+            entry["note"] = "rotated or sheared image: swapped without restoring its frame"
+        elif any(abs(a - b) > 0.05 for a, b in zip(box, frame)):
+            size = el["size"]
+            reqs.append({"updatePageElementTransform": {"objectId": oid, "applyMode": "ABSOLUTE", "transform": {
+                "scaleX": frame[2] * PT_TO_EMU / size["width"]["magnitude"],
+                "scaleY": frame[3] * PT_TO_EMU / size["height"]["magnitude"],
+                "translateX": frame[0] * PT_TO_EMU, "translateY": frame[1] * PT_TO_EMU, "unit": "EMU",
+            }}})
+            entry["frame_restored"] = True
+        reqs.append({"replaceImage": {"imageObjectId": oid, "url": url, "imageReplaceMethod": method}})
+        report.append(entry)
+    svc.presentations().batchUpdate(presentationId=pid, body={"requests": reqs}).execute()
+    return {"replaced": report}

@@ -19,7 +19,7 @@ DESTRUCTIVE = [
 ]
 IDEMPOTENT = [
     "set_text", "set_speaker_notes", "set_background", "set_slide_hidden", "set_fill", "set_outline",
-    "set_table_cell", "write_text_markdown", "batch_write_markdown", "style_text", "refill_text", "move_to_folder", "resize_table",
+    "set_table_cell", "write_text_markdown", "batch_write_markdown", "style_text", "refill_text", "move_to_folder", "resize_table", "replace_images",
 ]
 
 
