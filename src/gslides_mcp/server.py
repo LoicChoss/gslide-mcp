@@ -44,7 +44,15 @@ def google_auth():
         client_id=_require("GOOGLE_CLIENT_ID"),
         client_secret=_require("GOOGLE_CLIENT_SECRET"),
         base_url=_require("GSLIDES_MCP_BASE_URL").rstrip("/"),
-        required_scopes=["openid", "https://www.googleapis.com/auth/userinfo.email", *SCOPES],
+        required_scopes=[
+            "openid",
+            "https://www.googleapis.com/auth/userinfo.email",
+            *SCOPES,
+            # Not used by the tools: the hosted Apps Script (copy for gslides,
+            # chart_png for google-sheets-mcp) lists it, and scripts.run wants
+            # the caller's token to cover every scope of the script.
+            "https://www.googleapis.com/auth/spreadsheets",
+        ],
         extra_authorize_params=extra or None,
     )
 

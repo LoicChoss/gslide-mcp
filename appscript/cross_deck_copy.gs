@@ -24,14 +24,13 @@
  * Subsequent edits to this file: re-deploy via Manage Deployments → edit →
  * new version. The URL stays the same.
  *
- * Hosted, multi-user servers: use a SEPARATE Apps Script project per server,
- * with this same file, deployed as an API executable so each call runs as
- * the signed-in user (scripts.run → api()). scripts.run needs the caller's
- * token to cover every scope in the project's manifest, so each project
- * lists only what its server asks for:
- *   1. Project Settings → show "appsscript.json"; in it set "oauthScopes":
- *        gslides:  presentations, drive
- *        sheets:   spreadsheets
+ * Hosted, multi-user servers (gslides and google-sheets-mcp share one
+ * project): a SEPARATE Apps Script project from the web app above, with this
+ * same file, deployed as an API executable so each call runs as the
+ * signed-in user (scripts.run → api()). scripts.run needs the caller's token
+ * to cover every scope in the manifest, so both servers ask for all three:
+ *   1. Project Settings → show "appsscript.json"; in it set "oauthScopes" to
+ *      presentations, drive and spreadsheets
  *      (full URLs, https://www.googleapis.com/auth/<name>).
  *   2. Project Settings → Google Cloud Platform (GCP) project → Change
  *      project → the NUMBER of the project holding the server's OAuth

@@ -12,7 +12,7 @@ In a project that belongs to the Workspace organisation:
 1. Enable the Google Slides, Google Drive and Apps Script APIs.
 2. OAuth consent screen: audience **Internal** (only accounts of the domain
    can sign in, no Google verification needed). Scopes: `openid`,
-   `userinfo.email`, `presentations`, `drive`.
+   `userinfo.email`, `presentations`, `drive`, `spreadsheets`.
 3. OAuth client of type **Web application**, redirect URI
    `https://<host>/auth/callback` (plus `http://localhost:8000/auth/callback`
    to test locally).
@@ -41,12 +41,14 @@ In Claude: Settings → Connectors → Add custom connector → `https://<host>/
 
 The web-app deployment runs as whoever deployed it, so the hosted server
 refuses it. Create a **separate** Apps Script project with
-`appscript/cross_deck_copy.gs`, its manifest limited to the `presentations`
-and `drive` scopes, and deploy it as an **API executable** (steps at the top
-of the file): its Cloud project must be the one holding the OAuth client, and
-`GSLIDES_MCP_APPSCRIPT_ID` is its deployment ID (`AKfycb…`). Each copy then runs as the
-signed-in user. Keep the existing web-app project as it is: local servers
-(this one and google-sheets-mcp) still use it.
+`appscript/cross_deck_copy.gs`, its manifest listing the `presentations`,
+`drive` and `spreadsheets` scopes, and deploy it as an **API executable**
+(steps at the top of the file): its Cloud project must be the one holding the
+OAuth client, and `GSLIDES_MCP_APPSCRIPT_ID` is its deployment ID
+(`AKfycb…`). Each copy then runs as the signed-in user. The hosted
+google-sheets-mcp uses the same project for `chart_png`, which is why the
+server also asks for `spreadsheets`. Keep the existing web-app project as it
+is: local servers still use it.
 
 ## What changes for tools
 
