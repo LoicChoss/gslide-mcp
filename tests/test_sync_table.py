@@ -140,3 +140,66 @@ def test_charter_refuses_props_that_would_add_elements(deck):
     with pytest.raises(ValueError, match="icons"):
         sync.sync_table("PRES1", "tbl_b", "SHEET1", RANGE, style="charter", charter={"icons": ["search"]})
     assert deck.batches == []
+
+
+# --- rows="fit" ----------------------------------------------------------------------------
+
+PT = 12700
+
+
+def _kinds(batch):
+    return [next(iter(q)) for q in batch]
+
+
+def test_fit_adds_rows_below_the_last_data_row_then_writes_them(deck, fake_sheets):
+    fake_sheets.responses[RANGE] = _src([["Régie", "Dépenses", "vs N-1"], ["Google", "46 811 €", "+52 %"],
+                                         ["Meta", "12 000 €", "-8 %"], ["Bing", "900 €", "+2 %"],
+                                         ["Pinterest", "300 €", "+1 %"], ["Total", "60 011 €", "+30 %"]])
+    out = sync.sync_table("PRES1", "tbl_b", "SHEET1", RANGE, rows="fit")
+    (batch,) = deck.batches
+    assert batch[0] == {"insertTableRows": {"tableObjectId": "tbl_b", "cellLocation": {"rowIndex": 2},
+                                            "insertBelow": True, "number": 2}}
+    written = _cells_written(batch)
+    assert (3, 0) in written and (4, 0) in written and (5, 0) in written  # new rows, then the old last row moved down
+    assert {"row": 5, "column": 0, "old": "Bing", "new": "Total"} in out["changes"]
+    assert any("2 rows added below row 2" in n for n in out["notes"])
+    assert out["dimensions"] == {"table": [4, 3], "range": [6, 3]}
+
+
+def test_fit_removes_rows_before_the_last_row(deck, fake_sheets):
+    fake_sheets.responses[RANGE] = _src([["Régie", "Dépenses", "vs N-1"], ["Google", "46 811 €", "+52 %"],
+                                         ["Total", "46 811 €", "+52 %"]])
+    out = sync.sync_table("PRES1", "tbl_b", "SHEET1", RANGE, rows="fit")
+    (batch,) = deck.batches
+    assert batch[0] == {"deleteTableRow": {"tableObjectId": "tbl_b", "cellLocation": {"rowIndex": 2}}}
+    assert _kinds(batch).count("deleteTableRow") == 1
+    assert {"row": 2, "column": 0, "old": "Bing", "new": "Total"} in out["changes"]
+
+
+def test_fit_moves_the_components_own_elements_under_the_table(fake_slides, pres, fake_sheets):
+    tbl = _table("yt_top_table_1", [[("Nom", {}), ("A", {})], [("Vues", {}), ("1", {})], [("CTR", {}), ("2", {})]])
+    tbl["transform"] = {"scaleX": 1, "scaleY": 1, "translateX": 0, "translateY": 40 * PT, "unit": "EMU"}
+    for row in tbl["table"]["tableRows"]:
+        row["rowHeight"] = {"magnitude": 26 * PT, "unit": "EMU"}
+    note, other = _shape("yt_top_top_note_1", "Top annonce"), _shape("free_text", "Analyse")
+    for el, y in ((note, 130), (other, 140)):
+        el["transform"] = {"scaleX": 1, "scaleY": 1, "translateX": 0, "translateY": y * PT, "unit": "EMU"}
+    pres["slides"][2]["pageElements"] = [tbl, note, other]
+    fake_sheets.responses[RANGE] = _src([["Nom", "A"], ["Vues", "1"], ["Clics", "5"], ["CTR", "2"]])
+    out = sync.sync_table("PRES1", "yt_top_table_1", "SHEET1", RANGE, rows="fit")
+    (batch,) = fake_slides.batches
+    moves = [q["updatePageElementTransform"] for q in batch if "updatePageElementTransform" in q]
+    assert moves == [{"objectId": "yt_top_top_note_1", "applyMode": "RELATIVE",
+                      "transform": {"scaleX": 1, "scaleY": 1, "translateX": 0, "translateY": 26 * PT, "unit": "EMU"}}]
+    assert any("free_text" in n and "overlap_check" in n for n in out["notes"])
+
+
+def test_fit_refuses_to_drop_the_header_or_a_merge(deck, fake_sheets, pres):
+    fake_sheets.responses[RANGE] = _src([["Régie", "Dépenses", "vs N-1"]])
+    with pytest.raises(ValueError, match="header and one row"):
+        sync.sync_table("PRES1", "tbl_b", "SHEET1", RANGE, rows="fit")
+    pres["slides"][2]["pageElements"][0]["table"]["tableRows"][1]["tableCells"][0]["rowSpan"] = 2
+    fake_sheets.responses[RANGE] = _src([["Régie", "Dépenses", "vs N-1"], ["Total", "1", "+1 %"]])
+    with pytest.raises(ValueError, match="merged"):
+        sync.sync_table("PRES1", "tbl_b", "SHEET1", RANGE, rows="fit")
+    assert deck.batches == []

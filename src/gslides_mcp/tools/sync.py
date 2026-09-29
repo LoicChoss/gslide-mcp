@@ -10,6 +10,8 @@ place and look; the deck needs no re-insertion month after month.
 from __future__ import annotations
 
 import builtins
+import copy
+import re
 
 from .. import components, sheets_source, themes
 from .. import draw as drawing
@@ -22,7 +24,7 @@ _STYLES = ("slides", "sheets", "charter")
 # charter props that would add elements or change the table's geometry: not for a table that stays
 _CHARTER_REFUSED = ("rows", "icons", "dots", "subs", "pill_cols", "col_w", "row_h", "row_heights", "icon_w", "icon_tint")
 _STYLE_KINDS = ("updateTableCellProperties", "updateTextStyle", "updateParagraphStyle", "updateTableBorderProperties")
-_ROWS = ("keep",)
+_ROWS = ("keep", "fit")
 _COLUMNS = ("keep",)
 
 
@@ -118,30 +120,129 @@ def _charter_style(el: dict, texts: list[list[str]], charter: dict | None) -> tu
     return [[str(v) for v in row] for row in top["rows"]], kept
 
 
+def _empty_copy(cell: dict, r: int, c: int) -> dict:
+    """What Slides puts in a row inserted from ``cell``'s row: same properties and paragraph style, no text."""
+    new = copy.deepcopy(cell)
+    new["location"] = {"rowIndex": r, "columnIndex": c}
+    new["rowSpan"] = new["columnSpan"] = 1
+    markers = [te for te in (cell.get("text") or {}).get("textElements", []) if "paragraphMarker" in te][:1]
+    new["text"] = {"textElements": copy.deepcopy(markers)}
+    return new
+
+
+def _fit_rows(pres: dict, el: dict, slide: dict, want: int) -> tuple[list[dict], dict, list[str]]:
+    """Rows added below the last data row, or removed just before the last row, so header and total keep their place.
+
+    Returns the requests (sent first), a simulated copy of the presentation
+    as it will be after them (for planning the cells), and notes. Inserted
+    rows copy the reference row's fill and text style (verified live), so the
+    reference is the last data row, never the total.
+    """
+    table_id = el["objectId"]
+    table = el["table"]
+    n_r = table.get("rows", 0)
+    if want < 2:
+        raise ValueError(f"rows='fit' keeps at least a header and one row; the range has {want}")
+    sim = copy.deepcopy(pres)
+    sim_el, _ = find_element(sim, table_id)
+    rows = sim_el["table"]["tableRows"]
+    reqs: list[dict] = []
+    notes: list[str] = []
+    ref_h = 0.0
+    if want > n_r:
+        k = want - n_r
+        anchor = n_r - 2 if n_r >= 3 else n_r - 1
+        reqs.append({"insertTableRows": {"tableObjectId": table_id, "cellLocation": {"rowIndex": anchor},
+                                         "insertBelow": True, "number": k}})
+        ref = rows[anchor]
+        ref_h = ref.get("rowHeight", {}).get("magnitude", 0) / PT_TO_EMU
+        added = [{**copy.deepcopy({key: v for key, v in ref.items() if key != "tableCells"}),
+                  "tableCells": [_empty_copy(c, 0, j) for j, c in enumerate(ref.get("tableCells", []))]}
+                 for _ in range(k)]
+        rows[anchor + 1:anchor + 1] = added
+        notes.append(f"{k} row{'s' if k > 1 else ''} added below row {anchor}")
+        delta = k * ref_h
+    else:
+        k = n_r - want
+        start = n_r - 1 - k
+        if start < 1:
+            raise ValueError(f"rows='fit' would remove the header: the table has {n_r} rows, the range {want}")
+        doomed = range(start, n_r - 1)
+        covered = refill.covered_cells(table)
+        heads = {h for h in covered.values()} | set(covered)
+        merged = sorted({r for (r, _c) in heads if r in doomed})
+        if merged:
+            raise ValueError(f"rows='fit' would remove row(s) {merged} holding merged cells: unmerge them first")
+        reqs += [{"deleteTableRow": {"tableObjectId": table_id, "cellLocation": {"rowIndex": start}}}] * k
+        delta = -sum(rows[r].get("rowHeight", {}).get("magnitude", 0) for r in doomed) / PT_TO_EMU
+        del rows[start:n_r - 1]
+        notes.append(f"{k} row{'s' if k > 1 else ''} removed before the last row")
+    for i, row in enumerate(rows):
+        for j, cell in enumerate(row.get("tableCells", [])):
+            cell["location"] = {"rowIndex": i, "columnIndex": j}
+    sim_el["table"]["rows"] = len(rows)
+    reqs += _push_siblings(el, slide, delta, notes)
+    return reqs, sim, notes
+
+
+def _push_siblings(el: dict, slide: dict, delta: float, notes: list[str]) -> list[dict]:
+    """Move the component's own elements under the table by the height change; name the others that may now overlap."""
+    if abs(delta) < 0.5:
+        return []
+    t = el.get("transform", {})
+    rows = el["table"].get("tableRows", [])
+    bottom = (t.get("translateY", 0) + sum(r.get("rowHeight", {}).get("magnitude", 0) for r in rows)) / PT_TO_EMU
+    table_id = el["objectId"]
+    m = re.match(r"^(.+)_table_\d+$", table_id)
+    prefix = m.group(1) + "_" if m else None
+    reqs, others = [], []
+    for other in slide.get("pageElements", []):
+        if other["objectId"] == table_id:
+            continue
+        top = other.get("transform", {}).get("translateY", 0) / PT_TO_EMU
+        if top < bottom - 1:
+            continue
+        if prefix and other["objectId"].startswith(prefix):
+            reqs.append({"updatePageElementTransform": {"objectId": other["objectId"], "applyMode": "RELATIVE",
+                                                        "transform": {"scaleX": 1, "scaleY": 1, "translateX": 0,
+                                                                      "translateY": delta * PT_TO_EMU, "unit": "EMU"}}})
+        else:
+            others.append(other["objectId"])
+    if reqs:
+        notes.append(f"{len(reqs)} element(s) of the component moved by {delta:+.0f} pt")
+    if others:
+        notes.append(f"the table is {delta:+.0f} pt taller: check {', '.join(others[:5])} under it (overlap_check)")
+    return reqs
+
+
 def plan_table_sync(pres: dict, table_id: str, src: dict, style: str = "slides",
-                    charter: dict | None = None) -> tuple[list[dict], dict]:
+                    charter: dict | None = None, rows: str = "keep") -> tuple[list[dict], dict]:
     """Requests and report to bring table ``table_id`` in line with ``src`` (``read_cells``); nothing is sent."""
-    el, _slide = find_element(pres, table_id)
+    el, slide = find_element(pres, table_id)
     if el is None:
         raise ValueError(f"element not found: {table_id!r}")
     if "table" not in el:
         raise ValueError(f"{table_id!r} is not a table (use find_elements with type='table')")
-    table = el["table"]
-    n_r, n_c = table.get("rows", 0), table.get("columns", 0)
+    n_r, n_c = el["table"].get("rows", 0), el["table"].get("columns", 0)
     s_rows = src["rows"]
     s_r, s_c = len(s_rows), (len(s_rows[0]) if s_rows else 0)
-    covered = refill.covered_cells(table)
     report: dict = {"table": table_id, "dimensions": {"table": [n_r, n_c], "range": [s_r, s_c]}, "style": style}
-    notes = _dimension_notes(n_r, n_c, s_r, s_c)
+    structural: list[dict] = []
+    notes: list[str] = []
+    if rows == "fit" and s_r != n_r:
+        structural, pres, notes = _fit_rows(pres, el, slide, s_r)
+        el, slide = find_element(pres, table_id)
+        n_r = el["table"]["rows"]
+    notes += _dimension_notes(n_r, n_c, s_r, s_c)
     if notes:
         report["notes"] = notes
+    table = el["table"]
+    covered = refill.covered_cells(table)
     overlap = {(r, c): s_rows[r][c] for r in range(min(n_r, s_r)) for c in range(min(n_c, s_c))}
     if style == "sheets":
         reqs, changes = _write_texts(table_id, table, {k: v["text"] for k, v in overlap.items()}, covered)
         reqs += _sheets_style(table_id, overlap, covered)
-        report.update(changed=len(changes), changes=changes)
-        return reqs, report
-    if style == "charter":
+    elif style == "charter":
         texts = [[refill._plain(refill._cell_text(table, r, c)) for c in range(n_c)] for r in range(n_r)]
         for (r, c), cell in overlap.items():
             texts[r][c] = cell["text"]
@@ -150,24 +251,22 @@ def plan_table_sync(pres: dict, table_id: str, src: dict, style: str = "slides",
         reqs, changes = _write_texts(table_id, table, targets, covered)
         reqs += [q for q in style_reqs
                  if tuple(q[next(iter(q))].get("cellLocation", {}).values()) not in covered]
-        report.update(changed=len(changes), changes=changes)
-        return reqs, report
-    edits, changes = [], []
-    for r in range(min(n_r, s_r)):
-        for c in range(min(n_c, s_c)):
+    else:
+        edits, changes = [], []
+        for (r, c), cell in sorted(overlap.items()):
             if (r, c) in covered:
                 continue  # its text lives in the merge's head cell
-            new = s_rows[r][c]["text"]
+            new = cell["text"]
             old = refill._plain(refill._cell_text(table, r, c))
             if new.strip() == old:
                 continue
             edits.append({"element": table_id, "row": r, "column": c, "text": new})
             changes.append({"row": r, "column": c, "old": old, "new": new})
-    reqs, planned = refill.plan_refill(pres, edits) if edits else ([], {})
+        reqs, planned = refill.plan_refill(pres, edits) if edits else ([], {})
+        if planned.get("colors"):
+            report["colors"] = planned["colors"]
     report.update(changed=len(changes), changes=changes)
-    if planned.get("colors"):
-        report["colors"] = planned["colors"]
-    return reqs, report
+    return structural + reqs, report
 
 
 @mcp.tool(annotations=IDEMPOTENT)
@@ -207,10 +306,15 @@ def sync_table(
         range: A1 with the sheet (``'Données'!A1:F8``) or a named range
             (preferred: it follows the data when rows are inserted). The
             values are read as Sheets displays them (``46 811 €``, ``+52 %``).
-        rows, columns: ``keep`` — the table's size does not change; when the
-            range is larger the extra rows / columns are left out, when it
-            is smaller the table's extra cells keep their text; both are
-            reported in ``notes`` (0-based indexes).
+        rows: ``keep`` (the table's size does not change: extra range rows
+            are left out, extra table rows keep their text, both reported in
+            ``notes``, 0-based) or ``fit``: rows are added below the last
+            data row, or removed just before the last row, so the header and
+            a total row keep their place and look; new rows copy the last
+            data row's style. The component's own elements under the table
+            (same name prefix: ``yt_top_…``) move by the height change;
+            other elements that may now overlap are named in ``notes``.
+        columns: ``keep`` (extra range columns left out, reported).
         row_height_pt: minimum height set on every row afterwards.
         dry_run: report what would change and write nothing.
         charter: props of the ``table`` component for ``style="charter"``
@@ -239,7 +343,7 @@ def sync_table(
     if "table" not in el:
         raise ValueError(f"{table!r} is not a table (use find_elements with type='table')")
     src = sheets_source.read_cells(spreadsheet, range)
-    reqs, report = plan_table_sync(pres, table, src, style, charter)
+    reqs, report = plan_table_sync(pres, table, src, style, charter, rows)
     if row_height_pt:
         reqs.append({"updateTableRowProperties": {
             "objectId": table, "rowIndices": list(builtins.range(el["table"].get("rows", 0))),
