@@ -305,7 +305,7 @@ def cross_deck_ping() -> dict:
     version. Use this to debug deployment before relying on
     ``copy_slide_cross_deck``.
 
-    Returns: ``{ok: True, version: "0.5", url: "..."}`` on success
+    Returns: ``{ok: True, version: "0.6", url: "..."}`` on success
     (``script_id`` instead of ``url`` for an API-executable deployment).
     """
     script_id = _appscript_id()

@@ -1,10 +1,11 @@
 /**
- * Cross-deck slide copy via SlidesApp.appendSlide().
+ * Cross-deck slide copy via SlidesApp.appendSlide(), and Sheets chart PNGs.
  *
  * The Slides REST API has NO cross-presentation copy. Apps Script's
  * SlidesApp.appendSlide(slide) does — it carries layout, theme, fonts,
  * images, and styling. This web app exposes that as an HTTP endpoint the
- * gslides MCP can call.
+ * gslides MCP can call. google-sheets-mcp uses the same script for
+ * "chart_png" (a chart rendered the way "Download as PNG" does).
  *
  * Deployment (one-time):
  *   1. Open https://script.google.com → New project → name it
@@ -23,19 +24,25 @@
  * Subsequent edits to this file: re-deploy via Manage Deployments → edit →
  * new version. The URL stays the same.
  *
- * Hosted, multi-user server (GSLIDES_MCP_TRANSPORT=http): deploy as an
- * API executable instead, so each copy runs as the signed-in user:
- *   1. Project Settings → Google Cloud Platform (GCP) project → Change
- *      project → the number of the project that holds the server's OAuth
+ * Hosted, multi-user servers: use a SEPARATE Apps Script project per server,
+ * with this same file, deployed as an API executable so each call runs as
+ * the signed-in user (scripts.run → api()). scripts.run needs the caller's
+ * token to cover every scope in the project's manifest, so each project
+ * lists only what its server asks for:
+ *   1. Project Settings → show "appsscript.json"; in it set "oauthScopes":
+ *        gslides:  presentations, drive
+ *        sheets:   spreadsheets
+ *      (full URLs, https://www.googleapis.com/auth/<name>).
+ *   2. Project Settings → Google Cloud Platform (GCP) project → Change
+ *      project → the NUMBER of the project holding the server's OAuth
  *      client (the Apps Script API must be enabled there).
- *   2. Deploy → New deployment → type: API executable → Who has access:
+ *   3. Deploy → New deployment → type: API executable → Who has access:
  *      Anyone within <your domain>.
- *   3. Project Settings → copy the Script ID and set
- *      GSLIDES_MCP_APPSCRIPT_ID=<script id> on the server.
- * The server then calls api() through scripts.run with the user's token.
+ *   4. Project Settings → copy the Script ID into the server's environment
+ *      (GSLIDES_MCP_APPSCRIPT_ID for gslides).
  */
 
-var VERSION = "0.5";
+var VERSION = "0.6";
 
 // Successful copy results are remembered for this long, keyed by the
 // caller's requestId, so a replayed request returns the same answer.
@@ -43,7 +50,8 @@ var REPLAY_CACHE_SECONDS = 21600; // 6h, the CacheService maximum
 
 /**
  * Entry point for scripts.run (API executable). Same ops as doPost, but the
- * result is returned as-is and the script runs as the calling user.
+ * result is returned as-is (errors are thrown) and the script runs as the
+ * calling user.
  */
 function api(body) {
   body = body || {};
@@ -52,6 +60,8 @@ function api(body) {
     return _replaySafe_(body.requestId, function () {
       return copySlide_(body);
     });
+  } else if (op === "chart_png") {
+    return chartPng_(body);
   } else if (op === "ping") {
     return {ok: true, version: VERSION};
   }
@@ -66,6 +76,10 @@ function doPost(e) {
       return _json(_replaySafe_(body.requestId, function () {
         return copySlide_(body);
       }));
+    } else if (op === "chart_png") {
+      // A read: no replay cache, so a chart changed between two calls
+      // is rendered as it is now rather than as it was.
+      return _json(chartPng_(body));
     } else if (op === "ping") {
       return _json({ok: true, version: VERSION});
     } else {
@@ -77,6 +91,41 @@ function doPost(e) {
     // internals via the response.
     return _json({error: String(err)}, 500);
   }
+}
+
+/**
+ * Render ONE Sheets chart as PNG, the way "Download as PNG" does.
+ *
+ * @param {Object} req
+ *   - spreadsheetId: the spreadsheet
+ *   - chartId: the chart's id, as the Sheets API and google-sheets-mcp name it
+ *
+ * @return {Object} {png: base64 PNG, sheet: name of the sheet holding it}
+ *
+ * The "not found" wording matters: google-sheets-mcp maps it to its own
+ * [not_found] class.
+ */
+function chartPng_(req) {
+  var ss = SpreadsheetApp.openById(String(req.spreadsheetId));
+  var wanted = Number(req.chartId);
+  var sheets = ss.getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    var charts;
+    try {
+      charts = sheets[i].getCharts();
+    } catch (e) {
+      // A sheet that is not a grid — one a chart once had to itself,
+      // or still has — throws here rather than answering; skip it.
+      continue;
+    }
+    for (var j = 0; j < charts.length; j++) {
+      if (charts[j].getChartId() === wanted) {
+        var blob = charts[j].getAs("image/png");
+        return {png: Utilities.base64Encode(blob.getBytes()), sheet: sheets[i].getName()};
+      }
+    }
+  }
+  throw new Error("chart not found: " + wanted);
 }
 
 /**
@@ -92,8 +141,10 @@ function _replaySafe_(requestId, fn) {
     return fn();
   }
   var key = "req:" + String(requestId).slice(0, 64);
+  // Per user: under "execute as me" that is the deployer, as before; under
+  // scripts.run each person's copies queue on their own lock, not the team's.
   var cache = CacheService.getUserCache();
-  var lock = LockService.getUserLock(); // per user: one person's copies queue, not the team's
+  var lock = LockService.getUserLock();
   lock.waitLock(60000); // a replay may arrive while the first run is still going
   try {
     var hit = cache.get(key);
@@ -168,4 +219,11 @@ function _json(payload, status) {
   var out = ContentService.createTextOutput(JSON.stringify(payload));
   out.setMimeType(ContentService.MimeType.JSON);
   return out;
+}
+
+function authorizeSheets() {
+  // Run once from the editor: creates a throwaway spreadsheet so the
+  // Sheets scope is requested, then logs where it is so you can delete it.
+  var ss = SpreadsheetApp.create("gsmcp scope check (delete me)");
+  Logger.log("Sheets scope granted; delete " + ss.getUrl());
 }

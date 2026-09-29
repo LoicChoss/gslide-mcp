@@ -40,10 +40,13 @@ In Claude: Settings → Connectors → Add custom connector → `https://<host>/
 ## Cross-deck copy
 
 The web-app deployment runs as whoever deployed it, so the hosted server
-refuses it. Deploy `appscript/cross_deck_copy.gs` as an **API executable**
-instead (steps at the top of the file): the script's Cloud project must be the
-one holding the OAuth client, and `GSLIDES_MCP_APPSCRIPT_ID` is its Script ID.
-Each copy then runs as the signed-in user.
+refuses it. Create a **separate** Apps Script project with
+`appscript/cross_deck_copy.gs`, its manifest limited to the `presentations`
+and `drive` scopes, and deploy it as an **API executable** (steps at the top
+of the file): its Cloud project must be the one holding the OAuth client, and
+`GSLIDES_MCP_APPSCRIPT_ID` is its Script ID. Each copy then runs as the
+signed-in user. Keep the existing web-app project as it is: local servers
+(this one and google-sheets-mcp) still use it.
 
 ## What changes for tools
 
