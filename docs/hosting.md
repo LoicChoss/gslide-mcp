@@ -28,7 +28,8 @@ The image (`Dockerfile`) serves streamable HTTP on port 8000 at `/mcp`, with
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | the Web application client |
 | `GSLIDES_MCP_GOOGLE_DOMAIN` | optional: preselects accounts of the domain |
 | `GSLIDES_MCP_APPSCRIPT_ID` | Script ID of the cross-deck copy script (below) |
-| `GSLIDES_MCP_ASSETS_FOLDER` | Drive folder of named assets; share it with the domain |
+| `GSLIDES_MCP_ASSETS_FOLDER` | Drive folder of named assets (default: the team folder); share it with the domain |
+| `GSLIDES_MCP_THEME` | default theme (`periscope` when unset) |
 
 Mount a volume on `/data`: it keeps sign-in sessions (encrypted with a key
 derived from the client secret) and the shared themes and components. Without

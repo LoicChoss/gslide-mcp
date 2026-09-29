@@ -27,13 +27,12 @@ _EXTS = (".png", ".jpg", ".jpeg", ".gif")
 _FOLDER_URL = re.compile(r"/folders/([A-Za-z0-9_-]+)")
 
 
+# The team's shared folder of pictos and logos; GSLIDES_MCP_ASSETS_FOLDER overrides it.
+DEFAULT_FOLDER = "1a47ILzByssFMQHy9-UH0ELXpOwFISu5X"
+
+
 def folder_id() -> str:
-    raw = os.environ.get(ENV_FOLDER, "").strip()
-    if not raw:
-        raise ValueError(
-            f"no assets folder configured: set {ENV_FOLDER} to the id (or URL) of the "
-            "shared Drive folder holding pictos and logos"
-        )
+    raw = os.environ.get(ENV_FOLDER, "").strip() or DEFAULT_FOLDER
     m = _FOLDER_URL.search(raw)
     return m.group(1) if m else raw
 

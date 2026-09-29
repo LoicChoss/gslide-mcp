@@ -74,10 +74,14 @@ def test_unknown_asset_lists_the_folder(fake_drive):
         assets.ensure_asset("nope")
 
 
-def test_no_folder_configured(monkeypatch, fake_drive):
+def test_no_folder_configured_uses_the_team_folder(monkeypatch):
     monkeypatch.delenv("GSLIDES_MCP_ASSETS_FOLDER")
-    with pytest.raises(ValueError, match="GSLIDES_MCP_ASSETS_FOLDER"):
-        assets.ensure_asset("bolt")
+    assert assets.folder_id() == assets.DEFAULT_FOLDER
+
+
+def test_folder_can_be_overridden_by_id_or_url(monkeypatch):
+    monkeypatch.setenv("GSLIDES_MCP_ASSETS_FOLDER", "https://drive.google.com/drive/folders/OTHER_1")
+    assert assets.folder_id() == "OTHER_1"
 
 
 # --- draw / card / card_grid / tool wiring ------------------------------------------------
