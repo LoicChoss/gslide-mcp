@@ -40,9 +40,17 @@ def google_auth():
     domain = os.environ.get("GSLIDES_MCP_GOOGLE_DOMAIN", "").strip()
     if domain:
         extra["hd"] = domain
+    client_id = _require("GOOGLE_CLIENT_ID")
+    client_secret = _require("GOOGLE_CLIENT_SECRET")
+    # A value pasted into a UI that turns it into a link ("http://<id>/")
+    # otherwise only shows up as Google's "OAuth client was not found".
+    if "://" in client_id or not client_id.endswith(".apps.googleusercontent.com"):
+        sys.exit("gslides-mcp: GOOGLE_CLIENT_ID must be the bare <n>-<id>.apps.googleusercontent.com")
+    if "://" in client_secret or client_secret.endswith("/"):
+        sys.exit("gslides-mcp: GOOGLE_CLIENT_SECRET looks like a URL; paste the secret alone")
     return GoogleProvider(
-        client_id=_require("GOOGLE_CLIENT_ID"),
-        client_secret=_require("GOOGLE_CLIENT_SECRET"),
+        client_id=client_id,
+        client_secret=client_secret,
         base_url=_require("GSLIDES_MCP_BASE_URL").rstrip("/"),
         required_scopes=[
             "openid",
