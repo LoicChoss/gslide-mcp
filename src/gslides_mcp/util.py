@@ -85,6 +85,20 @@ def find_element(pres: dict, element_id: str) -> tuple[dict | None, dict | None]
     return None, None
 
 
+def all_object_ids(node, sink: set[str] | None = None) -> set[str]:
+    """Every objectId in a presentation: pages, elements, group children, notes, layouts, masters."""
+    sink = set() if sink is None else sink
+    if isinstance(node, dict):
+        if isinstance(node.get("objectId"), str):
+            sink.add(node["objectId"])
+        for value in node.values():
+            all_object_ids(value, sink)
+    elif isinstance(node, list):
+        for value in node:
+            all_object_ids(value, sink)
+    return sink
+
+
 def emu_to_pt(emu: int | float) -> float:
     return emu * EMU_TO_PT
 

@@ -97,3 +97,26 @@ def test_save_then_insert_a_recipe(fake_slides, user_dir):
 def test_save_component_rejects_invalid_recipe(fake_slides):
     with pytest.raises(ValueError, match="built-in"):
         tools.save_component({"name": "kpi", "description": "x", "ops": []})
+
+
+def test_insert_component_with_a_name_gives_readable_ids(fake_slides):
+    out = tools.insert_component("PRES1", "1", "kpi", {"value": "12", "label": "Sessions", "delta": "+3 %"},
+                                 x_pt=40, y_pt=60, width_pt=200, name="kpi_sessions")
+    assert out["group_id"] == "kpi_sessions"
+    assert all(i.startswith("kpi_sessions_") for i in out["element_ids"])
+    assert out["ids_by_role"] and sum(len(v) for v in out["ids_by_role"].values()) == len(out["element_ids"])
+    (grp,) = [r["groupObjects"] for r in fake_slides.batches[0] if "groupObjects" in r]
+    assert grp["groupObjectId"] == "kpi_sessions"
+
+
+def test_insert_component_refuses_a_bad_or_taken_name(fake_slides):
+    with pytest.raises(ValueError, match="5–24 chars"):
+        tools.insert_component("PRES1", "1", "kpi", {"value": "1", "label": "x"}, name="ab")
+    with pytest.raises(ValueError, match="already used"):
+        tools.insert_component("PRES1", "1", "kpi", {"value": "1", "label": "x"}, name="s1_box")
+    assert fake_slides.batches == []
+
+
+def test_insert_component_reports_roles_without_a_name(fake_slides):
+    out = tools.insert_component("PRES1", "1", "kpi", {"value": "12", "label": "Sessions"}, width_pt=200)
+    assert out["group_id"].startswith("cmp_") and out["ids_by_role"]

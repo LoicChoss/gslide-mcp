@@ -503,3 +503,25 @@ def test_summarize_topic_skips_slot_frames():
         {"objectId": "t", "description": "Bilan Meta", "shape": {}},
     ]}
     assert _infer_topic(slide) == "Bilan Meta"
+
+
+# --- readable ids per role ---------------------------------------------------------
+
+def test_named_ids_count_per_role_and_fall_back_to_the_op_kind():
+    roles = {}
+    ops = [{"op": "box", "x": 0, "y": 0, "w": 60, "h": 40, "role": "value"},
+           {"op": "text", "x": 0, "y": 0, "w": 60, "h": 40, "text": "a"},
+           {"op": "box", "x": 0, "y": 0, "w": 60, "h": 40, "role": "value"},
+           {"op": "line", "x1": 0, "y1": 0, "x2": 10, "y2": 0, "color": "navy", "role": "bad role!"}]
+    _, ids = draw.ops_to_requests("s", ops, THEME, prefix="yt_top", named=True, roles_out=roles)
+    assert ids == ["yt_top_value_1", "yt_top_text_1", "yt_top_value_2", "yt_top_bad_role__1"]
+    assert roles == {"value": ["yt_top_value_1", "yt_top_value_2"], "text": ["yt_top_text_1"],
+                     "bad_role_": ["yt_top_bad_role__1"]}
+
+
+def test_unnamed_ids_are_unchanged_and_roles_still_reported():
+    roles = {}
+    _, ids = draw.ops_to_requests("s", [{"op": "box", "x": 0, "y": 0, "w": 60, "h": 40, "role": "value"},
+                                        {"op": "text", "x": 0, "y": 0, "w": 60, "h": 40, "text": "a"}],
+                                  THEME, prefix="cmp", roles_out=roles)
+    assert ids == ["cmp_001", "cmp_002"] and roles == {"value": ["cmp_001"], "text": ["cmp_002"]}

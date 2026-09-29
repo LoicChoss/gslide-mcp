@@ -35,6 +35,7 @@ budget for them); predefined shapes only (no adjust handles).
 from __future__ import annotations
 
 import math
+import re
 
 from .themes import Theme
 from .util import md_requests
@@ -170,21 +171,31 @@ def _elem_props(page_id: str, x: float, y: float, w: float, h: float,
 
 class _Canvas:
     def __init__(self, page_id: str, theme: Theme, prefix: str, offset: tuple[float, float],
-                 resolve_asset=None):
+                 resolve_asset=None, named: bool = False):
         self.page = page_id
         self.theme = theme
         self.prefix = prefix
         self.resolve_asset = resolve_asset
+        self.named = named
         self.ox, self.oy = offset
         self.reqs: list[dict] = []
         self.ids: list[str] = []
+        self.roles: dict[str, list[str]] = {}  # role (or op kind) → element ids, in drawing order
+        self.role = "el"  # set by ops_to_requests before each op
         self._n = 0
 
     # -- helpers ---------------------------------------------------------------
 
     def new_id(self) -> str:
-        self._n += 1
-        return f"{self.prefix}_{self._n:03d}"
+        """``<prefix>_<n>`` — or, named, ``<prefix>_<role>_<n>`` counted per role (``yt_top_slot_2``)."""
+        key = self.role
+        if self.named:
+            oid = f"{self.prefix}_{key}_{len(self.roles.get(key, [])) + 1}"
+        else:
+            self._n += 1
+            oid = f"{self.prefix}_{self._n:03d}"
+        self.roles.setdefault(key, []).append(oid)
+        return oid
 
     def rgb(self, value) -> dict:
         return {"rgbColor": self.theme.color(value)}
@@ -728,19 +739,27 @@ def ops_to_requests(
     offset: tuple[float, float] = (0, 0),
     group: str | None = None,
     resolve_asset=None,
+    named: bool = False,
+    roles_out: dict | None = None,
 ) -> tuple[list[dict], list[str]]:
     """Translate ops into batchUpdate requests. Returns (requests, element ids).
 
     ``prefix`` seeds every objectId (≥ 3 chars so ids satisfy the 5-char
     minimum); ``offset`` shifts every op; ``group`` names a groupObjects
     request wrapping all elements (only sent when there are at least two).
+    ``named`` makes ids readable, ``<prefix>_<role>_<n>`` with the op's
+    ``role`` (else its kind) counted per role; ``roles_out`` receives
+    ``{role: [ids]}`` either way.
     """
-    canvas = _Canvas(page_id, theme, prefix, offset, resolve_asset)
+    canvas = _Canvas(page_id, theme, prefix, offset, resolve_asset, named=named)
     for op in ops:
         kind = op.get("op")
         if kind not in _OPS:
             raise ValueError(f"unknown draw op {kind!r}; ops: {', '.join(_OPS)}")
+        canvas.role = re.sub(r"[^A-Za-z0-9_-]", "_", str(op.get("role") or kind))[:18]
         getattr(canvas, kind)(op)
+    if roles_out is not None:
+        roles_out.update(canvas.roles)
     if group and len(canvas.ids) >= 2:
         canvas.reqs.append({"groupObjects": {"groupObjectId": group, "childrenObjectIds": list(canvas.ids)}})
     return canvas.reqs, canvas.ids

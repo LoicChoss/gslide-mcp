@@ -9,6 +9,7 @@ canvas and styled by a theme (``gslides_mcp.themes``); every insert is one
 from __future__ import annotations
 
 import os
+import re
 import uuid
 
 from .. import assets
@@ -18,9 +19,10 @@ from .. import themes
 from ..app import ADDITIVE, DESTRUCTIVE, READ_ONLY, mcp
 from ..auth import slide_service
 from ..components import recipes
-from ..util import parse_pres_id, resolve_slide_ids
+from ..util import all_object_ids, parse_pres_id, resolve_slide_ids
 
 DEFAULT_THEME = os.environ.get("GSLIDES_MCP_THEME", "periscope")
+_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{4,23}$")  # + "_<role>_<n>" stays under the 50-char id limit
 
 _HOW_TO_ADD = (
     "Draw the element with `draw` (ops: box, text, line, polyline, arc, ring, table, image). "
@@ -121,6 +123,7 @@ def insert_component(
     width_pt: float = 300,
     height_pt: float | None = None,
     theme: str | None = None,
+    name: str | None = None,
 ) -> dict:
     """Render a component on a slide — one batchUpdate, grouped as one element.
 
@@ -133,10 +136,17 @@ def insert_component(
         width_pt: width the component lays itself out in.
         height_pt: forced height; default is the component's natural height.
         theme: theme name (default ``periscope``).
+        name: readable id for a component that will be updated later (a
+            bilan): 5–24 chars, ``[A-Za-z][A-Za-z0-9_-]``, not used in the
+            deck yet. Elements become ``<name>_<role>_<n>`` (``yt_top_table_1``,
+            ``yt_top_slot_1``…), the group ``<name>``. These ids go into a
+            « Liaisons » tab and survive a Drive copy of the deck.
 
-    Returns: ``{component, theme, slide_id, group_id, element_ids, height_pt,
-    requests}`` — ``group_id`` is the element to move/delete afterwards
-    (``None`` when the component is a single element).
+    Returns: ``{component, theme, slide_id, group_id, element_ids,
+    ids_by_role, height_pt, requests}`` — ``group_id`` is the element to
+    move/delete afterwards (``None`` when the component is a single element
+    or holds a table); ``ids_by_role`` maps each role (``value``, ``slot``,
+    ``table``…) to its element ids.
 
     Example::
 
@@ -150,11 +160,21 @@ def insert_component(
     ops, height = registry.render(component, props, t, width_pt, height_pt)  # fails before any write
     pid = parse_pres_id(presentation)
     svc = slide_service()
+    if name is not None:
+        if not _NAME.match(name):
+            raise ValueError(f"name {name!r}: 5–24 chars, a letter first, then letters, digits, _ or -")
+        clash = sorted(i for i in all_object_ids(svc.presentations().get(presentationId=pid).execute())
+                       if i == name or i.startswith(name + "_"))
+        if clash:
+            raise ValueError(f"name {name!r} is already used in this deck ({clash[0]}): pick another, "
+                             "or delete the old component first")
     sid = resolve_slide_ids(svc, pid, [slide])[0]
-    gid = f"cmp_{uuid.uuid4().hex[:10]}"
+    gid = name or f"cmp_{uuid.uuid4().hex[:10]}"
     # a table cannot be grouped with other elements: components built around one stay ungrouped
     group = None if any(o.get("op") == "table" for o in ops) else gid
-    reqs, ids = drawing.ops_to_requests(sid, ops, t, prefix=gid, offset=(x_pt, y_pt), group=group, resolve_asset=_resolver(t))
+    roles: dict = {}
+    reqs, ids = drawing.ops_to_requests(sid, ops, t, prefix=gid, offset=(x_pt, y_pt), group=group,
+                                        resolve_asset=_resolver(t), named=name is not None, roles_out=roles)
     svc.presentations().batchUpdate(presentationId=pid, body={"requests": reqs}).execute(num_retries=5)
     return {
         "component": component,
@@ -162,6 +182,7 @@ def insert_component(
         "slide_id": sid,
         "group_id": gid if (group and len(ids) >= 2) else None,
         "element_ids": ids,
+        "ids_by_role": roles,
         "height_pt": height,
         "requests": len(reqs),
     }

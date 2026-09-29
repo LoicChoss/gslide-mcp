@@ -22,6 +22,7 @@ from ..auth import slide_service
 from . import qa
 from ..util import (
     PT_TO_EMU,
+    all_object_ids,
     find_element,
     md_requests,
     parse_pres_id,
@@ -1004,18 +1005,6 @@ def _speaker_notes_text(slide: dict) -> str:
     return ""
 
 
-def _all_object_ids(node, sink: set[str]) -> set[str]:
-    """Every objectId in the presentation: pages, elements, group children, notes, layouts, masters."""
-    if isinstance(node, dict):
-        if isinstance(node.get("objectId"), str):
-            sink.add(node["objectId"])
-        for value in node.values():
-            _all_object_ids(value, sink)
-    elif isinstance(node, list):
-        for value in node:
-            _all_object_ids(value, sink)
-    return sink
-
 
 @mcp.tool(annotations=DESTRUCTIVE)
 def rename_element(presentation: str, renames: list[dict]) -> dict:
@@ -1046,7 +1035,7 @@ def rename_element(presentation: str, renames: list[dict]) -> dict:
     pid = parse_pres_id(presentation)
     svc = slide_service()
     pres = svc.presentations().get(presentationId=pid).execute()
-    used = _all_object_ids(pres, set())
+    used = all_object_ids(pres)
     top_level = {el["objectId"]: slide for slide in pres.get("slides", []) for el in slide.get("pageElements", [])}
 
     olds: set[str] = set()
