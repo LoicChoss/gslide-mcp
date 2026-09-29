@@ -188,7 +188,8 @@ def draw(
     - ``line`` x1 y1 x2 y2 [color] [weight] [dash]
     - ``polyline`` points=[[x, y], …] [color] [weight] [dash]
     - ``arc`` cx cy r a0 a1 weight [color] — degrees, 0 = east, clockwise
-    - ``ring`` cx cy r thickness segments=[{value, color}] [start]
+    - ``ring`` cx cy r thickness segments=[{value, color}] [start] [span] — a few quarter-turn arcs
+      (``render: "spokes"`` for one line per degree); thickness = r for a pie, span < 360 for a gauge
     - ``table`` x y w rows [col_w] [row_h] [header] [banding] [borders] [align]
     - ``image`` x y w h drive_file_id | url | asset [tint] — ``asset`` names a PNG of the Drive assets folder
 

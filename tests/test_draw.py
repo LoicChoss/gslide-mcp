@@ -120,8 +120,8 @@ def test_arc_is_split_into_one_degree_segments():
     assert len(_of(reqs, "createLine")) == 90
 
 
-def test_ring_shares_cover_the_full_circle_in_order():
-    reqs, ids = _run([{"op": "ring", "cx": 50, "cy": 50, "r": 40, "thickness": 20,
+def test_ring_spokes_cover_the_full_circle_in_order():
+    reqs, ids = _run([{"op": "ring", "cx": 50, "cy": 50, "r": 40, "thickness": 20, "render": "spokes",
                        "segments": [{"value": 3, "color": "mint"}, {"value": 1, "color": "navy"}]}])
     lines = _of(reqs, "createLine")
     assert len(lines) == 360
@@ -215,7 +215,7 @@ def test_markdown_styles_never_reset_the_base_style():
 
 
 def test_pie_spokes_start_at_the_centre():
-    reqs, _ = _run([{"op": "ring", "cx": 70, "cy": 70, "r": 70, "thickness": 70,
+    reqs, _ = _run([{"op": "ring", "cx": 70, "cy": 70, "r": 70, "thickness": 70, "render": "spokes",
                      "segments": [{"value": 1, "color": "mint"}, {"value": 1, "color": "navy"}]}])
     lines = _of(reqs, "createLine")
     assert len(lines) == 360
@@ -227,7 +227,7 @@ def test_pie_spokes_start_at_the_centre():
 
 
 def test_donut_spokes_start_at_the_inner_radius():
-    reqs, _ = _run([{"op": "ring", "cx": 70, "cy": 70, "r": 70, "thickness": 20,
+    reqs, _ = _run([{"op": "ring", "cx": 70, "cy": 70, "r": 70, "thickness": 20, "render": "spokes",
                      "segments": [{"value": 1, "color": "mint"}]}])
     lines = _of(reqs, "createLine")
     assert len(lines) == 360
@@ -289,8 +289,8 @@ def test_runs_highlight_key_and_custom_highlight_color():
     assert bg[0]["style"]["backgroundColor"]["opaqueColor"]["rgbColor"]["red"] == 0
 
 
-def test_ring_span_limits_the_segments_to_a_partial_arc():
-    reqs, _ = _run([{"op": "ring", "cx": 50, "cy": 50, "r": 40, "thickness": 10, "start": 180, "span": 180,
+def test_ring_span_limits_the_spokes_to_a_partial_arc():
+    reqs, _ = _run([{"op": "ring", "cx": 50, "cy": 50, "r": 40, "thickness": 10, "start": 180, "span": 180, "render": "spokes",
                      "segments": [{"value": 1, "color": "mint"}, {"value": 1, "color": "navy"}]}])
     lines = _of(reqs, "createLine")
     assert 175 <= len(lines) <= 185  # half a turn of 1° spokes
@@ -361,3 +361,85 @@ def test_small_box_text_goes_into_a_centred_overlay():
     assert len(inserts) == 1 and inserts[0]["objectId"] == shapes[1]["objectId"] and inserts[0]["text"] == "3"
     big, _ = _run([{"op": "box", "x": 0, "y": 0, "w": 120, "h": 40, "text": "wide"}])
     assert [r["createShape"]["shapeType"] for r in big if "createShape" in r] == ["RECTANGLE"]
+
+
+# --- ring as quarter-turn arcs ------------------------------------------------------
+
+def _arcs(reqs):
+    shapes = [c for c in _of(reqs, "createShape") if c["shapeType"] == "ARC"]
+    props = {u["objectId"]: u["shapeProperties"] for u in _of(reqs, "updateShapeProperties")}
+    return shapes, props
+
+
+def test_donut_is_a_handful_of_arcs_stroked_as_thick_as_the_ring():
+    reqs, ids = _run([{"op": "ring", "cx": 100, "cy": 100, "r": 80, "thickness": 30,
+                       "segments": [{"value": 62, "color": "mint"}, {"value": 25, "color": "navy"}, {"value": 13, "color": "#FF9170"}]}])
+    shapes, props = _arcs(reqs)
+    assert len(ids) == len(shapes) <= 8 and not _of(reqs, "createLine")
+    for sh in shapes:
+        size = sh["elementProperties"]["size"]["width"]["magnitude"] / PT
+        assert size == pytest.approx(2 * 65, abs=0.01)  # the stroke is centred on r_mid = 80 - 30 / 2
+        t = sh["elementProperties"]["transform"]
+        assert t["scaleX"] ** 2 + t["shearY"] ** 2 == pytest.approx(1)  # a pure rotation
+        # the box centre lands on the ring's centre
+        cx = t["translateX"] / PT + t["scaleX"] * 65 + t["shearX"] * 65
+        cy = t["translateY"] / PT + t["shearY"] * 65 + t["scaleY"] * 65
+        assert (cx, cy) == (pytest.approx(100, abs=0.01), pytest.approx(100, abs=0.01))
+        outline = props[sh["objectId"]]["outline"]
+        assert outline["weight"]["magnitude"] == 30
+        assert props[sh["objectId"]]["shapeBackgroundFill"] == {"propertyState": "NOT_RENDERED"}
+    # the largest share is painted last, so nothing lies on top of it
+    last = props[shapes[-1]["objectId"]]["outline"]["outlineFill"]["solidFill"]["color"]["rgbColor"]
+    assert last == THEME.color("mint")
+
+
+def test_quarter_arc_rotation_matches_the_preset():
+    # the ARC preset covers top → right (270° → 360°); an arc starting at 0° (east) turns it by 90°
+    reqs, _ = _run([{"op": "ring", "cx": 0, "cy": 0, "r": 10, "thickness": 4,
+                     "segments": [{"value": 1, "color": "mint"}], "start": 0}])
+    shapes, _ = _arcs(reqs)
+    first = shapes[0]["elementProperties"]["transform"]
+    assert first["scaleX"] == pytest.approx(0, abs=0.02) and first["shearY"] == pytest.approx(1, abs=1e-3)  # less the 0.6° seam
+
+
+def test_pie_arcs_reach_the_centre():
+    reqs, _ = _run([{"op": "ring", "cx": 70, "cy": 70, "r": 70, "thickness": 70,
+                     "segments": [{"value": 1, "color": "mint"}, {"value": 1, "color": "navy"}]}])
+    shapes, props = _arcs(reqs)
+    assert all(s["elementProperties"]["size"]["width"]["magnitude"] / PT == pytest.approx(70) for s in shapes)
+    assert {p["outline"]["weight"]["magnitude"] for p in props.values()} == {70}
+
+
+def test_arc_plan_puts_the_largest_share_last_and_checks_itself():
+    shares = [("a", -90, 18), ("b", 18, 108), ("c", 108, 270)]
+    plan = draw.arc_plan(shares)
+    assert [p[1] for p in plan][-1] == "c" and all(p[0] == "arc" for p in plan)
+    assert all(p[3] - p[2] == pytest.approx(90) for p in plan)
+    assert draw._plan_shows(shares, plan)
+    assert not draw._plan_shows(shares, [("arc", "c", -90, 270)])
+
+
+def test_arc_plan_even_small_shares_top_with_spokes():
+    shares = [(f"s{i}", -90 + 72 * i, -18 + 72 * i) for i in range(5)]  # five shares of 72°
+    plan = draw.arc_plan(shares)
+    assert [p[0] for p in plan].count("spokes") == 1 and plan[-1][0] == "spokes"
+    reqs, ids = _run([{"op": "ring", "cx": 50, "cy": 50, "r": 40, "thickness": 10,
+                       "segments": [{"value": 1, "color": c} for c in ("mint", "navy", "#FF9170", "#E8FF00", "#111418")]}])
+    assert len(ids) < 100  # four arcs and one share of spokes, not 360 spokes
+
+
+def test_gauge_arcs_stay_inside_the_half_turn():
+    reqs, ids = _run([{"op": "ring", "cx": 50, "cy": 50, "r": 40, "thickness": 10, "start": 180, "span": 180,
+                       "segments": [{"value": 43, "color": "mint"}, {"value": 57, "color": "#F2F4F4"}]}])
+    shapes, _ = _arcs(reqs)
+    assert 0 < len(shapes) == len(ids) <= 4
+    plan = draw.arc_plan([("m", 180, 257.4), ("t", 257.4, 360)], span=180)
+    assert all(180 - 1e-9 <= p[2] and p[3] <= 360 + 1e-9 for p in plan)
+
+
+def test_partial_ring_without_an_exact_plan_falls_back_to_spokes():
+    # a 50° share near the gauge's end can neither overshoot past it nor be laid back over the first share
+    assert draw.arc_plan([("m", 180, 300), ("x", 300, 350), ("t", 350, 360)], span=180) is None
+    reqs, _ = _run([{"op": "ring", "cx": 50, "cy": 50, "r": 40, "thickness": 10, "start": 180, "span": 180,
+                     "segments": [{"value": 120, "color": "mint"}, {"value": 50, "color": "navy"}, {"value": 10, "color": "#F2F4F4"}]}])
+    assert _of(reqs, "createLine") and not _arcs(reqs)[0]

@@ -14,7 +14,7 @@ Ops:
     line      x1 y1 x2 y2 [color] [weight] [dash] [end_arrow] [start_arrow]
     polyline  points=[[x,y],…] [color] [weight] [dash] [end_arrow]   (arrow on the last segment)
     arc       cx cy r a0 a1 weight [color]        (degrees, 0 = east, clockwise)
-    ring      cx cy r thickness segments=[{value,color}] [start=-90] [span=360]
+    ring      cx cy r thickness segments=[{value,color}] [start=-90] [span=360] [render=arcs|spokes]
     table     x y w rows=[[…],…] [col_w] [row_h] [row_heights=[…]] [header] [banding] [first_col_bold]
               [align=[…]] [borders{color,weight}|None] [size] [style]
               [row_fills{i:color}] [bold_rows] [cell_fills{(i,j):color}] [cell_text_colors] [cell_runs{(i,j):runs}]
@@ -23,10 +23,11 @@ Ops:
               contain shrinks and centres the box to the source's aspect)
 
 What the Slides API cannot do, and how ops cope: no freeform geometry, so
-polylines are straight segments, arcs are 1° thick-line chords and rings /
-pies are 1° radial spokes; text insets are fixed (~7 pt left/right,
-~4 pt top/bottom, ``INSET_X`` / ``INSET_Y`` below — budget for them);
-predefined shapes only (no adjust handles).
+polylines are straight segments, arcs are 1° thick-line chords, rings / pies
+are quarter-turn ARC shapes stroked as thick as the ring (a few per ring, see
+``arc_plan``) or, failing an exact plan, 1° radial spokes; text insets are
+fixed (~7 pt left/right, ~4 pt top/bottom, ``INSET_X`` / ``INSET_Y`` below —
+budget for them); predefined shapes only (no adjust handles).
 """
 
 from __future__ import annotations
@@ -45,6 +46,85 @@ _ARROWS = {"none": "NONE", "arrow": "FILL_ARROW", "open": "OPEN_ARROW", "dot": "
 _ALIGN = {"START": "START", "LEFT": "START", "CENTER": "CENTER", "END": "END", "RIGHT": "END", "JUSTIFIED": "JUSTIFIED"}
 _VALIGN = {"TOP": "TOP", "MIDDLE": "MIDDLE", "BOTTOM": "BOTTOM"}
 _ARC_STEP_DEG = 1.0
+
+
+_QUARTER = 90.0  # Google's ARC preset spans a quarter turn; the API cannot move its adjust handles
+_ARC_OVERLAP = 2.0  # consecutive arcs of one share overlap, so no hairline shows between them
+_ARC_SEAM = 0.6  # a share runs this far under the share painted after it
+_PLAN_BIN = 0.25  # degrees: the grid arc_plan checks its result on
+
+
+def arc_plan(shares: list[tuple], span: float = 360.0) -> list[tuple] | None:
+    """Painting order of quarter-turn arcs that shows every share of a ring exactly, or None.
+
+    ``shares``: ``[(color, a0, a1)]`` in angular order (degrees, clockwise,
+    0 = east). Returns ``[("arc", color, a0, a0 + 90) | ("spokes", color, a0, a1)]``
+    in painting order. Every share but the last painted is laid with arcs
+    from its start onwards; its last arc may overshoot onto the shares
+    painted after it, which cover the overshoot. The last painted share
+    must not overshoot: on a full turn it is the largest share (moved to
+    the end), laid from both of its ends — or, when it is under a quarter
+    turn, drawn in spokes. A partial ring (gauge) keeps its order and lays
+    a piece back from the ring's end rather than past it. The plan is
+    checked on a 0.25° grid; None means no exact plan (fall back to spokes).
+    """
+    if not shares:
+        return []
+    full = span >= 359.999
+    order = list(shares)
+    if full:
+        k = max(range(len(order)), key=lambda i: order[i][2] - order[i][1])
+        order = order[k + 1:] + order[:k + 1]
+    end = shares[-1][2]
+    step = _QUARTER - _ARC_OVERLAP
+    plan: list[tuple] = []
+    for n, (color, a0, a1) in enumerate(order):
+        last = n == len(order) - 1
+        lo = a0 - (_ARC_SEAM if full and n == 0 else 0.0)  # the first share runs under the last one
+        hi = a1 if last else a1 + _ARC_SEAM  # and every share under the next one
+        if not full:
+            hi = min(hi, end)
+        if hi - lo >= _QUARTER:
+            # from the start, then one piece laid back from the end: nothing spills out of the share
+            p = lo
+            while p + _QUARTER < hi:
+                plan.append(("arc", color, p, p + _QUARTER))
+                p += step
+            plan.append(("arc", color, hi - _QUARTER, hi))
+        elif last:
+            plan.append(("spokes", color, a0, a1))  # on top of everything: it must not overshoot
+        else:
+            # under a quarter turn: overshoot forwards, onto shares painted later; a partial
+            # ring lays it back from its end rather than past it (the check refuses a bad fit)
+            p = lo if full else min(lo, end - _QUARTER)
+            plan.append(("arc", color, p, p + _QUARTER))
+    return plan if _plan_shows(shares, plan) else None
+
+
+def _plan_shows(shares: list[tuple], plan: list[tuple]) -> bool:
+    """True when painting ``plan`` in order leaves every share's colour on top, and nothing outside them."""
+    n = int(round(360 / _PLAN_BIN))
+
+    def cover(grid: list, a0: float, a1: float, value) -> None:
+        for k in range(math.floor(a0 / _PLAN_BIN), math.ceil(a1 / _PLAN_BIN)):
+            c = (k + 0.5) * _PLAN_BIN
+            if a0 <= c <= a1:
+                grid[k % n] = value
+
+    want: list = [None] * n
+    got: list = [None] * n
+    for color, a0, a1 in shares:
+        cover(want, a0, a1, repr(color))
+    for _kind, color, a0, a1 in plan:
+        cover(got, a0, a1, repr(color))
+    edges = [a % 360 for _c, a0, a1 in shares for a in (a0, a1)]
+    for k in range(n):
+        c = (k + 0.5) * _PLAN_BIN
+        if any(min(abs(c - e), 360 - abs(c - e)) < 1.0 for e in edges):
+            continue  # boundaries: the seam overlaps and the spokes' width live here
+        if want[k] != got[k]:
+            return False
+    return True
 
 
 def _emu(pt: float) -> int:
@@ -351,33 +431,77 @@ class _Canvas:
                           cx + r * math.cos(t1), cy + r * math.sin(t1), color, weight)
 
     def ring(self, op: dict) -> None:
-        """Ring, or full pie when thickness == r, drawn as radial spokes.
+        """Ring, or full pie when thickness == r: a few quarter-turn arcs, or radial spokes.
 
-        One thin line per degree from the inner to the outer radius. Unlike
-        tangential chords, a spoke's straight edges are radial, so the
-        boundary between two colours is a clean radial line whatever the
-        thickness — and the outer edge is a 360-facet polygon, i.e. a
-        circle. Spoke weight is just enough for neighbours to overlap.
+        ``render: "arcs"`` (default) paints each share with Google's ARC
+        shape — a quarter turn with flat radial ends — outlined as thick as
+        the ring, so a donut is a handful of elements instead of 360 (see
+        ``arc_plan``). When no plan is exact (a partial ring whose last share
+        is under a quarter turn and would spill past the end), or with
+        ``render: "spokes"``, every share is one thin line per degree from
+        the inner to the outer radius: radial edges, clean colour boundaries,
+        but ~360 elements for a full turn.
         """
         segments = op["segments"]
         total = sum(float(s["value"]) for s in segments) or 1.0
         r_out = float(op["r"])
         r_in = max(0.0, r_out - min(float(op["thickness"]), r_out))
-        step = _ARC_STEP_DEG
-        weight = max(2.5, 1.3 * r_out * math.tan(math.radians(step)))
-        a = float(op.get("start", -90))
         full = float(op.get("span", 360))  # < 360 for gauges: the segments share that arc only
+        shares, a = [], float(op.get("start", -90))
         for s in segments:
             span = full * float(s["value"]) / total
-            if span <= 0:
-                continue
-            n = max(1, int(round(span / step)))
-            for i in range(n):
-                t = math.radians(a + span * (i + 0.5) / n)
-                self._segment(op["cx"] + r_in * math.cos(t), op["cy"] + r_in * math.sin(t),
-                              op["cx"] + r_out * math.cos(t), op["cy"] + r_out * math.sin(t),
-                              s.get("color", "accent"), weight)
+            if span > 0:
+                shares.append((s.get("color", "accent"), a, a + span))
             a += span
+        plan = arc_plan(shares, full) if op.get("render", "arcs") == "arcs" else None
+        if plan is None:
+            plan = [("spokes", color, a0, a1) for color, a0, a1 in shares]
+        for kind, color, a0, a1 in plan:
+            if kind == "arc":
+                self._quarter_arc(op["cx"], op["cy"], (r_in + r_out) / 2, r_out - r_in, a0, color)
+            else:
+                self._spokes(op["cx"], op["cy"], r_in, r_out, a0, a1, color)
+
+    def _spokes(self, cx, cy, r_in, r_out, a0, a1, color) -> None:
+        """One line per degree across the ring; weight just enough for neighbours to overlap."""
+        step = _ARC_STEP_DEG
+        weight = max(2.5, 1.3 * r_out * math.tan(math.radians(step)))
+        span = a1 - a0
+        n = max(1, int(round(span / step)))
+        for i in range(n):
+            t = math.radians(a0 + span * (i + 0.5) / n)
+            self._segment(cx + r_in * math.cos(t), cy + r_in * math.sin(t),
+                          cx + r_out * math.cos(t), cy + r_out * math.sin(t), color, weight)
+
+    def _quarter_arc(self, cx, cy, r_mid, thickness, a0, color) -> None:
+        """Google's ARC preset (top → right, clockwise) turned to start at ``a0``, stroked ``thickness`` wide.
+
+        The stroke is centred on the circle of radius ``r_mid`` and its ends
+        are cut radially, so it covers exactly [a0, a0 + 90°] between
+        r_mid ± thickness / 2. Rotation is an affine transform about the
+        box centre (degrees clockwise, 0 = east, as everywhere here).
+        """
+        oid = self.new_id()
+        phi = math.radians(a0 - 270.0)
+        c, s = math.cos(phi), math.sin(phi)
+        half = r_mid  # the box is the circle's square, 2 × r_mid
+        self.reqs.append({"createShape": {
+            "objectId": oid, "shapeType": "ARC",
+            "elementProperties": {
+                "pageObjectId": self.page,
+                "size": {"width": {"magnitude": max(1, _emu(2 * r_mid)), "unit": "EMU"},
+                         "height": {"magnitude": max(1, _emu(2 * r_mid)), "unit": "EMU"}},
+                "transform": {"scaleX": c, "shearX": -s, "shearY": s, "scaleY": c,
+                              "translateX": _emu(cx + self.ox - (c * half - s * half)),
+                              "translateY": _emu(cy + self.oy - (s * half + c * half)), "unit": "EMU"},
+            },
+        }})
+        self.reqs.append({"updateShapeProperties": {"objectId": oid, "shapeProperties": {
+            "shapeBackgroundFill": {"propertyState": "NOT_RENDERED"},
+            "outline": {"outlineFill": {"solidFill": {"color": self.rgb(color)}},
+                        "weight": {"magnitude": round(thickness, 2), "unit": "PT"}, "dashStyle": "SOLID"},
+        }, "fields": "shapeBackgroundFill,outline"}})
+        self.ids.append(oid)
 
     def table(self, op: dict) -> None:
         rows = op["rows"]

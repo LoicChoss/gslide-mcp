@@ -307,7 +307,8 @@ line      x1 y1 x2 y2 [color] [weight] [dash] [end_arrow] [start_arrow]
           (arrow | open | dot | stealth | none)
 polyline  points=[[x, y], …] [color] [weight] [dash] [end_arrow]   arrow on the last segment
 arc       cx cy r a0 a1 weight [color]           degrees, 0 = east, clockwise
-ring      cx cy r thickness segments=[{value, color}] [start] [span]   span < 360 = gauge
+ring      cx cy r thickness segments=[{value, color}] [start] [span] [render]   span < 360 = gauge;
+          render arcs (default: quarter-turn ARC shapes) | spokes (one line per degree)
 table     x y w rows [col_w] [row_h] [header {fill, color, bold}] [banding]
           [first_col_bold] [align] [borders {color, weight, position} | null]
           [row_fills] [bold_rows] [size]
@@ -352,10 +353,16 @@ screenshot, adjust, then freeze as a recipe.
 
 ## What the Slides API imposes
 
-- **No freeform geometry.** Curves are straight `createLine` segments;
-  rings and pies are radial spokes, one per degree (a donut or a pie is 360
-  lines grouped into one element — count on 3–8 s per chart). Partial
-  fills (the SERP's 4.6 stars) are a full shape masked by a white box.
+- **No freeform geometry.** Curves are straight `createLine` segments.
+  Rings and pies use Google's `ARC` preset — a quarter turn with flat,
+  radial ends — outlined as thick as the ring and turned into place: each
+  share is laid from its start, may run on under the shares painted after
+  it, and the largest share goes on top, laid from both of its ends. A
+  three-share donut is about six arcs instead of the 360 one-degree spokes
+  of earlier versions. When no share reaches a quarter turn (five shares of
+  20 %), the top share is drawn in spokes; a gauge that cannot be laid
+  exactly falls back to spokes entirely (`render: "spokes"` forces them).
+  Partial fills (the SERP's 4.6 stars) are a full shape masked by a white box.
 - **Fixed text insets** (~7 pt left/right, ~4 pt top/bottom) that can't be
   changed. Components budget for them; when you `draw` text yourself, add
   8 pt to box heights and expect text to start 7 pt in.
