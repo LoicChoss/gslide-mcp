@@ -7,7 +7,10 @@ The model orchestrates the two; the servers never talk to each other.
 ## Flow
 
 1. **Spreadsheet.** Either the user's (an export, a reporting workbook: pass its URL)
-   or a new one for the deck (Sheets MCP `create_spreadsheet`, named like the deck).
+   or a new one for the deck, in the deck's folder: Sheets MCP `create_spreadsheet`
+   named like the deck with `folder` = the deck's URL, or `copy_spreadsheet` of a model
+   workbook with the same `folder`. Without `folder` it lands at the root of My Drive
+   (then gslide-mcp `move_to_folder` or Sheets MCP `move_spreadsheet`).
 2. **Data.** Sheets MCP `write_values`: one block per chart (categories in the first
    column, one series per column, a header row), formulas welcome (`SUM`, N / N-1 - 1,
    ROAS = collecte / dépenses).

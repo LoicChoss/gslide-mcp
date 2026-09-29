@@ -89,8 +89,9 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.7.0.mcpb
 
 | Group | Tool | What it does |
 |-------|------|--------------|
-| **Deck** | `create_presentation` | Create a new blank deck; returns `{presentation_id, url}` |
-| | `clone_deck` | Copy an existing deck via Drive |
+| **Deck** | `create_presentation` | Create a new blank deck, in a given Drive folder (`folder`) or My Drive |
+| | `clone_deck` | Copy an existing deck via Drive, into the source deck's folder unless `parent_folder_id` says otherwise |
+| | `move_to_folder` | Move a deck, spreadsheet or any Drive file into another folder (e.g. a chart spreadsheet next to its deck) |
 | | `list_slides` | List slides with index, object ID, and summary |
 | | `inspect_slide` | Inspect all elements on a slide (optionally recursive): geometry, placeholder type, paragraphs with bullets, table cells, image URLs |
 | | `find_elements` | Search elements by type, alt-title, or text content |
@@ -125,13 +126,14 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.7.0.mcpb
 | | `set_outline` | Set the outline of a shape |
 | **Table** | `create_table` | Create a table (≤ 20×20), optionally pre-filled, in one batch |
 | | `edit_table` | Insert/delete rows and columns |
-| | `set_table_cell` | Write markdown into one cell |
+| | `set_table_cell` | Write markdown into one cell (resets the cell's style: see `refill_text`) |
 | **Content** | `write_text_markdown` | Write bold/italic/bullets in one call via gslides-api's markdown writer |
 | | `batch_write_markdown` | Batch version of `write_text_markdown` (~N× faster for multi-element updates) |
 | | `set_text` | Set plain text on a shape |
 | | `style_text` | Apply text styles (font, size, color) to a range |
-| | `replace_text` | Find-and-replace text across a slide or deck |
-| **Element** | `transform_element` | Move (absolute or relative pt) and / or resize (`width_pt`, `height_pt`; one alone keeps the aspect) any element, linked Sheets charts included |
+| | `replace_text` | Find-and-replace text across the deck, some slides or some elements; `dry_run` lists every match first |
+| | `refill_text` | Rewrite shapes and table cells of a designed deck in one batch, keeping each one's style; variations coloured by sign |
+| **Element** | `transform_element` | Move (absolute or relative pt, each axis on its own) and / or resize (`width_pt`, `height_pt`; one alone keeps the aspect) any element, linked Sheets charts included |
 | | `zorder` | Change element stacking order |
 | | `duplicate_element` | Duplicate an element within a slide |
 | | `delete_elements` | Delete one or more elements |

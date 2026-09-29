@@ -6,6 +6,10 @@ All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachang
 
 ### Added
 
+- **`refill_text`**: rewrite the shapes and table cells of a deck that is already designed (a client template whose slides are kept, last month's bilan) in one batch, each target keeping its font, weight, size, colour, highlight and alignment; an empty cell borrows the style of a filled cell of its column. Signed values in variation cells (« vs N-1 » / « Évol. » columns, or cells already signed) take the colour of their sign, learnt from the deck (same table, then deck) before the theme's `positive` / `negative`; `delta: "inverse"` for costs where lower is better. `set_table_cell` resets the style and now says so.
+- `replace_text`: `elements=` replaces inside the given shapes and tables only (the slide scope also changed the analysis paragraph that quoted the same words); `dry_run=True` lists every match (slide, element, cell, context) and writes nothing.
+- `move_to_folder`: move a deck, a spreadsheet or any Drive file into another folder. `create_presentation(folder=…)` creates the deck in a Drive folder.
+
 - **Hosted, multi-user mode** ([docs/hosting.md](docs/hosting.md)): `GSLIDES_MCP_TRANSPORT=http` serves streamable HTTP at `/mcp`; the server runs the OAuth flow itself (Google, Web application client) so a person only adds the URL in Claude and signs in with their Google account. Every call uses that person's token; there is no fallback to a token on disk. `Dockerfile`, CI (tests and image build); Coolify builds and deploys on each push to main.
 - Cross-deck copy through `scripts.run` (`GSLIDES_MCP_APPSCRIPT_ID`, script 0.6 `api()`, which also serves `chart_png` for google-sheets-mcp; combo charts, which `getAs` refuses, are rendered through a throwaway presentation), running as the caller; the hosted server refuses the web app, which runs as its deployer.
 - `insert_image_local`: `image_base64`. The assets folder defaults to the team folder (`GSLIDES_MCP_ASSETS_FOLDER` still overrides it). On the hosted server `path` is refused and `export_pres` returns a Google download `url`.
@@ -18,6 +22,9 @@ All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachang
 
 ### Changed
 
+- **Light rings**: `donut`, `pie`, `donut_row`, `gauge` and every `ring` op are drawn with Google's `ARC` preset (a quarter turn, flat radial ends) outlined as thick as the ring and turned into place, stacked so the largest share lies on top: a three-share donut is about six arcs instead of 360 one-degree spokes (≈ 370 elements with its labels), with true curves. A plan is checked before use; when no share reaches a quarter turn the top share is drawn in spokes, and a gauge that cannot be laid exactly falls back to spokes (`render: "spokes"` forces them).
+- `clone_deck` puts the copy in the source deck's folder (it landed at the root of My Drive); when that folder refuses new files or cannot be seen, the copy goes to My Drive and `folder_note` says so. It returns `folder_id`, `folder_name` and `placed`.
+- `transform_element` takes each axis on its own: `x_pt` alone keeps the top edge, `dy_pt` alone nudges vertically, `x_pt` + `dy_pt` mixes; only two values for the same axis are refused.
 - Built on `fastmcp` 3; sync tools run in a thread pool, so each thread keeps its own API clients (httplib2 is not thread-safe) and token.json is read once.
 
 ## [0.7.0] — 2026-09-25
