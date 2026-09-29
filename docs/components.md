@@ -368,6 +368,16 @@ screenshot, adjust, then freeze as a recipe.
 - **Fixed text insets** (~7 pt left/right, ~4 pt top/bottom) that can't be
   changed. Components budget for them; when you `draw` text yourself, add
   8 pt to box heights and expect text to start 7 pt in.
+- **Images keep their picture's aspect.** `createImage` shrinks the element
+  to the picture (a 16:9 capture asked into 300 × 100 comes out 177.5 × 100);
+  `replaceImage` with CENTER_CROP keeps the element's box, with CENTER_INSIDE
+  shrinks it to the new picture, and clears the element's alt text. Image
+  slots (`slot: true`, `replace_images`) work around all three: the element
+  is created from a placeholder at the box's aspect, its frame is kept in
+  the alt text (`slot:x,y,w,h`), restored before each swap and written again
+  after it.
+- **A duplicate lands on top** of the slide; `SEND_BACKWARD` moves one step
+  (`rename_element` puts the copy back where the original was).
 - **No adjust handles** on predefined shapes: a `ROUND_RECTANGLE`'s radius
   or a `TRAPEZOID`'s slant are what Google gives.
 - **Line caps are square**, so a very thick arc shows faint oblique seams

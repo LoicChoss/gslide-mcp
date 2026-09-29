@@ -119,6 +119,7 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.7.0.mcpb
 | **Shape** | `create_shape` | Insert a shape |
 | | `insert_image` | Insert an image by URL or Drive file ID |
 | | `insert_image_local` | Insert a local PNG/JPEG/GIF (temporary Drive upload, cleaned up) |
+| | `replace_images` | Swap the picture of existing images in place (URL, asset, `drive:<id>`, or back to an empty slot): same id, frame and z-order, month after month |
 | **Sheets charts** | `insert_sheets_chart` | Embed a chart built in a Google Sheets spreadsheet, linked (follows the sheet) or as a snapshot |
 | | `list_sheets_charts` | The linked charts of a deck or a slide: element, spreadsheet, chart id, geometry |
 | | `refresh_sheets_charts` | Refresh linked charts (deck, slide or given elements) after the spreadsheet changed |
@@ -127,6 +128,7 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.7.0.mcpb
 | **Table** | `create_table` | Create a table (≤ 20×20), optionally pre-filled, in one batch |
 | | `edit_table` | Insert/delete rows and columns |
 | | `set_table_cell` | Write markdown into one cell (resets the cell's style: see `refill_text`) |
+| | `resize_table` | Minimum row heights and column widths of an existing table |
 | **Content** | `write_text_markdown` | Write bold/italic/bullets in one call via gslides-api's markdown writer |
 | | `batch_write_markdown` | Batch version of `write_text_markdown` (~N× faster for multi-element updates) |
 | | `set_text` | Set plain text on a shape |
@@ -134,6 +136,7 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.7.0.mcpb
 | | `replace_text` | Find-and-replace text across the deck, some slides or some elements; `dry_run` lists every match first |
 | | `refill_text` | Rewrite shapes and table cells of a designed deck in one batch, keeping each one's style; variations coloured by sign |
 | **Element** | `transform_element` | Move (absolute or relative pt, each axis on its own) and / or resize (`width_pt`, `height_pt`; one alone keeps the aspect) any element, linked Sheets charts included |
+| | `rename_element` | Give elements readable ids (duplicate + delete, stacking order kept) for bindings on a hand-designed deck |
 | | `zorder` | Change element stacking order |
 | | `duplicate_element` | Duplicate an element within a slide |
 | | `delete_elements` | Delete one or more elements |
@@ -141,7 +144,7 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.7.0.mcpb
 | | `screenshot_range` | Capture a range of slides |
 | | `overlap_check` | Detect overlapping elements on a slide |
 | **Components** | `list_components` | Catalogue of 85 themed components (KPI, cards, callouts, badges, pills, numbered lists, agenda, big numbers, phase cards, compare / before-after panels, quote, table, heatmap, bar / grouped / line / stacked / combo charts, mini charts, pie, donut, donut rows, gauge, target, funnel, timeline, milestone arrow, process, hub & spoke, semantic cocoon, tree, flowchart, cycle, formula, persona card, stack, matrices, team and logo grids, media-bilan blocks (analysis, source note, stat boxes, takeaways, ad scoreboard, gallery, media plan), design-system brand blocks (pill buttons by ground, content cards on three grounds, hashtags, eyebrow, section header, client ticker, do / don't), workshop and restitution blocks (score matrix, ranked bars, chip cloud, quadrant matrix, next steps, board columns, session plan, attention points, commented bar list), Google-result / browser / laptop / phone mockups) plus themes and the assets folder |
-| | `insert_component` | Render a component at a position — one atomic batch, grouped as one element |
+| | `insert_component` | Render a component at a position — one atomic batch, grouped as one element; `name` gives readable ids per role (`yt_top_slot_1`), returned in `ids_by_role` |
 | | `draw` | Primitive ops (box, text runs with `==highlight==`, arrowed lines, polyline, arc, ring, table, image from URL or assets folder) in one batch |
 | | `save_component` | Freeze a JSON recipe as a reusable component |
 | | `delete_component` | Remove a saved recipe |
@@ -238,7 +241,7 @@ gslide-mcp/
         ├── slides.py
         ├── notes.py                speaker notes
         ├── shapes.py
-        ├── images.py               insert_image_local
+        ├── images.py               insert_image_local, replace_images
         ├── sheets_charts.py        insert / list / refresh linked Google Sheets charts
         ├── tables.py
         ├── content.py

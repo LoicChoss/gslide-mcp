@@ -6,6 +6,9 @@ All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachang
 
 ### Added
 
+- **Image slots and `replace_images`** (bilan sync, phase 1): a `draw` image op with `slot: true` is created from a generated placeholder at the box's aspect (dashed, `slot:<w>x<h>` assets uploaded once to the assets folder) and keeps its frame in its alt text; `replace_images` swaps pictures in place (URL, asset, `drive:<id>`, empty = placeholder back) with `fit` inside / crop, restoring the frame before each swap and writing it again after (Google's CENTER_INSIDE shrinks the element, `replaceImage` clears the alt text: both verified live). `ad_scoreboard` visual cells are slots.
+- `rename_element`: readable ids on hand-designed decks (duplicate under the new id, delete, stacking order restored; groups and group children refused). `insert_component(name=…)`: elements named `<name>_<role>_<n>`, group `<name>`; every insert returns `ids_by_role`.
+- `resize_table`: minimum row heights and column widths of an existing table.
 - **`refill_text`**: rewrite the shapes and table cells of a deck that is already designed (a client template whose slides are kept, last month's bilan) in one batch, each target keeping its font, weight, size, colour, highlight and alignment; an empty cell borrows the style of a filled cell of its column. Signed values in variation cells (« vs N-1 » / « Évol. » columns, or cells already signed) take the colour of their sign, learnt from the deck (same table, then deck) before the theme's `positive` / `negative`; `delta: "inverse"` for costs where lower is better. `set_table_cell` resets the style and now says so.
 - `replace_text`: `elements=` replaces inside the given shapes and tables only (the slide scope also changed the analysis paragraph that quoted the same words); `dry_run=True` lists every match (slide, element, cell, context) and writes nothing.
 - `move_to_folder`: move a deck, a spreadsheet or any Drive file into another folder. `create_presentation(folder=…)` creates the deck in a Drive folder.
@@ -22,6 +25,9 @@ All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachang
 
 ### Changed
 
+- `swap_client` swaps the logo in place through `replace_images` (same element and frame); the result reports `element` instead of `deleted_id`.
+- `refill_text`: an empty cell keeps a styled space (an empty cell falls back to an 18 pt paragraph and its row grows); a cell hidden by a merge is refused, naming the head cell.
+- `summarize_deck` ignores `slot:` alt texts when it guesses a slide's topic.
 - **Light rings**: `donut`, `pie`, `donut_row`, `gauge` and every `ring` op are drawn with Google's `ARC` preset (a quarter turn, flat radial ends) outlined as thick as the ring and turned into place, stacked so the largest share lies on top: a three-share donut is about six arcs instead of 360 one-degree spokes (≈ 370 elements with its labels), with true curves. A plan is checked before use; when no share reaches a quarter turn the top share is drawn in spokes, and a gauge that cannot be laid exactly falls back to spokes (`render: "spokes"` forces them).
 - `clone_deck` puts the copy in the source deck's folder (it landed at the root of My Drive); when that folder refuses new files or cannot be seen, the copy goes to My Drive and `folder_note` says so. It returns `folder_id`, `folder_name` and `placed`.
 - `transform_element` takes each axis on its own: `x_pt` alone keeps the top edge, `dy_pt` alone nudges vertically, `x_pt` + `dy_pt` mixes; only two values for the same axis are refused.
