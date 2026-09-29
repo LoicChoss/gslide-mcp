@@ -75,7 +75,7 @@ _OPENER = urllib.request.build_opener(
 
 
 def _appscript_id() -> str | None:
-    """Script ID of the API-executable deployment, if configured."""
+    """Deployment ID (AKfycb…) of the API executable; scripts.run takes it as the script id."""
     sid = os.environ.get("GSLIDES_MCP_APPSCRIPT_ID", "").strip()
     return sid or None
 

@@ -27,7 +27,7 @@ The image (`Dockerfile`) serves streamable HTTP on port 8000 at `/mcp`, with
 | `GSLIDES_MCP_BASE_URL` | public URL, e.g. `https://slides.example.com` |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | the Web application client |
 | `GSLIDES_MCP_GOOGLE_DOMAIN` | optional: preselects accounts of the domain |
-| `GSLIDES_MCP_APPSCRIPT_ID` | Script ID of the cross-deck copy script (below) |
+| `GSLIDES_MCP_APPSCRIPT_ID` | deployment ID (`AKfycb…`) of the cross-deck copy script (below) |
 | `GSLIDES_MCP_ASSETS_FOLDER` | Drive folder of named assets (default: the team folder); share it with the domain |
 | `GSLIDES_MCP_THEME` | default theme (`periscope` when unset) |
 
@@ -44,7 +44,7 @@ refuses it. Create a **separate** Apps Script project with
 `appscript/cross_deck_copy.gs`, its manifest limited to the `presentations`
 and `drive` scopes, and deploy it as an **API executable** (steps at the top
 of the file): its Cloud project must be the one holding the OAuth client, and
-`GSLIDES_MCP_APPSCRIPT_ID` is its Script ID. Each copy then runs as the
+`GSLIDES_MCP_APPSCRIPT_ID` is its deployment ID (`AKfycb…`). Each copy then runs as the
 signed-in user. Keep the existing web-app project as it is: local servers
 (this one and google-sheets-mcp) still use it.
 

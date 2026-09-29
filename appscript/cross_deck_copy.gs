@@ -38,8 +38,10 @@
  *      client (the Apps Script API must be enabled there).
  *   3. Deploy → New deployment → type: API executable → Who has access:
  *      Anyone within <your domain>.
- *   4. Project Settings → copy the Script ID into the server's environment
- *      (GSLIDES_MCP_APPSCRIPT_ID for gslides).
+ *   4. Copy the deployment ID (AKfycb…, from Deploy → Manage deployments)
+ *      into the server's environment
+ *      (GSLIDES_MCP_APPSCRIPT_ID for gslides); scripts.run takes it as the
+ *      script id.
  */
 
 var VERSION = "0.6";
