@@ -13,10 +13,12 @@ import builtins
 import copy
 import re
 
+from googleapiclient.errors import HttpError
+
 from .. import components, sheets_source, themes
 from .. import draw as drawing
 from ..app import IDEMPOTENT, mcp
-from ..auth import slide_service
+from ..auth import drive_service, slide_service
 from ..util import PT_TO_EMU, find_element, parse_pres_id
 from . import refill
 
@@ -277,11 +279,15 @@ def _fit_columns(pres: dict, el: dict, slide: dict, want: int) -> tuple[list[dic
     return reqs, sim, notes
 
 
+def _fills(box, frame) -> bool:
+    return all(abs(a - b) < 0.5 for a, b in zip(box, frame))
+
+
 def _fitted(box, old_frame, new_frame):
     """The picture's box moved into ``new_frame``: centred, same aspect when it was fitted inside its old frame."""
     x, y, w, h = box
     fx, fy, fw, fh = new_frame
-    if old_frame is None or all(abs(a - b) < 0.5 for a, b in zip(box, old_frame)) or w <= 0 or h <= 0:
+    if old_frame is None or _fills(box, old_frame) or w <= 0 or h <= 0:
         return new_frame  # it filled its frame (crop, placeholder): it fills the new one
     aspect = w / h
     if aspect > fw / fh:
@@ -291,11 +297,23 @@ def _fitted(box, old_frame, new_frame):
     return fx + (fw - nw) / 2, fy + (fh - nh) / 2, nw, nh
 
 
+def _is_placeholder(url: str) -> bool:
+    """True when ``url`` is a Drive file named ``slot-…``: an empty slot's generated placeholder."""
+    m = re.search(r"[?&]id=([A-Za-z0-9_-]+)", url)
+    if not m or "drive.google.com" not in url:
+        return False
+    try:
+        name = drive_service().files().get(fileId=m.group(1), fields="name", supportsAllDrives=True).execute().get("name", "")
+    except HttpError:
+        return False
+    return name.startswith("slot-")
+
+
 def _realign_slots(sim_el: dict, slide: dict, name: str, n_data: int, notes: list[str]) -> list[dict]:
     """Slot k onto column k of the image row: moved and refitted, created empty when missing, deleted when extra."""
     from ..assets import ensure_asset, slot_ref
     from ..draw import parse_slot_frame, slot_frame_text
-    from .images import _box_pt, _hex6
+    from .images import _box_pt, _hex6, _inside
 
     pattern = re.compile(rf"^{re.escape(name)}_slot_(\d+)$")
     slots = {}
@@ -341,11 +359,21 @@ def _realign_slots(sim_el: dict, slide: dict, name: str, n_data: int, notes: lis
             box, sheared = _box_pt(el)
             if sheared:
                 continue
-            nx, ny, nw, nh = _fitted(box, parse_slot_frame(el.get("description")) or box, frame)
+            old = parse_slot_frame(el.get("description"))
+            old = old if old and _inside(box, old) else box
+            nx, ny, nw, nh = _fitted(box, old, frame)
             size = el["size"]
             reqs.append({"updatePageElementTransform": {"objectId": el["objectId"], "applyMode": "ABSOLUTE", "transform": {
                 "scaleX": nw * PT_TO_EMU / size["width"]["magnitude"], "scaleY": nh * PT_TO_EMU / size["height"]["magnitude"],
                 "translateX": nx * PT_TO_EMU, "translateY": ny * PT_TO_EMU, "unit": "EMU"}}})
+            if _fills(box, old) and abs((frame[2] / frame[3]) / (old[2] / old[3]) - 1) > 0.02:
+                # a picture that filled its frame would be stretched: fit it again (an empty slot gets a
+                # placeholder of the new aspect), then the frame is written after, replaceImage clears it
+                src = (el.get("image") or {}).get("sourceUrl") or ""
+                if not src or _is_placeholder(src):
+                    fid = ensure_asset(slot_ref(frame[2], frame[3], _hex6(theme, "surface"), _hex6(theme, "divider")))
+                    src = f"https://drive.google.com/uc?export=view&id={fid}"
+                reqs.append({"replaceImage": {"imageObjectId": el["objectId"], "url": src, "imageReplaceMethod": "CENTER_CROP"}})
             moved += 1
         reqs.append({"updatePageElementAltText": {"objectId": f"{name}_slot_{k}", "description": slot_frame_text(*frame)}})
     extra = sorted(k for k in slots if k > n_data)

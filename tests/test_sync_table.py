@@ -254,6 +254,10 @@ def test_fit_columns_adds_a_column_shares_the_width_and_adds_a_slot(board, fake_
     assert new["objectId"] == "yt_top_slot_3" and "slot:" in new["url"]
     alts = {q["updatePageElementAltText"]["objectId"] for q in batch if "updatePageElementAltText" in q}
     assert alts == {"yt_top_slot_1", "yt_top_slot_2", "yt_top_slot_3"}
+    # slot 2 filled its frame and the frame changes shape: its picture is fitted again (crop), not stretched
+    swaps = {q["replaceImage"]["imageObjectId"]: q["replaceImage"] for q in batch if "replaceImage" in q}
+    assert swaps["yt_top_slot_2"] == {"imageObjectId": "yt_top_slot_2", "url": "https://x/old.png", "imageReplaceMethod": "CENTER_CROP"}
+    assert "yt_top_slot_1" not in swaps  # a picture shrunk inside its frame just moves
     assert {"row": 2, "column": 3, "old": "", "new": "3 210"} in out["changes"]
     assert "image slots: 2 realigned, 1 added, 0 removed" in out["notes"]
 
@@ -273,3 +277,13 @@ def test_fit_columns_needs_a_named_table(deck, fake_sheets):
     with pytest.raises(ValueError, match="named table"):
         sync.sync_table("PRES1", "tbl_b", "SHEET1", RANGE, columns="fit")
     assert deck.batches == []
+
+
+def test_an_empty_slot_gets_a_placeholder_of_its_new_shape(board, fake_sheets, fake_drive, pres):
+    slot2 = pres["slides"][2]["pageElements"][2]
+    slot2["image"]["sourceUrl"] = "https://drive.google.com/uc?export=view&id=ph_old"
+    fake_drive.store_files.append({"id": "ph_old", "name": "slot-1016x224-f2f4f4-c8d0d0.png", "mimeType": "image/png", "parents": []})
+    fake_sheets.responses[RANGE] = _src([["Nom", "Vidéo", "Bumper", "Démo"], ["Visuel", "", "", ""], ["Vues", "1", "2", "3"]])
+    sync.sync_table("PRES1", "yt_top_table_1", "SHEET1", RANGE, columns="fit")
+    swaps = {q["replaceImage"]["imageObjectId"]: q["replaceImage"] for q in board.batches[0] if "replaceImage" in q}
+    assert swaps["yt_top_slot_2"]["url"].startswith("https://drive.google.com/uc?export=view&id=fid_slot:667x224:")
