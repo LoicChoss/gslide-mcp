@@ -1,4 +1,4 @@
-"""Table tools: create_table, edit_table, set_table_cell.
+"""Table tools: create_table, edit_table, set_table_cell, resize_table.
 
 Cells are addressed 0-based ``(row, column)``. Text goes through the same
 markdown writer as ``write_text_markdown`` with a ``cellLocation`` on every
@@ -239,3 +239,77 @@ def set_table_cell(presentation: str, table_id: str, row: int, column: int, mark
         presentationId=pid, body={"requests": reqs}
     ).execute()
     return {"table_id": table_id, "row": row, "column": column, "content_length": len(markdown)}
+
+
+_MIN_COL_W = 32.0  # Slides refuses narrower table columns
+
+
+@mcp.tool(annotations=IDEMPOTENT)
+def resize_table(
+    presentation: str,
+    table_id: str,
+    row_height_pt: float | None = None,
+    rows: list[int] | None = None,
+    column_widths_pt: list[float | None] | None = None,
+) -> dict:
+    """Set the row heights and / or column widths of an existing table — one batchUpdate.
+
+    Row height is a minimum: a row never shrinks below its text plus
+    Google's fixed 7.2 pt cell padding (≈ 26 pt for 10.5 pt text), so a
+    smaller value leaves such rows as they are. Useful to even out a
+    designed table after its rows were filled or added.
+
+    Args:
+        row_height_pt: minimum height for ``rows`` (0-based; default: every row).
+        column_widths_pt: one width per column, ``null`` to keep a column
+            (e.g. ``[160, null, 90]``); each at least 32 pt (Slides minimum).
+
+    Returns: ``{table_id, rows, row_height_pt, column_widths_pt}``.
+
+    Example: ``resize_table(deck, "tbl_regies", row_height_pt=26, column_widths_pt=[180, null, null, 70])``
+    """
+    if row_height_pt is None and column_widths_pt is None:
+        raise ValueError("give row_height_pt or column_widths_pt (or both)")
+    if row_height_pt is not None and row_height_pt <= 0:
+        raise ValueError(f"row_height_pt must be positive, got {row_height_pt}")
+    pid = parse_pres_id(presentation)
+    svc = slide_service()
+    pres = svc.presentations().get(presentationId=pid).execute()
+    el, _slide = find_element(pres, table_id)
+    if el is None:
+        raise ValueError(f"element not found: {table_id!r}")
+    table = el.get("table")
+    if table is None:
+        raise ValueError(f"{table_id!r} is not a table (use find_elements with type='table')")
+    n_rows, n_cols = table.get("rows", 0), table.get("columns", 0)
+
+    reqs: list[dict] = []
+    picked: list[int] = []
+    if row_height_pt is not None:
+        picked = list(range(n_rows)) if rows is None else [int(r) for r in rows]
+        bad = [r for r in picked if not 0 <= r < n_rows]
+        if bad:
+            raise ValueError(f"rows {bad} are outside table {table_id} ({n_rows} rows, 0-based)")
+        reqs.append({"updateTableRowProperties": {
+            "objectId": table_id, "rowIndices": picked,
+            "tableRowProperties": {"minRowHeight": {"magnitude": row_height_pt, "unit": "PT"}},
+            "fields": "minRowHeight",
+        }})
+    if column_widths_pt is not None:
+        if len(column_widths_pt) != n_cols:
+            raise ValueError(f"column_widths_pt has {len(column_widths_pt)} values; table {table_id} has "
+                             f"{n_cols} columns (use null to keep a column)")
+        for j, width in enumerate(column_widths_pt):
+            if width is None:
+                continue
+            if width < _MIN_COL_W:
+                raise ValueError(f"column {j}: {width} pt is under the 32 pt Slides allows")
+            reqs.append({"updateTableColumnProperties": {
+                "objectId": table_id, "columnIndices": [j],
+                "tableColumnProperties": {"columnWidth": {"magnitude": width, "unit": "PT"}},
+                "fields": "columnWidth",
+            }})
+    if reqs:
+        svc.presentations().batchUpdate(presentationId=pid, body={"requests": reqs}).execute()
+    return {"table_id": table_id, "rows": picked, "row_height_pt": row_height_pt,
+            "column_widths_pt": column_widths_pt}

@@ -145,3 +145,43 @@ def test_set_table_cell_unknown_or_not_a_table(fake_slides):
         tables.set_table_cell("PRES1", "nope", 0, 0, "y")
     with pytest.raises(ValueError, match="not a table"):
         tables.set_table_cell("PRES1", "s1_box", 0, 0, "y")
+
+
+# --- resize_table -----------------------------------------------------------
+
+def test_resize_table_rows_and_columns(fake_slides):
+    out = tables.resize_table("PRES1", "tbl_1", row_height_pt=30, rows=[1], column_widths_pt=[120, None])
+    (batch,) = fake_slides.batches
+    assert _only(batch, "updateTableRowProperties") == [{
+        "objectId": "tbl_1", "rowIndices": [1],
+        "tableRowProperties": {"minRowHeight": {"magnitude": 30, "unit": "PT"}}, "fields": "minRowHeight",
+    }]
+    assert _only(batch, "updateTableColumnProperties") == [{
+        "objectId": "tbl_1", "columnIndices": [0],
+        "tableColumnProperties": {"columnWidth": {"magnitude": 120, "unit": "PT"}}, "fields": "columnWidth",
+    }]
+    assert out == {"table_id": "tbl_1", "rows": [1], "row_height_pt": 30, "column_widths_pt": [120, None]}
+
+
+def test_resize_table_sets_every_row_by_default(fake_slides):
+    tables.resize_table("PRES1", "tbl_1", row_height_pt=26)
+    assert _only(fake_slides.batches[0], "updateTableRowProperties")[0]["rowIndices"] == [0, 1]
+    assert _only(fake_slides.batches[0], "updateTableColumnProperties") == []
+
+
+@pytest.mark.parametrize("kw, match", [
+    ({}, "row_height_pt or column_widths_pt"),
+    ({"column_widths_pt": [20, 100]}, "32"),
+    ({"column_widths_pt": [100]}, "2 columns"),
+    ({"row_height_pt": 20, "rows": [5]}, "outside"),
+    ({"row_height_pt": 0}, "positive"),
+])
+def test_resize_table_validates_before_writing(fake_slides, kw, match):
+    with pytest.raises(ValueError, match=match):
+        tables.resize_table("PRES1", "tbl_1", **kw)
+    assert fake_slides.batches == []
+
+
+def test_resize_table_needs_a_table(fake_slides):
+    with pytest.raises(ValueError, match="not a table"):
+        tables.resize_table("PRES1", "s1_box", row_height_pt=30)
