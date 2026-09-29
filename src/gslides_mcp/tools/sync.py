@@ -25,7 +25,7 @@ _STYLES = ("slides", "sheets", "charter")
 _CHARTER_REFUSED = ("rows", "icons", "dots", "subs", "pill_cols", "col_w", "row_h", "row_heights", "icon_w", "icon_tint")
 _STYLE_KINDS = ("updateTableCellProperties", "updateTextStyle", "updateParagraphStyle", "updateTableBorderProperties")
 _ROWS = ("keep", "fit")
-_COLUMNS = ("keep",)
+_COLUMNS = ("keep", "fit")
 
 
 def _span(first: int, last: int, noun: str) -> str:
@@ -215,8 +215,147 @@ def _push_siblings(el: dict, slide: dict, delta: float, notes: list[str]) -> lis
     return reqs
 
 
+_MIN_COL_W = 32.0  # Slides refuses narrower table columns
+_NAMED_TABLE = re.compile(r"^(.+)_table_\d+$")
+
+
+def _col_widths(table: dict) -> list[float]:
+    return [c.get("columnWidth", {}).get("magnitude", 0) / PT_TO_EMU for c in table.get("tableColumns", [])]
+
+
+def _fit_columns(pres: dict, el: dict, slide: dict, want: int) -> tuple[list[dict], dict, list[str]]:
+    """Columns added or removed at the end; data columns share what the first column leaves; slots follow.
+
+    Only for a named table (``<name>_table_<n>``): its image slots are
+    ``<name>_slot_<k>``, one per data column ``k``.
+    """
+    table_id = el["objectId"]
+    m = _NAMED_TABLE.match(table_id)
+    if not m:
+        raise ValueError(f"columns='fit' needs a named table (<name>_table_1) so its image slots can follow; "
+                         f"{table_id!r} is not: rename_element it, or insert the component with name")
+    if want < 2:
+        raise ValueError(f"columns='fit' keeps at least a label column and one column; the range has {want}")
+    table = el["table"]
+    n_c = table.get("columns", 0)
+    widths = _col_widths(table)
+    total, first = sum(widths), widths[0]
+    share = (total - first) / (want - 1)
+    if share < _MIN_COL_W:
+        raise ValueError(f"{want} columns do not fit in the table's {total:.0f} pt ({share:.0f} pt each, 32 minimum)")
+    reqs: list[dict] = []
+    k = abs(want - n_c)
+    if want > n_c:
+        reqs.append({"insertTableColumns": {"tableObjectId": table_id, "cellLocation": {"columnIndex": n_c - 1},
+                                            "insertRight": True, "number": k}})
+        note = f"{k} column{'s' if k > 1 else ''} added at the end"
+    else:
+        reqs += [{"deleteTableColumn": {"tableObjectId": table_id, "cellLocation": {"columnIndex": want}}}] * k
+        note = f"{k} column{'s' if k > 1 else ''} removed at the end"
+    new_widths = [first] + [share] * (want - 1)
+    for j, width in enumerate(new_widths):
+        reqs.append({"updateTableColumnProperties": {
+            "objectId": table_id, "columnIndices": [j],
+            "tableColumnProperties": {"columnWidth": {"magnitude": width * PT_TO_EMU, "unit": "EMU"}},
+            "fields": "columnWidth"}})
+    sim = copy.deepcopy(pres)
+    sim_el, sim_slide = find_element(sim, table_id)
+    st = sim_el["table"]
+    for row in st.get("tableRows", []):
+        cells = row.get("tableCells", [])
+        if want > n_c:
+            cells += [_empty_copy(cells[-1], 0, 0) for _ in range(k)]
+        else:
+            del cells[want:]
+    for i, row in enumerate(st.get("tableRows", [])):
+        for j, cell in enumerate(row.get("tableCells", [])):
+            cell["location"] = {"rowIndex": i, "columnIndex": j}
+    st["columns"] = want
+    st["tableColumns"] = [{"columnWidth": {"magnitude": w * PT_TO_EMU, "unit": "EMU"}} for w in new_widths]
+    notes = [note]
+    reqs += _realign_slots(sim_el, sim_slide, m.group(1), want - 1, notes)
+    return reqs, sim, notes
+
+
+def _fitted(box, old_frame, new_frame):
+    """The picture's box moved into ``new_frame``: centred, same aspect when it was fitted inside its old frame."""
+    x, y, w, h = box
+    fx, fy, fw, fh = new_frame
+    if old_frame is None or all(abs(a - b) < 0.5 for a, b in zip(box, old_frame)) or w <= 0 or h <= 0:
+        return new_frame  # it filled its frame (crop, placeholder): it fills the new one
+    aspect = w / h
+    if aspect > fw / fh:
+        nw, nh = fw, fw / aspect
+    else:
+        nw, nh = fh * aspect, fh
+    return fx + (fw - nw) / 2, fy + (fh - nh) / 2, nw, nh
+
+
+def _realign_slots(sim_el: dict, slide: dict, name: str, n_data: int, notes: list[str]) -> list[dict]:
+    """Slot k onto column k of the image row: moved and refitted, created empty when missing, deleted when extra."""
+    from ..assets import ensure_asset, slot_ref
+    from ..draw import parse_slot_frame, slot_frame_text
+    from .images import _box_pt, _hex6
+
+    pattern = re.compile(rf"^{re.escape(name)}_slot_(\d+)$")
+    slots = {}
+    for other in slide.get("pageElements", []):
+        mm = pattern.match(other["objectId"])
+        if mm and "image" in other:
+            slots[int(mm.group(1))] = other
+    if not slots:
+        return []
+    t = sim_el.get("transform", {})
+    tx, ty = t.get("translateX", 0) / PT_TO_EMU, t.get("translateY", 0) / PT_TO_EMU
+    widths = _col_widths(sim_el["table"])
+    heights = [r.get("rowHeight", {}).get("magnitude", 0) / PT_TO_EMU for r in sim_el["table"].get("tableRows", [])]
+    first = slots[min(slots)]
+    box, _sheared = _box_pt(first)
+    ref_frame = parse_slot_frame(first.get("description")) or box
+    centre = ref_frame[1] + ref_frame[3] / 2 - ty
+    row, acc = 0, 0.0
+    for i, hh in enumerate(heights):
+        if acc <= centre < acc + hh:
+            row = i
+            break
+        acc += hh
+    slot_h = ref_frame[3]
+    top = ty + sum(heights[:row]) + (heights[row] - slot_h) / 2
+    theme = themes.load(refill.DEFAULT_THEME)
+    reqs: list[dict] = []
+    created = moved = 0
+    for k in range(1, n_data + 1):
+        frame = (tx + sum(widths[:k]) + 4, top, widths[k] - 8, slot_h)
+        el = slots.get(k)
+        if el is None:
+            fid = ensure_asset(slot_ref(frame[2], frame[3], _hex6(theme, "surface"), _hex6(theme, "divider")))
+            reqs.append({"createImage": {"objectId": f"{name}_slot_{k}",
+                                         "url": f"https://drive.google.com/uc?export=view&id={fid}",
+                                         "elementProperties": {"pageObjectId": slide["objectId"],
+                                                               "size": {"width": {"magnitude": frame[2] * PT_TO_EMU, "unit": "EMU"},
+                                                                        "height": {"magnitude": frame[3] * PT_TO_EMU, "unit": "EMU"}},
+                                                               "transform": {"scaleX": 1, "scaleY": 1, "translateX": frame[0] * PT_TO_EMU,
+                                                                             "translateY": frame[1] * PT_TO_EMU, "unit": "EMU"}}}})
+            created += 1
+        else:
+            box, sheared = _box_pt(el)
+            if sheared:
+                continue
+            nx, ny, nw, nh = _fitted(box, parse_slot_frame(el.get("description")) or box, frame)
+            size = el["size"]
+            reqs.append({"updatePageElementTransform": {"objectId": el["objectId"], "applyMode": "ABSOLUTE", "transform": {
+                "scaleX": nw * PT_TO_EMU / size["width"]["magnitude"], "scaleY": nh * PT_TO_EMU / size["height"]["magnitude"],
+                "translateX": nx * PT_TO_EMU, "translateY": ny * PT_TO_EMU, "unit": "EMU"}}})
+            moved += 1
+        reqs.append({"updatePageElementAltText": {"objectId": f"{name}_slot_{k}", "description": slot_frame_text(*frame)}})
+    extra = sorted(k for k in slots if k > n_data)
+    reqs += [{"deleteObject": {"objectId": slots[k]["objectId"]}} for k in extra]
+    notes.append(f"image slots: {moved} realigned, {created} added, {len(extra)} removed")
+    return reqs
+
+
 def plan_table_sync(pres: dict, table_id: str, src: dict, style: str = "slides",
-                    charter: dict | None = None, rows: str = "keep") -> tuple[list[dict], dict]:
+                    charter: dict | None = None, rows: str = "keep", columns: str = "keep") -> tuple[list[dict], dict]:
     """Requests and report to bring table ``table_id`` in line with ``src`` (``read_cells``); nothing is sent."""
     el, slide = find_element(pres, table_id)
     if el is None:
@@ -233,6 +372,12 @@ def plan_table_sync(pres: dict, table_id: str, src: dict, style: str = "slides",
         structural, pres, notes = _fit_rows(pres, el, slide, s_r)
         el, slide = find_element(pres, table_id)
         n_r = el["table"]["rows"]
+    if columns == "fit" and s_c != n_c:
+        more, pres, col_notes = _fit_columns(pres, el, slide, s_c)
+        structural += more
+        notes += col_notes
+        el, slide = find_element(pres, table_id)
+        n_c = el["table"]["columns"]
     notes += _dimension_notes(n_r, n_c, s_r, s_c)
     if notes:
         report["notes"] = notes
@@ -314,7 +459,13 @@ def sync_table(
             data row's style. The component's own elements under the table
             (same name prefix: ``yt_top_…``) move by the height change;
             other elements that may now overlap are named in ``notes``.
-        columns: ``keep`` (extra range columns left out, reported).
+        columns: ``keep`` (extra range columns left out, reported) or
+            ``fit`` for a named table (``<name>_table_1``, a component
+            inserted with ``name`` — one column per ad, post, campaign):
+            columns are added or removed at the end, data columns share the
+            width the first column leaves (32 pt minimum), and the image
+            slots ``<name>_slot_<k>`` follow column k: realigned (a picture
+            keeps its aspect), created empty, or deleted.
         row_height_pt: minimum height set on every row afterwards.
         dry_run: report what would change and write nothing.
         charter: props of the ``table`` component for ``style="charter"``
@@ -343,7 +494,7 @@ def sync_table(
     if "table" not in el:
         raise ValueError(f"{table!r} is not a table (use find_elements with type='table')")
     src = sheets_source.read_cells(spreadsheet, range)
-    reqs, report = plan_table_sync(pres, table, src, style, charter, rows)
+    reqs, report = plan_table_sync(pres, table, src, style, charter, rows, columns)
     if row_height_pt:
         reqs.append({"updateTableRowProperties": {
             "objectId": table, "rowIndices": list(builtins.range(el["table"].get("rows", 0))),

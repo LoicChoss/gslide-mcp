@@ -203,3 +203,73 @@ def test_fit_refuses_to_drop_the_header_or_a_merge(deck, fake_sheets, pres):
     with pytest.raises(ValueError, match="merged"):
         sync.sync_table("PRES1", "tbl_b", "SHEET1", RANGE, rows="fit")
     assert deck.batches == []
+
+
+# --- columns="fit" and image slots --------------------------------------------------------
+
+from test_images import _image  # noqa: E402
+
+
+@pytest.fixture
+def board(fake_slides, pres, fake_sheets, monkeypatch):
+    """A named scoreboard: label column 76 pt + two ads of 262 pt, image row 1, two slots."""
+    import gslides_mcp.assets as assets_mod
+
+    tbl = _table("yt_top_table_1", [[("Nom", {}), ("Vidéo", {}), ("Bumper", {})],
+                                    [("Visuel", {}), (" ", {}), (" ", {})],
+                                    [("Vues", {}), ("12 400", {}), ("8 950", {})]])
+    tbl["transform"] = {"scaleX": 1, "scaleY": 1, "translateX": 40 * PT, "translateY": 40 * PT, "unit": "EMU"}
+    tbl["table"]["tableColumns"] = [{"columnWidth": {"magnitude": w * PT, "unit": "EMU"}} for w in (76, 262, 262)]
+    for row, h in zip(tbl["table"]["tableRows"], (26, 64, 26)):
+        row["rowHeight"] = {"magnitude": h * PT, "unit": "EMU"}
+    shown = _image("yt_top_slot_1", 120 + (254 - 99.6) / 2, 70, 99.6, 56, description="slot:120.0,70.0,254.0,56.0")
+    empty = _image("yt_top_slot_2", 386, 70, 254, 56, base=(6400, 6400), description="slot:386.0,70.0,254.0,56.0")
+    pres["slides"][2]["pageElements"] = [tbl, shown, empty]
+    monkeypatch.setattr(assets_mod, "ensure_asset", lambda ref, tint=None: "fid_" + ref)
+    return fake_slides
+
+
+def _transform(batch, oid):
+    return [q["updatePageElementTransform"]["transform"] for q in batch
+            if "updatePageElementTransform" in q and q["updatePageElementTransform"]["objectId"] == oid]
+
+
+def test_fit_columns_adds_a_column_shares_the_width_and_adds_a_slot(board, fake_sheets):
+    fake_sheets.responses[RANGE] = _src([["Nom", "Vidéo", "Bumper", "Démo"], ["Visuel", "", "", ""], ["Vues", "12 400", "8 950", "3 210"]])
+    out = sync.sync_table("PRES1", "yt_top_table_1", "SHEET1", RANGE, columns="fit")
+    (batch,) = board.batches
+    assert batch[0] == {"insertTableColumns": {"tableObjectId": "yt_top_table_1", "cellLocation": {"columnIndex": 2},
+                                               "insertRight": True, "number": 1}}
+    widths = [q["updateTableColumnProperties"]["tableColumnProperties"]["columnWidth"]["magnitude"] / PT
+              for q in batch if "updateTableColumnProperties" in q]
+    assert widths == pytest.approx([76, 174.667, 174.667, 174.667], abs=0.01)
+    # the picture keeps its aspect, centred in its narrower frame
+    (t1,) = _transform(batch, "yt_top_slot_1")
+    assert t1["translateX"] / PT == pytest.approx(120 + (166.667 - 99.6) / 2, abs=0.05)
+    assert t1["scaleX"] * 49000 / PT == pytest.approx(99.6, abs=0.05)
+    # the empty slot fills its new frame
+    (t2,) = _transform(batch, "yt_top_slot_2")
+    assert t2["translateX"] / PT == pytest.approx(40 + 76 + 174.667 + 4, abs=0.05)
+    (new,) = [q["createImage"] for q in batch if "createImage" in q]
+    assert new["objectId"] == "yt_top_slot_3" and "slot:" in new["url"]
+    alts = {q["updatePageElementAltText"]["objectId"] for q in batch if "updatePageElementAltText" in q}
+    assert alts == {"yt_top_slot_1", "yt_top_slot_2", "yt_top_slot_3"}
+    assert {"row": 2, "column": 3, "old": "", "new": "3 210"} in out["changes"]
+    assert "image slots: 2 realigned, 1 added, 0 removed" in out["notes"]
+
+
+def test_fit_columns_removes_the_last_column_and_its_slot(board, fake_sheets):
+    fake_sheets.responses[RANGE] = _src([["Nom", "Vidéo"], ["Visuel", ""], ["Vues", "12 400"]])
+    sync.sync_table("PRES1", "yt_top_table_1", "SHEET1", RANGE, columns="fit")
+    (batch,) = board.batches
+    assert batch[0] == {"deleteTableColumn": {"tableObjectId": "yt_top_table_1", "cellLocation": {"columnIndex": 2}}}
+    assert {"deleteObject": {"objectId": "yt_top_slot_2"}} in batch
+    (t1,) = _transform(batch, "yt_top_slot_1")
+    assert t1["translateX"] / PT == pytest.approx(120 + (516 - 99.6) / 2, abs=0.05)
+
+
+def test_fit_columns_needs_a_named_table(deck, fake_sheets):
+    fake_sheets.responses[RANGE] = _src([["Régie", "Dépenses", "vs N-1", "Clics"], ["Google", "1", "+1 %", "2"]])
+    with pytest.raises(ValueError, match="named table"):
+        sync.sync_table("PRES1", "tbl_b", "SHEET1", RANGE, columns="fit")
+    assert deck.batches == []
