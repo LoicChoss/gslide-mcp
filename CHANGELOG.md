@@ -12,7 +12,7 @@ All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachang
 
 ### Security
 
-- Hosted mode never reads a server file named by a caller: an image prop given a path (`card.icon`, `draw` `asset`…) is refused instead of uploading that file to the assets folder. Theme and component names are checked before they become file paths, so `delete_component` can no longer remove other files.
+- Hosted mode never reads a server file named by a caller: an image prop given a path (`card.icon`, `draw` `asset`…) is refused instead of uploading that file to the assets folder. Theme and component names are checked before they become file paths, so `delete_component` can no longer remove other files. Recipe expressions refuse huge exponents and repetitions, which could stall the shared process.
 
 ### Changed
 

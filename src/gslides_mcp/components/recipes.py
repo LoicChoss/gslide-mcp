@@ -85,7 +85,9 @@ def _eval_node(node: ast.AST, ctx: dict, src: str):
     if isinstance(node, ast.Attribute):
         return _lookup(ctx, _dotted(node))
     if isinstance(node, ast.BinOp) and type(node.op) in _BIN:
-        return _BIN[type(node.op)](_eval_node(node.left, ctx, src), _eval_node(node.right, ctx, src))
+        left, right = _eval_node(node.left, ctx, src), _eval_node(node.right, ctx, src)
+        _check_size(node.op, left, right, src)
+        return _BIN[type(node.op)](left, right)
     if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARY:
         return _UNARY[type(node.op)](_eval_node(node.operand, ctx, src))
     if isinstance(node, ast.Subscript):
@@ -97,6 +99,21 @@ def _eval_node(node: ast.AST, ctx: dict, src: str):
     if isinstance(node, (ast.List, ast.Tuple)):
         return [_eval_node(e, ctx, src) for e in node.elts]
     raise ValueError(f"unsupported expression {src!r}")
+
+
+# Recipes are shared on the hosted server: an expression must not be able to
+# stall or exhaust the one process everybody uses ("9**9**9", "'a' * 10**9").
+_MAX_EXPONENT = 64
+_MAX_REPEAT = 10_000
+
+
+def _check_size(op: ast.operator, left, right, src: str) -> None:
+    if isinstance(op, ast.Pow) and isinstance(right, (int, float)) and abs(right) > _MAX_EXPONENT:
+        raise ValueError(f"exponent too large in {src!r}")
+    if isinstance(op, ast.Mult):
+        for seq, count in ((left, right), (right, left)):
+            if isinstance(seq, (str, list)) and isinstance(count, int) and len(seq) * count > _MAX_REPEAT:
+                raise ValueError(f"repetition too large in {src!r}")
 
 
 def _dotted(node: ast.AST) -> str:

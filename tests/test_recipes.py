@@ -105,3 +105,15 @@ def test_delete_refuses_a_name_that_is_a_path():
 
     with pytest.raises(ValueError, match="invalid component name"):
         recipes.delete("../../fastmcp/session")
+
+
+def test_expressions_cannot_stall_the_shared_server():
+    import pytest
+    from gslides_mcp.components import recipes
+
+    assert recipes.evaluate("2 ** 10", {}) == 1024
+    assert recipes.evaluate("len(items) * 26", {"items": [1, 2]}) == 52
+    with pytest.raises(ValueError, match="exponent too large"):
+        recipes.evaluate("9 ** 9 ** 9", {})
+    with pytest.raises(ValueError, match="repetition too large"):
+        recipes.evaluate("'a' * 10 ** 9", {})
