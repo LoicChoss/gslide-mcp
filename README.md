@@ -97,7 +97,7 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.8.0.mcpb
 | | `find_elements` | Search elements by type, alt-title, or text content |
 | | `get_presentation` | Raw `presentations.get` passthrough with an optional `fields` mask (auto-trimmed to 200 kB) |
 | | `get_page` | One page — slide, layout, master or notes — raw, or `compact=True` for one line per element |
-| | `export_pres` | Export to local `.pptx` or `.pdf` |
+| | `export_pres` | Download an existing deck as `.pptx` or `.pdf` (a link on the hosted server); not a way to make a PowerPoint |
 | | `batch_apply` | Raw `batchUpdate` escape hatch for unsupported operations |
 | | `raw_request` | GET/POST any Slides API path under the presentation (Drive refused) |
 | **Rework** | `harvest_deck_assets` | Copy a deck's images (and slide thumbnails) into a Drive folder, returned as stable URLs / `drive:<id>` assets, before rebuilding it on the charter |

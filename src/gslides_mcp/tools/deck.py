@@ -37,6 +37,9 @@ def _check_folder(drv, folder_id: str) -> str | None:
 def create_presentation(title: str, folder: str | None = None) -> dict:
     """Create a new blank Google Slides presentation.
 
+    Not for a PowerPoint (.pptx) the user asked for: that file is made with the
+    usual PowerPoint tooling, not in Google Slides.
+
     Args:
         folder: Drive folder id or URL (``drive.google.com/drive/folders/<id>``)
             to create it in. Default: the root of the user's My Drive.
@@ -424,7 +427,11 @@ def _resolve_slide_index(pres: dict, slide: str) -> int:
 
 @mcp.tool(annotations=READ_ONLY)
 def export_pres(presentation: str, format: str = "pptx") -> dict:
-    """Export the presentation via Drive. Returns local file path.
+    """Download an existing Google Slides deck as .pptx or .pdf. Returns local file path.
+
+    Only when the user asks to download or send a deck that lives in Google
+    Slides. Not a way to make a PowerPoint: a PowerPoint the user asks for is
+    not built in Google Slides to be exported here.
 
     On the hosted server the file would land on the server, so this returns
     ``url`` instead: a Google download link that works for anyone who can

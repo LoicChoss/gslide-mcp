@@ -2,6 +2,12 @@
 
 All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/) (0.x: minor bumps may change tool signatures).
 
+## [Unreleased]
+
+### Changed
+
+- **PowerPoint requests go elsewhere**: Claude picked this server (and the skill) as soon as someone asked for a PowerPoint. The server now sends `instructions` — Google Slides only; a PowerPoint, PPT, `.pptx` or Keynote is made with the usual PowerPoint tooling unless the user explicitly wants it in Google Slides. `create_presentation` and `export_pres` say the same (`export_pres` downloads an existing deck, it does not make a PowerPoint), and the skill's description no longer matches a PowerPoint request.
+
 ## [0.8.0] — 2026-09-30
 
 ### Added

@@ -12,7 +12,17 @@ defaults: ``destructiveHint`` is *true* unless stated, so additive writers say
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-mcp = FastMCP("gslides-mcp")
+# Sent to the client with the tool list. Without it, Claude picked this server as
+# soon as someone asked for a PowerPoint ("build it in Slides, export to .pptx").
+INSTRUCTIONS = """\
+Google Slides only: these tools build and edit Google Slides decks in the user's Drive.
+When the user asks for a PowerPoint (PowerPoint, PPT, .pptx) or a Keynote, do not use this
+server: make the file with the usual PowerPoint tooling. Use it for such a request only when
+the user explicitly wants the result in Google Slides. export_pres downloads a Google Slides
+deck that already exists, when the user asks for that download; it is not a way to make a
+PowerPoint."""
+
+mcp = FastMCP("gslides-mcp", instructions=INSTRUCTIONS)
 
 # Reads nothing but the deck (or the web); changes nothing.
 READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False)
