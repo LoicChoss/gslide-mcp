@@ -33,6 +33,22 @@ def _shape(oid, content, style=None):
     return {"objectId": oid, "shape": {"shapeType": "TEXT_BOX", "text": _text(content, style)}}
 
 
+BIG = {"fontSize": {"magnitude": 30, "unit": "PT"}, "bold": True}
+SMALL = {"fontSize": {"magnitude": 11, "unit": "PT"}}
+GREY = {"opaqueColor": {"rgbColor": {"red": 0.5, "green": 0.5, "blue": 0.5}}}
+
+
+def _kpi_block(oid):
+    """« 12 400 » 30 pt / « impressions » 11 pt / « +8 % » green then « vs N-1 » grey, on three lines."""
+    marker = {"paragraphMarker": {"style": {}}}
+    return {"objectId": oid, "shape": {"shapeType": "TEXT_BOX", "text": {"textElements": [
+        marker, {"textRun": {"content": "12 400\n", "style": BIG}},
+        marker, {"textRun": {"content": "impressions\n", "style": SMALL}},
+        marker, {"textRun": {"content": "+8 %", "style": {**SMALL, "foregroundColor": GREEN}}},
+        {"textRun": {"content": " vs N-1\n", "style": {**SMALL, "foregroundColor": GREY}}},
+    ]}}}
+
+
 @pytest.fixture
 def deck(fake_slides, pres):
     pres["slides"][2]["pageElements"] = [
@@ -46,6 +62,7 @@ def deck(fake_slides, pres):
         _shape("kpi_delta", "+4 %", {"foregroundColor": GREEN}),
         _shape("analysis", "Le nouveau levier a porté la collecte : nouveau levier confirmé.", {"italic": True}),
         _shape("label", "Nouveau levier", {"bold": True}),
+        _kpi_block("kpi_block"),
     ]
     return fake_slides
 
@@ -170,6 +187,108 @@ def test_refill_validates_before_writing(deck, edit, match):
 def test_refill_refuses_the_same_target_twice(deck):
     with pytest.raises(ValueError, match="twice"):
         refill.refill_text("PRES1", [{"element": "kpi_val", "text": "1"}, {"element": "kpi_val", "text": "2"}])
+
+
+# --- refill_text by run -----------------------------------------------------------------------
+
+def test_runs_are_stretches_of_one_style_within_a_line():
+    text = _kpi_block("k")["shape"]["text"]
+    assert [(r["text"], r["start"], r["end"]) for r in refill.runs(text)] == [
+        ("12 400", 0, 6), ("impressions", 7, 18), ("+8 %", 19, 23), ("vs N-1", 24, 30)]  # outer space left out
+
+
+def test_runs_skip_slide_numbers_soft_breaks_and_blank_stretches():
+    text = {"textElements": [
+        {"paragraphMarker": {}},
+        {"textRun": {"content": "📈 Clics\u000bvs N-1", "style": SMALL}},
+        {"textRun": {"content": " ", "style": BIG}},
+        {"autoText": {"type": "SLIDE_NUMBER", "content": "3", "style": SMALL}},
+        {"textRun": {"content": "€\n", "style": SMALL}},
+    ]}
+    assert [(r["text"], r["start"], r["end"]) for r in refill.runs(text)] == [
+        ("📈 Clics", 0, 8), ("vs N-1", 9, 15), ("€", 17, 18)]  # the emoji is two UTF-16 units
+
+
+def test_refill_runs_rewrites_each_run_in_its_own_style_from_last_to_first(deck):
+    out = refill.refill_text("PRES1", [{"element": "kpi_block", "runs": ["13 100", None, "+3 %", None]}])
+    (batch,) = deck.batches
+    assert [next(iter(r)) for r in batch] == ["deleteText", "insertText", "updateTextStyle"] * 2
+    deletes, inserts, styles = (_by_kind(batch, k) for k in ("deleteText", "insertText", "updateTextStyle"))
+    assert [d["textRange"] for d in deletes] == [{"type": "FIXED_RANGE", "startIndex": 19, "endIndex": 23},
+                                                 {"type": "FIXED_RANGE", "startIndex": 0, "endIndex": 6}]
+    assert [(i["text"], i["insertionIndex"]) for i in inserts] == [("+3 %", 19), ("13 100", 0)]
+    assert styles[0]["style"] == {**SMALL, "foregroundColor": GREEN}
+    assert styles[0]["textRange"] == {"type": "FIXED_RANGE", "startIndex": 19, "endIndex": 23}
+    assert styles[1]["style"] == BIG
+    assert out["edits"] == [{"element": "kpi_block", "style_from": "self", "runs": [
+        {"index": 0, "text": "13 100"}, {"index": 2, "text": "+3 %", "delta": "up"}]}]
+
+
+def test_refill_runs_flip_a_variation_run_to_its_sign_and_leave_its_neighbour(deck):
+    out = refill.refill_text("PRES1", [{"element": "kpi_block", "runs": [None, None, "-2 %", None]}])
+    (st,) = _by_kind(deck.batches[0], "updateTextStyle")
+    assert st["style"]["foregroundColor"] == RED and st["style"]["fontSize"] == SMALL["fontSize"]
+    assert out["edits"][0]["runs"] == [{"index": 2, "text": "-2 %", "delta": "down"}]
+
+
+def test_refill_runs_keep_outer_spaces_and_skip_unchanged_runs(deck):
+    out = refill.refill_text("PRES1", [{"element": "kpi_block", "runs": ["12 400", None, None, "vs M-1"]}])
+    (batch,) = deck.batches
+    assert _by_kind(batch, "deleteText")[0]["textRange"] == {"type": "FIXED_RANGE", "startIndex": 24, "endIndex": 30}
+    assert _by_kind(batch, "insertText")[0]["insertionIndex"] == 24  # the space before stays
+    assert out["edits"][0]["runs"] == [{"index": 3, "text": "vs M-1"}]
+
+
+def test_refill_runs_with_nothing_to_change_send_nothing(deck):
+    out = refill.refill_text("PRES1", [{"element": "kpi_block", "runs": ["12 400", None, "+8 %", None]}])
+    assert deck.batches == [] and out["edits"][0]["runs"] == []
+
+
+def test_signed_runs_coloured_apart_teach_the_deck_colours():
+    # KPI blocks alone: the variation runs set apart by colour give the colours of each sign
+    down = _kpi_block("k2")["shape"]["text"]
+    down["textElements"][5]["textRun"].update(content="-3 %", style={**SMALL, "foregroundColor": RED})
+    assert refill._learn([_kpi_block("k1")["shape"]["text"], down]) == {"up": GREEN, "down": RED}
+    # a signed run in the colour of its paragraph is not a variation colour
+    plain = {"textElements": [{"paragraphMarker": {}}, {"textRun": {"content": "Hausse de ", "style": {**SMALL, "foregroundColor": GREY}}},
+                              {"textRun": {"content": "+20 %", "style": {**SMALL, "foregroundColor": GREY, "bold": True}}}]}
+    assert refill._learn([plain]) == {}
+
+
+def test_refill_runs_in_a_variation_cell_use_the_table_colours(deck):
+    out = refill.refill_text("PRES1", [{"element": "tbl_b", "row": 1, "column": 2, "runs": ["-3,1 %"]}])
+    (st,) = _by_kind(deck.batches[0], "updateTextStyle")
+    assert st["style"]["foregroundColor"] == RED and st["cellLocation"] == {"rowIndex": 1, "columnIndex": 2}
+    assert out["edits"][0]["runs"] == [{"index": 0, "text": "-3,1 %", "delta": "down"}]
+
+
+def test_refill_runs_count_mismatch_lists_the_runs(deck):
+    with pytest.raises(ValueError, match="kpi_block has 4 runs, got 2") as err:
+        refill.refill_text("PRES1", [{"element": "kpi_block", "runs": ["1", "2"]}])
+    assert "«impressions» 11 pt" in str(err.value) and "«+8 %» 11 pt #1A994C" in str(err.value)
+    assert deck.batches == []
+
+
+@pytest.mark.parametrize("edit, match", [
+    ({"element": "kpi_block", "text": "x", "runs": ["x"]}, "either 'text' or 'runs'"),
+    ({"element": "kpi_block", "runs": "13 100"}, "list"),
+    ({"element": "kpi_block", "runs": [{"t": 1}, None, None, None]}, "string or null"),
+    ({"element": "tbl_b", "row": 3, "column": 1, "runs": ["1"]}, "no run"),
+])
+def test_refill_runs_validate_before_writing(deck, edit, match):
+    with pytest.raises(ValueError, match=match):
+        refill.refill_text("PRES1", [{"element": "kpi_delta", "text": "+1 %"}, edit])
+    assert deck.batches == []
+
+
+def test_inspect_slide_shows_the_runs_of_a_mixed_style_shape(deck):
+    from gslides_mcp.tools.deck import inspect_slide
+
+    by_id = {e["id"]: e for e in inspect_slide("PRES1", "3")["elements"]}
+    assert by_id["kpi_block"]["runs"] == [
+        {"text": "12 400", "size": 30, "bold": True}, {"text": "impressions", "size": 11},
+        {"text": "+8 %", "size": 11, "color": "#1A994C"}, {"text": "vs N-1", "size": 11, "color": "#808080"}]
+    assert "runs" not in by_id["kpi_val"]  # one style: nothing to tell apart
 
 
 def test_sign_of():

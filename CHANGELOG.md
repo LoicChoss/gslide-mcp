@@ -4,6 +4,11 @@ All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Added
+
+- **`refill_text` run by run**: `{element, runs: ["13 100", null, "-2 %", null]}` in place of `text` refills a block whose parts have their own look (a KPI: figure 30 pt, label 11 pt, variation in green) — one entry per run of the current text, `null` leaves a run, each run keeps its own style and the variation run takes the colour of its sign. A run is a stretch of one style within a line, outer spaces left out; line breaks, slide numbers and blank stretches are never rewritten. A wrong count is refused with the runs listed; `inspect_slide` lists the `runs` of a shape that mixes styles. Verified live (sizes, colours, the space before « vs M-1 » kept). Before, the whole block took its first run's style, and the fix was raw requests.
+- Sign colours are also learnt from KPI blocks: a signed run whose colour sets it apart from the rest of its block counts, as a signed cell or shape already did.
+
 ### Changed
 
 - **PowerPoint requests go elsewhere**: Claude picked this server (and the skill) as soon as someone asked for a PowerPoint. The server now sends `instructions` — Google Slides only; a PowerPoint, PPT, `.pptx` or Keynote is made with the usual PowerPoint tooling unless the user explicitly wants it in Google Slides. `create_presentation` and `export_pres` say the same (`export_pres` downloads an existing deck, it does not make a PowerPoint), and the skill's description no longer matches a PowerPoint request.

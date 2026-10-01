@@ -7,6 +7,7 @@ from googleapiclient.errors import HttpError
 from ..app import ADDITIVE, DESTRUCTIVE, IDEMPOTENT, READ_ONLY, mcp
 from ..auth import remote_mode, slide_service, drive_service
 from ..util import parse_drive_id, parse_pres_id, emu_to_pt
+from .refill import describe_run, runs
 
 _SLIDES_MIME = "application/vnd.google-apps.presentation"
 _FOLDER_MIME = "application/vnd.google-apps.folder"
@@ -277,6 +278,9 @@ def _summarize_element(el: dict, parent_tx: float = 0, parent_ty: float = 0,
         paras = _paragraphs(el.get("shape", {}).get("text", {}).get("textElements", []))
         if len(paras) > 1 or any(p["bullet"] for p in paras):
             out["paragraphs"] = paras
+        rs = runs(el.get("shape", {}).get("text") or {})
+        if any(r["style"] != rs[0]["style"] for r in rs):  # mixed styles: refill_text(runs=…) keeps each
+            out["runs"] = [describe_run(r) for r in rs]
     return out, tx, ty, sx, sy
 
 
@@ -341,9 +345,11 @@ def inspect_slide(presentation: str, slide: str, recursive: bool = False) -> dic
             write_text_markdown / set_text.
 
     Returns: ``{slide_id, elements: [{id, type, x, y, w, h, text, alt_title?, parent_id?,
-    placeholder?, paragraphs?: [{text, level, bullet}], rows? (table cells),
-    image_url? (temporary), source_url?}]}`` — enough to rebuild the content
-    with components elsewhere; ``harvest_deck_assets`` stores the images first.
+    placeholder?, paragraphs?: [{text, level, bullet}], runs?: [{text, size?, bold?, color?}],
+    rows? (table cells), image_url? (temporary), source_url?}]}`` — enough to
+    rebuild the content with components elsewhere; ``harvest_deck_assets``
+    stores the images first. ``runs`` appears on a shape that mixes styles
+    (a KPI: figure, label, variation): ``refill_text`` rewrites it run by run.
     """
     pid = parse_pres_id(presentation)
     svc = slide_service()

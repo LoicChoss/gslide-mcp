@@ -136,7 +136,7 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.8.0.mcpb
 | | `set_text` | Set plain text on a shape |
 | | `style_text` | Apply text styles (font, size, color) to a range |
 | | `replace_text` | Find-and-replace text across the deck, some slides or some elements; `dry_run` lists every match first |
-| | `refill_text` | Rewrite shapes and table cells of a designed deck in one batch, keeping each one's style; variations coloured by sign |
+| | `refill_text` | Rewrite shapes and table cells of a designed deck in one batch, keeping each one's style; variations coloured by sign; `runs` rewrites a mixed-style block (KPI: figure, label, variation) run by run |
 | **Element** | `transform_element` | Move (absolute or relative pt, each axis on its own) and / or resize (`width_pt`, `height_pt`; one alone keeps the aspect) any element, linked Sheets charts included |
 | | `rename_element` | Give elements readable ids (duplicate + delete, stacking order kept) for bindings on a hand-designed deck |
 | | `zorder` | Change element stacking order |
