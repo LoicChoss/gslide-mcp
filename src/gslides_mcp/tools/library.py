@@ -21,8 +21,9 @@ import json
 from pathlib import Path
 
 from ..app import ADDITIVE, READ_ONLY, mcp
+from .. import defaults
 from ..auth import drive_service, remote_mode, slide_service
-from ..util import parse_pres_id
+from ..util import parse_drive_id, parse_pres_id
 
 
 # Topic / snippet tuning. Centralized here so the heuristic can be adjusted
@@ -316,10 +317,11 @@ def assemble_from_template(
     Args:
         picks: non-empty list of ``{"deck": ..., "slide": ...}`` dicts.
         dst_title: title for the new presentation.
-        parent_folder_id: optional Drive folder ID to move the new deck into.
-            On failure (e.g. shared-drive permission mismatch) the error is
-            recorded in the result and the deck is left in Drive root — the
-            assembly itself is not aborted.
+        parent_folder_id: optional Drive folder id or URL to move the new deck
+            into. Default: the default folder of the extension when set
+            (``get_defaults``), else none. On failure (e.g. shared-drive
+            permission mismatch) the error is recorded in the result and the
+            deck is left in Drive root — the assembly itself is not aborted.
 
     Returns:
         {
@@ -358,6 +360,7 @@ def assemble_from_template(
     # --- 2. Optionally move to parent folder ---
     from googleapiclient.errors import HttpError
 
+    parent_folder_id = parse_drive_id(parent_folder_id) if parent_folder_id else defaults.folder_id()
     folder_move: str
     if parent_folder_id is None:
         folder_move = "skipped"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from googleapiclient.errors import HttpError
 
+from .. import defaults
 from ..app import ADDITIVE, DESTRUCTIVE, IDEMPOTENT, READ_ONLY, mcp
 from ..auth import remote_mode, slide_service, drive_service
 from ..util import parse_drive_id, parse_pres_id, emu_to_pt
@@ -34,6 +35,49 @@ def _check_folder(drv, folder_id: str) -> str | None:
     return meta.get("name")
 
 
+def _describe_default(drv, file_id: str, mime: str, kind: str) -> dict:
+    """``{id, name}`` of a default set in the bundle, or ``{id, error}`` when it cannot serve."""
+    try:
+        meta = drv.files().get(fileId=file_id, fields="id,name,mimeType", supportsAllDrives=True).execute()
+    except HttpError as exc:
+        return {"id": file_id, "error": f"not found or not shared with you (HTTP {exc.resp.status})"}
+    if meta.get("mimeType") != mime:
+        return {"id": file_id, "error": f"not a {kind} ({meta.get('mimeType')})"}
+    return {"id": file_id, "name": meta.get("name")}
+
+
+@mcp.tool(annotations=READ_ONLY)
+def get_defaults() -> dict:
+    """The template a new deck starts from, and the Drive folder it lands in, when the user names none.
+
+    Both are set once in the Claude Desktop extension (*Template par défaut*,
+    *Dossier de rangement par défaut*), local server only. Call it when the
+    user asks for a deck without giving a reference deck: when ``template`` is
+    set, say in one line which template and which folder you use, then read
+    its layouts as for any template; when it is ``null`` or carries ``error``,
+    ask for the template URL (and relay the error).
+
+    With ``folder`` set and no folder given: a ``clone_deck`` of this template,
+    ``create_presentation`` and ``assemble_from_template`` land in ``folder``;
+    a copy of any other deck still lands next to its source.
+
+    Returns: ``{template: {id, url, title} | {id, error} | null,
+    folder: {id, name} | {id, error} | null}``.
+    """
+    tid, fid = defaults.template_id(), defaults.folder_id()
+    out: dict = {"template": None, "folder": None}
+    if not (tid or fid):
+        return out
+    drv = drive_service()
+    if tid:
+        tpl = _describe_default(drv, tid, _SLIDES_MIME, "presentation")
+        out["template"] = tpl if "error" in tpl else {
+            "id": tid, "url": f"https://docs.google.com/presentation/d/{tid}/edit", "title": tpl["name"]}
+    if fid:
+        out["folder"] = _describe_default(drv, fid, _FOLDER_MIME, "folder")
+    return out
+
+
 @mcp.tool(annotations=ADDITIVE)
 def create_presentation(title: str, folder: str | None = None) -> dict:
     """Create a new blank Google Slides presentation.
@@ -43,11 +87,14 @@ def create_presentation(title: str, folder: str | None = None) -> dict:
 
     Args:
         folder: Drive folder id or URL (``drive.google.com/drive/folders/<id>``)
-            to create it in. Default: the root of the user's My Drive.
+            to create it in. Default: the default folder of the extension when
+            set (``get_defaults``), else the root of the user's My Drive.
 
     Returns:
         {presentation_id, url, folder_id, folder_name}
     """
+    default = None if folder else defaults.folder_id()
+    folder = folder or default
     if not folder:
         pres = slide_service().presentations().create(body={"title": title}).execute()
         pid = pres["presentationId"]
@@ -58,7 +105,13 @@ def create_presentation(title: str, folder: str | None = None) -> dict:
         }
     drv = drive_service()
     folder_id = parse_drive_id(folder)
-    folder_name = _check_folder(drv, folder_id)
+    try:
+        folder_name = _check_folder(drv, folder_id)
+    except ValueError as exc:
+        if default is None:
+            raise
+        raise ValueError(f"default folder of the extension ({defaults.ENV_FOLDER}): {exc}; "
+                         "fix the setting or pass folder") from exc
     out = drv.files().create(
         body={"name": title, "mimeType": _SLIDES_MIME, "parents": [folder_id]},
         fields="id", supportsAllDrives=True,
@@ -80,11 +133,12 @@ def clone_deck(src: str, name: str, parent_folder_id: str | None = None) -> dict
     in Shared Drives copy cleanly. Without that flag the API returns a
     misleading 404 even when the caller has full Drive scope.
 
-    Where the copy lands: ``parent_folder_id`` when given; otherwise the
-    source deck's own folder. When that folder cannot take the copy (the
-    source is shared with you read-only, or sits in a folder you cannot
-    see), the copy goes to the root of My Drive and ``folder_note`` says so:
-    tell the user, and offer ``move_to_folder``.
+    Where the copy lands: ``parent_folder_id`` when given; for a copy of the
+    extension's default template, its default folder when set
+    (``get_defaults``); otherwise the source deck's own folder. When that
+    folder cannot take the copy (the source is shared with you read-only, or
+    sits in a folder you cannot see), the copy goes to the root of My Drive
+    and ``folder_note`` says so: tell the user, and offer ``move_to_folder``.
 
     Args:
         src: source presentation ID or full Slides URL.
@@ -93,15 +147,19 @@ def clone_deck(src: str, name: str, parent_folder_id: str | None = None) -> dict
 
     Returns:
         {presentation_id, url, folder_id, folder_name, placed: "given" |
-        "source_folder" | "my_drive", folder_note?}
+        "default_folder" | "source_folder" | "my_drive", folder_note?}
     """
     src_id = parse_pres_id(src)
     drv = drive_service()
     body: dict = {"name": name}
     placed = "my_drive"
+    default_folder = defaults.folder_id() if src_id == defaults.template_id() else None
     if parent_folder_id:
         body["parents"] = [parse_drive_id(parent_folder_id)]
         placed = "given"
+    elif default_folder:
+        body["parents"] = [default_folder]
+        placed = "default_folder"
     else:
         try:
             parents = drv.files().get(fileId=src_id, fields="parents", supportsAllDrives=True).execute().get("parents") or []
@@ -114,13 +172,15 @@ def clone_deck(src: str, name: str, parent_folder_id: str | None = None) -> dict
     try:
         out = drv.files().copy(fileId=src_id, body=body, fields="id,parents", supportsAllDrives=True).execute()
     except HttpError as exc:
-        if placed != "source_folder" or exc.resp.status not in (403, 404):
+        if placed not in ("source_folder", "default_folder") or exc.resp.status not in (403, 404):
             raise
-        # the source folder refuses the copy (read-only share): fall back to My Drive
+        # the folder refuses the copy (read-only share, gone): fall back to My Drive
         body.pop("parents")
         out = drv.files().copy(fileId=src_id, body=body, fields="id,parents", supportsAllDrives=True).execute()
+        where = ("the default folder of the extension" if placed == "default_folder"
+                 else "the source deck's folder")
         placed = "my_drive"
-        note = ("the source deck's folder does not accept new files from you (HTTP "
+        note = (f"{where} does not accept new files from you (HTTP "
                 f"{exc.resp.status}): the copy is in My Drive; move it with move_to_folder")
     if placed == "my_drive" and note is None and not parent_folder_id:
         note = "the source deck's folder is not visible to you: the copy is in My Drive; move it with move_to_folder"

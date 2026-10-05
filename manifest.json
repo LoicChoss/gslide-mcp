@@ -35,7 +35,9 @@
         "GSLIDES_MCP_APPSCRIPT_URL": "${user_config.appscript_url}",
         "GSLIDES_MCP_LOGODEV_TOKEN": "${user_config.logodev_token}",
         "GSLIDES_MCP_THEME": "${user_config.theme}",
-        "GSLIDES_MCP_ASSETS_FOLDER": "${user_config.assets_folder}"
+        "GSLIDES_MCP_ASSETS_FOLDER": "${user_config.assets_folder}",
+        "GSLIDES_MCP_DEFAULT_TEMPLATE": "${user_config.default_template}",
+        "GSLIDES_MCP_DEFAULT_FOLDER": "${user_config.default_folder}"
       }
     }
   },
@@ -71,6 +73,18 @@
       "type": "string",
       "title": "Assets folder (Drive)",
       "description": "Id or URL of the shared Drive folder holding pictos and logos (PNG) used by components.",
+      "required": false
+    },
+    "default_template": {
+      "type": "string",
+      "title": "Template par défaut (Google Slides)",
+      "description": "Id or URL of the deck a new presentation starts from when you give no reference deck.",
+      "required": false
+    },
+    "default_folder": {
+      "type": "string",
+      "title": "Dossier de rangement par défaut (Drive)",
+      "description": "Id or URL of the Drive folder new presentations land in: a copy of the default template, a blank deck, an assembled deck. A copy of another deck stays next to its source.",
       "required": false
     }
   },

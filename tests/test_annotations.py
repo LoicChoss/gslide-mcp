@@ -11,7 +11,7 @@ READ_ONLY = [
     "list_slides", "list_layouts", "get_page", "get_presentation", "get_speaker_notes",
     "inspect_slide", "find_elements", "screenshot", "screenshot_range", "screenshot_layout",
     "screenshot_layouts", "summarize_deck", "overlap_check", "cross_deck_ping", "export_pres",
-    "fetch_logo_by_domain", "list_components",
+    "fetch_logo_by_domain", "list_components", "get_defaults",
 ]
 DESTRUCTIVE = [
     "delete_slides", "delete_elements", "relayout_slide", "manage_comments", "edit_table",
