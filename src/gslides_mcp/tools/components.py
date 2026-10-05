@@ -8,6 +8,7 @@ canvas and styled by a theme (``gslides_mcp.themes``); every insert is one
 
 from __future__ import annotations
 
+import difflib
 import os
 import re
 import uuid
@@ -18,17 +19,20 @@ from .. import draw as drawing
 from .. import themes
 from ..app import ADDITIVE, DESTRUCTIVE, READ_ONLY, mcp
 from ..auth import slide_service
-from ..components import recipes
+from ..components import intents, recipes
 from ..util import all_object_ids, parse_pres_id, resolve_slide_ids
 
 DEFAULT_THEME = os.environ.get("GSLIDES_MCP_THEME", "periscope")
 _NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{4,23}$")  # + "_<role>_<n>" stays under the 50-char id limit
+# The team's visual catalogue: one slide per component, then one per variant.
+CATALOGUE_DECK = "1cPrerkVnlbxs5QtKjlILoBDO-MczFd-WViffUEUfi1E"
 
 _HOW_TO_ADD = (
     "Draw the element with `draw` (ops: box, text, line, polyline, arc, ring, table, image). "
     "When it looks right, freeze it as a recipe with `save_component`: same ops with "
     "{prop} placeholders in strings, expressions in numeric keys (\"i * 70\", \"w / 2\") and "
-    "`each` blocks over list props. It then appears here with source 'recipe' and works "
+    "`each` blocks over list props, and `intents` (keys of the index) so it shows under "
+    "the right intentions. It then appears here with source 'recipe' and works "
     "with `insert_component` like a built-in."
 )
 
@@ -75,34 +79,59 @@ def _fill_image_aspects(component: str, props: dict | None) -> dict:
 
 
 @mcp.tool(annotations=READ_ONLY)
-def list_components(theme: str | None = None) -> dict:
-    """Catalogue of insertable components and available themes.
+def list_components(theme: str | None = None, names: list[str] | None = None) -> dict:
+    """Components in two steps: the whole catalogue by intention, then the details of the ones you pick.
 
-    Each entry gives ``description`` (what it draws), ``use`` (when to pick
-    it, with the close alternatives — a component fits several intents, so
-    read ``use`` before choosing), the props (type, default, choices,
-    required), an example call, optional ``variants`` (other ready-made
-    settings of the same component: ``title`` = what it looks like,
-    ``when`` = the situation it fits, ``props`` = the call to copy) and
-    its source: ``builtin`` (Python) or ``recipe`` (JSON saved with
-    ``save_component``). Themes carry the
-    brand — colors, font, text styles — so the same component renders in
-    any charter.
+    Without ``names``, the index. ``intents`` lists what a slide has to do
+    (faire retenir des chiffres, comparer, montrer une répartition, une
+    évolution, classer, enchaîner des étapes, poser des constats…), each with
+    the components that do it, best fits first; a component sits under every
+    intention it serves. ``components`` gives each one's ``use`` (when to pick
+    it, and the close alternatives) and its variant titles. Start each slide
+    from its intention and read the ``use`` of every candidate, not only the
+    familiar names; ``suggest_components(description=…)`` ranks them for a
+    slide described in words. ``catalogue_deck`` shows one slide per
+    component and per variant.
+
+    With ``names``, the full entries of those components: ``description``
+    (what it draws), ``use``, ``intents``, the props (type, default, choices,
+    required), an example call, ``variants`` (other ready-made settings:
+    ``title`` = what it looks like, ``when`` = the situation it fits,
+    ``props`` = the call to copy) and ``source``: ``builtin`` (Python) or
+    ``recipe`` (JSON saved with ``save_component``). Read them before writing
+    the props of ``insert_component``. Themes carry the brand — colors, font,
+    text styles — so the same component renders in any charter.
 
     Args:
         theme: theme to validate and report (default: ``GSLIDES_MCP_THEME``
             or ``periscope``).
+        names: components to detail, as named in the index.
 
-    Returns: ``{default_theme, theme, themes, components: [...], how_to_add}``.
+    Returns: the index ``{default_theme, theme, themes, intents: [{key, label,
+    components}], components: {name: {use, variants}}, catalogue_deck,
+    how_to_add, assets}``, or with ``names`` ``{theme, components: [...]}``.
 
-    Example: ``list_components()["components"][0]``
+    Example: ``list_components(names=["mini_charts"])["components"][0]["props"]``
     """
     t = _theme(theme)
+    entries = registry.catalogue()
+    if names:
+        by_name = {e["name"]: e for e in entries}
+        for n in names:
+            if n not in by_name:
+                close = difflib.get_close_matches(n, list(by_name), n=3)
+                raise ValueError(f"unknown component {n!r}" + (f"; close: {', '.join(close)}" if close else "")
+                                 + "; the index (list_components() without names) lists them all")
+        return {"theme": t.name, "components": [by_name[n] for n in dict.fromkeys(names)]}
     out = {
         "default_theme": DEFAULT_THEME,
         "theme": t.name,
         "themes": themes.available(),
-        "components": registry.catalogue(),
+        "intents": intents.index(entries),
+        "components": {e["name"]: {"use": e["use"], "variants": [v["title"] for v in e.get("variants", [])],
+                                   **({"source": "recipe"} if e["source"] == "recipe" else {})}
+                       for e in entries},
+        "catalogue_deck": CATALOGUE_DECK,
         "how_to_add": _HOW_TO_ADD,
     }
     try:
@@ -143,10 +172,11 @@ def insert_component(
             « Liaisons » tab and survive a Drive copy of the deck.
 
     Returns: ``{component, theme, slide_id, group_id, element_ids,
-    ids_by_role, height_pt, requests}`` — ``group_id`` is the element to
+    ids_by_role, height_pt, requests, warnings?}`` — ``group_id`` is the element to
     move/delete afterwards (``None`` when the component is a single element
     or holds a table); ``ids_by_role`` maps each role (``value``, ``slot``,
-    ``table``…) to its element ids.
+    ``table``…) to its element ids; ``warnings`` names the fields too long
+    for their block (the block grew rather than overlap): shorten them.
 
     Example::
 
@@ -158,6 +188,7 @@ def insert_component(
     t = _theme(theme)
     props = _fill_image_aspects(component, props)
     ops, height = registry.render(component, props, t, width_pt, height_pt)  # fails before any write
+    warnings = [str(o.get("text", "")) for o in ops if o.get("op") == "warning"]
     pid = parse_pres_id(presentation)
     svc = slide_service()
     if name is not None:
@@ -185,6 +216,7 @@ def insert_component(
         "ids_by_role": roles,
         "height_pt": height,
         "requests": len(reqs),
+        **({"warnings": warnings} if warnings else {}),
     }
 
 
@@ -249,6 +281,7 @@ def save_component(recipe: dict) -> dict:
     written; a broken op is reported with its index. Shape::
 
         {"name": "pill_row", "description": "…", "use": "when to pick it (optional)",
+         "intents": ["habillage"],   # keys of the list_components index (optional)
          "props": {"items": {"type": "list", "description": "…", "required": true},
                    "fill": {"type": "color", "description": "…", "default": "accent"}},
          "height": "16",

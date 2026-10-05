@@ -1,4 +1,4 @@
-"""Teaching and audit diagrams: semantic cocoon, persona card, cycle, formula.
+"""Teaching and audit diagrams: semantic cocoon, persona card and sheet, cycle, formula.
 
 Charter grounds only: light discs and boxes, colour on the hub, the numbers and the
 arrows; navy is reserved for « action » nodes and the result header.
@@ -10,7 +10,7 @@ import math
 
 from ..themes import Theme
 from . import Component, Prop, register
-from .builtin import INSETS, PAD, _text_height, fit_text_size
+from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height, _wrapped_lines, fit_text_size
 
 # --- cocon ------------------------------------------------------------------------------
 
@@ -386,5 +386,204 @@ register(Component(
              "gauges": [{"label": "Priorité", "value": 0.8}, {"label": "Compétences informatiques", "value": 0.55}, {"label": "Utilise les réseaux sociaux", "value": 0.7}],
              "devices": [{"label": "Mobile", "on": True}, {"label": "Desktop", "on": True}, {"label": "Tablette", "on": False}],
              "expectations": ["Un guide pas à pas", "Des modèles de documents"], "brakes": ["Manque de temps", "Réglementation floue"], "tag": "Et le Search ?"},
+    tags=["personnes"],
+))
+
+
+# --- persona_sheet ----------------------------------------------------------------------
+
+_SHEET_HEAD = 50.0     # avatar, name, subtitle, badge
+_SHEET_UNDER = 10.0    # between the header and the cards
+_SHEET_GAP = 12.0      # between the columns
+_SHEET_VGAP = 8.0      # between stacked blocks
+_SHEET_CTX = 92.0      # design heights: a card grows when its text needs more, with a warning
+_SHEET_LISTS = 108.0
+_SHEET_TAG = 28.0
+_SHEET_IN = 3.0        # text box inside its card (Google adds its own insets)
+_SHEET_SPACING = 2.0   # between the paragraphs of a card
+_SHEET_MAX = {"expectations": 3, "brakes": 3, "side_items": 5}
+_CAPS_BOLD = 1.3       # bold capitals run this much wider than the wrap estimate
+_CAPS = 1.15           # regular capitals
+
+
+def _sheet_card(x: float, y: float, w: float, h: float, fill: str, role: str) -> dict:
+    box = {"op": "box", "x": x, "y": y, "w": w, "h": h, "shape": "ROUND_RECTANGLE", "fill": fill, "role": role}
+    if fill == "background":
+        box["line"] = {"color": "rule", "weight": 1}
+    return box
+
+
+def _sheet_text(x: float, y: float, w: float, label: str, paras: list[list[dict]], role: str) -> tuple[dict, float]:
+    """A card's text, its label in capitals then ``paras`` (runs), as one box: (op, card height it needs)."""
+    runs = [[{"text": str(label).upper(), "bold": True, "size": 10, "color": "ink"}]] + paras
+    tw = w - 2 * _SHEET_IN
+    lines = sum(_wrapped_lines("".join(r["text"] for r in para), tw, para[0]["size"]) * para[0]["size"] * LEADING for para in runs)
+    th = lines + _SHEET_SPACING * (len(runs) - 1) + INSETS
+    return ({"op": "text", "x": x + _SHEET_IN, "y": y + _SHEET_IN, "w": tw, "h": th, "runs": runs, "style": "caption", "size": 11,
+             "spacing": _SHEET_SPACING, "role": role}, th + 2 * _SHEET_IN)
+
+
+def _sheet_bullets(items: list, marker: str) -> list[list[dict]]:
+    return [[{"text": "›  ", "bold": True, "size": 11, "color": marker}, {"text": str(it), "size": 11, "color": "ink"}] for it in items]
+
+
+def _sheet_header(p: dict, w: float, warnings: list[str]) -> list[dict]:
+    ops: list[dict] = []
+    d = 46.0
+    if p["photo"]:
+        ops.append({"op": "image", "x": 0, "y": 2, "w": d, "h": d, "asset": str(p["photo"]), "cover": True, "role": "avatar"})
+    else:
+        ops.append({"op": "box", "x": 0, "y": 2, "w": d, "h": d, "shape": "ELLIPSE", "fill": "surface", "role": "avatar",
+                    "text": (str(p["name"]).strip()[:1] or "?").upper(), "style": "card_title", "size": 18, "bold": True,
+                    "color": "ink", "align": "CENTER", "valign": "MIDDLE"})
+    right = w
+    badge = {"text": p["badge"]} if isinstance(p["badge"], str) else (p["badge"] or {})
+    if badge.get("text"):
+        text = str(badge["text"]).upper()
+        bw = len(text) * 10 * 0.62 + 2 * INSET_X + 8
+        ops.append({"op": "box", "x": w - bw, "y": 6, "w": bw, "h": 22, "shape": "ROUND_RECTANGLE", "fill": badge.get("color") or "accent_alt",
+                    "role": "badge", "text": text, "style": "badge", "size": 10, "bold": True, "color": "ink", "align": "CENTER",
+                    "valign": "MIDDLE"})
+        right = w - bw - 12
+    tx = d + 12
+    tw = right - tx
+    name = (str(p["name"]) + (f" – {p['age']}" if p["age"] else "")).upper()
+    size = fit_text_size(name + ".", tw / _CAPS_BOLD, 20, max_lines=1, floor=14)
+    if _wrapped_lines(name + ".", tw / _CAPS_BOLD, size) > 1:
+        warnings.append(f"name and age do not fit on one line at {size:g} pt in {tw:.0f} pt: shorten them")
+    ops.append({"op": "text", "x": tx, "y": 0, "w": tw, "h": size * LEADING + INSETS, "style": "card_title", "size": size, "role": "name",
+                "runs": [[{"text": name, "bold": True, "size": size, "color": "ink"},
+                          {"text": ".", "bold": True, "size": size, "color": "accent"}]]})
+    sub = " · ".join(str(s) for s in (p["segment"], p["role"]) if s) + (f" ({p['origin']})" if p["origin"] else "")
+    if sub.strip():
+        sub = sub.strip().upper()
+        sw = w - tx  # under the name and the badge, which sits on the name line
+        ssize = fit_text_size(sub, sw / _CAPS, 12, max_lines=1, floor=10)
+        if _wrapped_lines(sub, sw / _CAPS, ssize) > 1:
+            warnings.append(f"segment, role and origin do not fit on one line at {ssize:g} pt: shorten them")
+        ops.append({"op": "text", "x": tx, "y": 30, "w": sw, "h": ssize * LEADING + INSETS, "text": sub, "style": "body", "size": ssize,
+                    "color": "ink", "role": "subtitle", "small_ok": ssize < 11})
+    return ops
+
+
+def _persona_sheet(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
+    for key, cap in _SHEET_MAX.items():
+        if len(p[key] or []) > cap:
+            raise ValueError(f"persona_sheet: {key} takes {cap} items at most, got {len(p[key])}")
+    warnings: list[str] = []
+    if w < 480:
+        warnings.append(f"made for the full content width (564 pt on a 720 x 405 deck): at {w:g} pt the columns are cramped")
+    side = list(p["side_items"] or [])
+    lw = round(w * 0.585, 1) if side else w
+    rx, rw = lw + _SHEET_GAP, w - lw - _SHEET_GAP
+    head = _sheet_header(p, w, warnings) if p["header"] else []
+    y0 = _SHEET_HEAD + _SHEET_UNDER if p["header"] else 0.0
+
+    # measure every block, then settle the heights
+    ctx_paras = ([[{"text": str(p["context"]), "size": 11, "color": "text"}]] if p["context"] else []) + \
+                ([[{"text": "Objectif : " + str(p["goal"]), "bold": True, "size": 11, "color": "ink"}]] if p["goal"] else [])
+    ctx_text, ctx_need = _sheet_text(0, y0, lw, p["context_label"], ctx_paras, "context")
+    ctx_h = max(_SHEET_CTX, ctx_need)
+    if ctx_need > _SHEET_CTX:
+        fields = "context and goal" if p["goal"] and p["context"] else ("goal" if p["goal"] else "context")
+        warnings.append(f"{fields}: {ctx_need:.0f} pt of text, the context card grows from {_SHEET_CTX:g} pt; shorten {fields}")
+    exp, brk = list(p["expectations"] or []), list(p["brakes"] or [])
+    has_lists = bool(exp or brk)
+    cw = (lw - _SHEET_VGAP) / 2
+    lists = [(key, label, items, k * (cw + _SHEET_VGAP)) for k, (key, label, items)
+             in enumerate((("expectations", p["expectations_label"], exp), ("brakes", p["brakes_label"], brk)))] if has_lists else []
+    needs = {key: _sheet_text(x, 0, cw, label, _sheet_bullets(items, "accent"), key)[1] for key, label, items, x in lists}
+    lists_h = max([_SHEET_LISTS, *needs.values()]) if has_lists else 0.0
+    for key, need in needs.items():
+        if need > _SHEET_LISTS:
+            warnings.append(f"{key}: {need:.0f} pt of text, the list cards grow from {_SHEET_LISTS:g} pt; shorten the items")
+    column = ctx_h + (_SHEET_VGAP + lists_h if has_lists else 0.0)
+    if side:
+        side_need = _sheet_text(rx, y0, rw, p["side_label"], _sheet_bullets(side, "ink"), "side")[1]
+        if side_need > column:
+            warnings.append(f"side_items: {side_need:.0f} pt of text, more than the {column:.0f} pt of the left column; shorten them")
+            if has_lists:
+                lists_h += side_need - column
+            else:
+                ctx_h += side_need - column
+            column = side_need
+
+    # bottom row: the tag under the left column, the note under the right one (or under the tag)
+    nw = rw if side else w
+    note_h = _text_height(str(p["note"]), nw, 10) if p["note"] else 0.0
+    tag_h = _SHEET_TAG if p["tag"] else 0.0
+    if p["tag"] and _wrapped_lines(str(p["tag"]), lw / _CAPS_BOLD, 11) > 1:
+        warnings.append("tag does not fit on one line: shorten it")
+    row = max(tag_h, note_h) if side else tag_h + note_h + (_SHEET_VGAP if tag_h and note_h else 0.0)
+    natural = y0 + column + (_SHEET_VGAP + row if row else 0.0)
+    height = natural
+    if h is not None and h < natural - 0.01:
+        warnings.append(f"height_pt {h:g} is less than the {natural:.0f} pt the sheet needs: it keeps {natural:.0f} pt "
+                        "rather than overlap; shorten the texts or give it more room")
+    elif h is not None:
+        grow = h - natural
+        if has_lists:
+            lists_h += grow
+        else:
+            ctx_h += grow
+        column += grow
+        height = h
+
+    ops = list(head)
+    ops.append(_sheet_card(0, y0, lw, ctx_h, "background", "context_card"))
+    ops.append(ctx_text)
+    ly = y0 + ctx_h + _SHEET_VGAP
+    for key, label, items, x in lists:
+        ops.append(_sheet_card(x, ly, cw, lists_h, "background", f"{key}_card"))
+        ops.append(_sheet_text(x, ly, cw, label, _sheet_bullets(items, "accent"), key)[0])
+    if side:
+        ops.append(_sheet_card(rx, y0, rw, column, "accent", "side_card"))
+        ops.append(_sheet_text(rx, y0, rw, p["side_label"], _sheet_bullets(side, "ink"), "side")[0])
+    by = y0 + column + _SHEET_VGAP
+    if p["tag"]:
+        ops.append({"op": "box", "x": 0, "y": by, "w": lw, "h": _SHEET_TAG, "shape": "ROUND_RECTANGLE", "fill": "cyan", "role": "tag",
+                    "text": str(p["tag"]), "style": "card_title", "size": 11, "bold": True, "color": "ink", "align": "CENTER",
+                    "valign": "MIDDLE"})
+    if p["note"]:
+        nx, ny = (rx, by) if side else (0.0, by + (tag_h + _SHEET_VGAP if tag_h else 0.0))
+        ops.append({"op": "text", "x": nx, "y": ny, "w": nw, "h": note_h, "text": str(p["note"]), "style": "caption", "size": 10,
+                    "color": "muted", "role": "note"})
+    ops += [{"op": "warning", "text": f"persona_sheet: {msg}"} for msg in warnings]
+    return ops, height
+
+
+register(Component(
+    name="persona_sheet",
+    description="Fiche persona pleine largeur avec son propre en-tête : pastille (initiale ou photo), nom et âge en capitales suivis d'un point menthe, sous-titre public · libellé (origine), badge de statut ; à gauche contexte + objectif puis attentes et freins côte à côte, à droite une carte menthe (requêtes, verbatims) ; pastille cyan et note de source en pied. Hauteurs calculées bloc par bloc, jamais de chevauchement.",
+    props=[
+        Prop("name", "str", "Prénom du persona.", required=True),
+        Prop("age", "str", "Âge (« 48 ans »)."),
+        Prop("segment", "str", "Public visé (« Porteurs de projets »)."),
+        Prop("role", "str", "Libellé du persona : fonction, besoin."),
+        Prop("origin", "str", "Origine du persona (« Persona 2017 revu »), entre parenthèses."),
+        Prop("photo", "image", "Photo (asset) à la place de la pastille à initiale."),
+        Prop("badge", "dict", "Badge de statut calé à droite : {text, color} (couleur par défaut acide) ou un texte."),
+        Prop("context", "str", "Contexte : qui est le persona, comment il cherche."),
+        Prop("context_label", "str", "Libellé de la carte contexte.", default="Contexte"),
+        Prop("goal", "str", "Objectif, en gras sous le contexte (« Objectif : … »)."),
+        Prop("expectations", "list", "Attentes : 3 puces au plus.", default=[]),
+        Prop("expectations_label", "str", "Libellé des attentes.", default="Attentes"),
+        Prop("brakes", "list", "Freins : 3 puces au plus.", default=[]),
+        Prop("brakes_label", "str", "Libellé des freins.", default="Freins"),
+        Prop("side_label", "str", "Libellé de la carte menthe de droite.", default="Requêtes Google types"),
+        Prop("side_items", "list", "Carte menthe : requêtes, verbatims… 5 puces au plus ; vide, la colonne gauche prend toute la largeur.", default=[]),
+        Prop("tag", "str", "Pastille cyan sous les cartes (« 2 PROMPTS : N° 24, 27 »)."),
+        Prop("note", "str", "Note de source sous la carte de droite, 10 pt gris."),
+        Prop("header", "bool", "Dessiner l'en-tête ; false garde le titre du layout et la fiche commence aux cartes.", default=True),
+    ],
+    render=_persona_sheet,
+    example={"name": "Manon", "age": "48 ans", "segment": "Porteurs de projets", "role": "Financements et partenariats", "origin": "Persona 2017 revu",
+             "badge": {"text": "NOUVEAU 2026", "color": "acid"},
+             "context": "Responsable développement ou chargée de projets, utilise l'IA générative.",
+             "goal": "Identifier rapidement les financements pertinents.",
+             "expectations": ["Recherche et filtres", "Alertes personnalisées", "FAQ détaillée"],
+             "brakes": ["Trop de dossiers", "Lourdeur administrative", "Infos dispersées"],
+             "side_items": ["« appel à projet » : 1 242 impr., pos. 18,5 (GSC)", "« appel à projet fondation » : 839 impr. (GSC)", "« collecte de fonds » (S)"],
+             "tag": "2 PROMPTS : N° 24, 27", "note": "(GSC) Search Console www, 29/06 au 28/09/2026. (S) expression Synomia 2016."},
     tags=["personnes"],
 ))

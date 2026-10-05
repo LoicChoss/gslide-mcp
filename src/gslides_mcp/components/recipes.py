@@ -195,6 +195,7 @@ def _height(recipe: dict, ops: list[dict], ctx: dict) -> float:
 def parse(recipe: dict) -> Component:
     """Validate a recipe (schema + dry render) and build its Component."""
     from .. import draw, themes
+    from . import intents
 
     name = recipe.get("name")
     if not name or not _NAME_RE.match(str(name)):
@@ -223,6 +224,7 @@ def parse(recipe: dict) -> Component:
         name=name, description=str(recipe.get("description", "")), props=props, render=render,
         example=dict(recipe.get("example") or {p.name: p.default for p in props if p.default is not None}),
         source="recipe", tags=list(recipe.get("tags") or []), use=str(recipe.get("use", "")),
+        intents=intents.check(list(recipe.get("intents") or [])),
     )
     # dry run with sample props: a broken op fails here, with its index
     sample = {p.name: (p.default if p.default is not None else _SAMPLE_BY_TYPE.get(p.type, "sample"))

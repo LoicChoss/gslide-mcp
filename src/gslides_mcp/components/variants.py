@@ -277,6 +277,17 @@ VARIANTS: dict[str, list[dict]] = {
          "when": "Colonne étroite ou grille : photo au-dessus du nom.",
          "props": {"name": "Aurélie M.", "role": "Directrice de clientèle", "bio": "Coordonne le projet.", "layout": "top"}},
     ],
+    "persona_sheet": [
+        {"title": "sans colonne de droite",
+         "when": "Pas de requêtes ni de verbatims à montrer : la colonne de gauche prend toute la largeur.",
+         "props": {"name": "Manon", "age": "48 ans", "segment": "Porteurs de projets", "role": "Financements et partenariats", "origin": "Persona 2017 revu", "context": "Responsable développement ou chargée de projets, utilise l'IA générative.", "goal": "Identifier rapidement les financements pertinents.", "expectations": ["Recherche et filtres", "Alertes personnalisées", "FAQ détaillée"], "badge": {"text": "NOUVEAU 2026", "color": "acid"}, "brakes": ["Trop de dossiers", "Lourdeur administrative", "Infos dispersées"], "tag": "2 PROMPTS : N° 24, 27"}},
+        {"title": "persona à valider",
+         "when": "Persona proposé, pas encore validé par le client : badge « NOUVEAU · À VALIDER », freins à compléter en séance.",
+         "props": {"name": "Manon", "age": "48 ans", "segment": "Porteurs de projets", "role": "Financements et partenariats", "origin": "Persona 2017 revu", "context": "Responsable développement ou chargée de projets, utilise l'IA générative.", "goal": "Identifier rapidement les financements pertinents.", "expectations": ["Recherche et filtres", "Alertes personnalisées", "FAQ détaillée"], "badge": {"text": "NOUVEAU · À VALIDER", "color": "acid"}, "brakes": ["[À compléter]"], "side_items": ["« appel à projet » : 1 242 impr., pos. 18,5 (GSC)", "« collecte de fonds » (S)"], "note": "(GSC) Search Console www, 29/06 au 28/09/2026. (S) expression Synomia 2016."}},
+        {"title": "sans en-tête, sous le titre du layout",
+         "when": "Le titre du layout porte déjà le nom du persona : header false, la fiche commence aux cartes.",
+         "props": {"name": "Manon", "age": "48 ans", "segment": "Porteurs de projets", "role": "Financements et partenariats", "origin": "Persona 2017 revu", "context": "Responsable développement ou chargée de projets, utilise l'IA générative.", "goal": "Identifier rapidement les financements pertinents.", "expectations": ["Recherche et filtres", "Alertes personnalisées", "FAQ détaillée"], "brakes": ["Trop de dossiers", "Lourdeur administrative", "Infos dispersées"], "header": False, "side_items": ["« appel à projet » : 1 242 impr., pos. 18,5 (GSC)", "« collecte de fonds » (S)"], "note": "(GSC) Search Console www, 29/06 au 28/09/2026. (S) expression Synomia 2016."}},
+    ],
     "team_grid": [
         {"title": "photo au-dessus, 4 colonnes",
          "when": "Trombinoscope en colonnes, bio courte.",

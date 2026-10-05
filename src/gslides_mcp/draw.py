@@ -755,6 +755,8 @@ def ops_to_requests(
     canvas = _Canvas(page_id, theme, prefix, offset, resolve_asset, named=named)
     for op in ops:
         kind = op.get("op")
+        if kind == "warning":  # a component's note to the caller (a field too long), not drawn
+            continue
         if kind not in _OPS:
             raise ValueError(f"unknown draw op {kind!r}; ops: {', '.join(_OPS)}")
         canvas.role = re.sub(r"[^A-Za-z0-9_-]", "_", str(op.get("role") or kind))[:18]

@@ -24,7 +24,7 @@ def _kinds(batch):
 
 def test_list_components_returns_catalogue_and_themes(fake_slides):
     out = tools.list_components()
-    names = {c["name"] for c in out["components"]}
+    names = set(out["components"])
     assert {"kpi", "card", "table", "donut"} <= names
     assert "periscope" in out["themes"] and "default" in out["themes"]
     assert out["default_theme"] == "periscope"
@@ -87,7 +87,7 @@ def test_save_then_insert_a_recipe(fake_slides, user_dir):
               "height": "weight", "ops": [{"op": "line", "x1": 0, "y1": 0, "x2": "w", "y2": 0, "color": "rule", "weight": "weight"}]}
     out = tools.save_component(recipe)
     assert out["saved"].endswith("rule.json") and out["component"]["source"] == "recipe"
-    assert "rule" in {c["name"] for c in tools.list_components()["components"]}
+    assert tools.list_components()["components"]["rule"]["source"] == "recipe"
     ins = tools.insert_component("PRES1", "1", "rule", {"weight": 2}, x_pt=0, y_pt=100, width_pt=300)
     assert ins["height_pt"] == 2 and len(ins["element_ids"]) == 1
     assert tools.delete_component("rule") == {"deleted": "rule"}

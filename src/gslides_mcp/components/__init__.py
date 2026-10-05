@@ -51,12 +51,16 @@ class Component:
     tags: list[str] = field(default_factory=list)
     use: str = ""             # when to use it, and the close alternatives
     variants: list[dict] = field(default_factory=list)  # [{title, when, props, native?}]: other typical settings, shown in the catalogue
+    intents: list[str] = field(default_factory=list)  # a recipe's own intentions; built-ins are in intents.INTENTS
 
     def schema(self) -> dict:
+        from .intents import of
+
         out = {
             "name": self.name,
             "description": self.description,
             "use": self.use,
+            "intents": of(self.name, self.intents),
             "source": self.source,
             "tags": list(self.tags),
             "props": [p.schema() for p in self.props],

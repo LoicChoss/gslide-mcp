@@ -15,6 +15,7 @@ import tempfile
 
 from ..app import ADDITIVE, READ_ONLY, mcp
 from ..auth import drive_service, slide_service
+from ..components.intents import KEYWORDS as _KEYWORDS
 from ..util import parse_pres_id
 from . import deck as deck_tools
 from . import qa
@@ -186,33 +187,6 @@ _NUM = re.compile(r"(?<![\w,.])[+-]?\d[\d   ]*(?:[.,]\d+)?\s*(?:%|€|k€|M�
 _STRONG_NUM = re.compile(r"[+-]?\d[\d   ]*(?:[.,]\d+)?\s*(?:%|€|k€|M€|k|M)|\d{1,3}(?:[   ]\d{3})+|\d{4,}")  # figures: unit, thousands or 4+ digits
 _ARROW_SHAPES = {"RIGHT_ARROW", "LEFT_RIGHT_ARROW", "CHEVRON", "HOME_PLATE", "NOTCHED_RIGHT_ARROW", "STRIPED_RIGHT_ARROW", "BENT_ARROW", "UP_ARROW", "DOWN_ARROW"}
 
-# (regex on the slide's text, components in order, reason)
-_KEYWORDS: list[tuple[str, list[str], str]] = [
-    (r"\bavant\b.*\bapr[eè]s\b|\bbefore\b.*\bafter\b", ["before_after", "stat_pair"], "le texte oppose un avant et un après"),
-    (r"\bsommaire\b|\bagenda\b|ordre du jour|\bplan de (la )?pr[ée]sentation\b", ["agenda", "numbered_list"], "sommaire ou ordre du jour"),
-    (r"\b[àa] retenir\b|\bconclusion|\bsynth[èe]se\b|\brecommandation|\bkey takeaways?\b|\benseignements?\b", ["takeaways", "attention_points", "next_steps"], "messages à retenir ou recommandations"),
-    (r"prochaines? [ée]tapes?|\bnext steps?\b|\bsuite du projet\b|\bplan d'action", ["next_steps", "numbered_list", "session_plan"], "prochaines étapes"),
-    (r"\bplanning\b|\bcalendrier\b|\bretroplanning\b|\btimeline\b|\broadmap\b|\bphases?\b|\bjalons?\b", ["timeline", "timeline_arrow", "phase_cards", "session_plan"], "planning, phases ou jalons"),
-    (r"\b[ée]tapes?\b|\bprocess(us)?\b|\bm[ée]thod(e|ologie)\b|\bd[ée]marche\b|\bparcours\b", ["process", "steps", "numbered_list", "chevrons", "flowchart"], "démarche en étapes"),
-    (r"\b[ée]quipe\b|\bteam\b|qui sommes[- ]nous|\binterlocuteurs?\b", ["team_grid", "person_card"], "présentation d'équipe"),
-    (r"\bobjectifs?\b|\bdispositif\b|\bleviers?\b|\bbudget\b|\bplan m[ée]dia\b", ["media_plan", "table", "kpi_grid"], "objectifs, budget ou dispositif média"),
-    (r"\br[ée]sultats?\b|\bbilan\b|\bperformances?\b|\bcampagne\b|\bkpi", ["kpi_grid", "chart_bars", "chart_combo", "table", "source_note"], "résultats chiffrés d'une campagne"),
-    (r"\bcitation\b|\bt[ée]moignage\b|\bverbatim\b|«", ["quote"], "citation ou verbatim"),
-    (r"\batelier\b|\bworkshop\b|\bvotes?\b|\bpriorisation\b|\bid[ée]es?\b|\bbrainstorm", ["ranked_bars", "chip_cloud", "quadrant_matrix", "board_columns", "score_matrix"], "restitution d'atelier"),
-    (r"\bid[ée]e re[çc]ue\b|\bmythe\b|\bvrai ou faux\b|\bdo\b.*\bdon'?t\b", ["compare_cards", "do_dont"], "idées reçues ou bonnes / mauvaises pratiques"),
-    (r"\bmaquette|\bwireframe|\bsite\b|\bpage d'accueil|\b[ée]cran|\bapp(li)?\b|\bmobile\b", ["browser", "laptop", "phone", "gallery"], "capture d'écran ou maquette"),
-    (r"\bpiliers?\b|\bvaleurs?\b|\bconvictions?\b|\bprincipes?\b|\bexpertises?\b|\boffres?\b", ["card_grid", "big_numbers", "content_cards"], "piliers, valeurs ou offres en cartes"),
-    (r"\bentonnoir\b|\bfunnel\b|\bconversion\b|\btunnel\b", ["funnel", "stat_box"], "entonnoir de conversion"),
-    (r"\bpersona", ["persona_card"], "fiche persona"),
-    (r"\bcocon\b|\bsilo\b|\bpage cible\b", ["cocon", "tree"], "cocon sémantique ou silo"),
-    (r"\bcycle\b|\bboucle\b", ["cycle", "process"], "cycle ou boucle d'étapes"),
-    (r"\bchecklist\b|\bcheck-list\b|\bà v[ée]rifier\b", ["checklist"], "liste à cocher"),
-    (r"\bunivers\b.*\bmots?[- ]cl[ée]s?\b|\bmapping\b", ["tree"], "univers de mots-clés"),
-    (r"\bclients?\b|\br[ée]f[ée]rences?\b|\bpartenaires?\b|\bils nous font confiance", ["logo_wall", "logo_grid", "client_ticker"], "références clients ou partenaires"),
-    (r"\br[ée]partition\b|\bpart de\b|\bmix\b", ["donut", "donut_row", "chart_stacked"], "répartition en parts"),
-    (r"\b[ée]volution\b|\btendance\b|\bmois par mois\b|\bjour par jour\b", ["chart_line", "chart_combo", "chart_bars"], "évolution dans le temps"),
-]
-
 
 def _bullets_of(el: dict) -> tuple[int, int]:
     """(paragraph count, bulleted paragraph count) of a shape."""
@@ -381,33 +355,60 @@ def _blocks(slide: dict, page_w: float, page_h: float) -> tuple[dict, list[dict]
 
 
 @mcp.tool(annotations=READ_ONLY)
-def suggest_components(presentation: str, slide: str, top: int = 4) -> dict:
-    """Read a source slide and propose, block by block, the charter components that would present it.
+def suggest_components(presentation: str | None = None, slide: str | None = None, description: str | None = None,
+                       avoid: list[str] | None = None, top: int = 4) -> dict:
+    """Propose charter components, for a source slide to rework or for a slide of a new deck described in words.
 
-    A slide usually holds several things: a title (→ the target layout's TITLE
-    placeholder), a table, a row of figures, a paragraph, a screenshot, a
-    source note… Each becomes a ``block`` with its zone on the source slide,
-    the element ids it came from, a content excerpt and ranked ``candidates``
-    (component, why, the catalogue's ``use`` sentence, variant titles). The
-    zones keep the source's proportions so the blocks can be laid out inside
-    the target layout's ``content_area`` (see ``list_layouts``).
-    ``slide_level`` lists whole-slide alternatives read from the wording
-    (« avant / après » → before_after, « équipe » → team_grid, « objectifs »
-    → media_plan…) that may replace several blocks at once. Heuristics: the
-    signals are returned so a better reading can override them, and a block
-    may well deserve a component that is not listed.
+    **New deck** (``description``): say what the slide has to do and what it
+    holds (« comparer Google et Bing sur 4 KPI, septembre », « 3 constats et
+    une reco sur le trafic »). The answer lists the intentions read in it
+    (``intents``, the same as the ``list_components`` index), each with ranked
+    ``candidates`` (component, ``use``, variant titles, ``why`` when a word
+    pointed at it), and ``less_obvious``: a good fit that is not one of the
+    usual picks — consider it before settling. ``avoid``: the components the
+    plan already uses on other slides; they go to the end of every list, so
+    the deck does not repeat the same blocks. Nothing recognised: the answer
+    gives ``all_intents`` to choose from.
+
+    **Rework** (``presentation`` + ``slide``): a slide usually holds several
+    things: a title (→ the target layout's TITLE placeholder), a table, a row
+    of figures, a paragraph, a screenshot, a source note… Each becomes a
+    ``block`` with its zone on the source slide, the element ids it came from,
+    a content excerpt and ranked ``candidates`` (component, why, the
+    catalogue's ``use`` sentence, variant titles). The zones keep the source's
+    proportions so the blocks can be laid out inside the target layout's
+    ``content_area`` (see ``list_layouts``). ``slide_level`` lists whole-slide
+    alternatives read from the wording (« avant / après » → before_after,
+    « équipe » → team_grid, « objectifs » → media_plan…) that may replace
+    several blocks at once. Heuristics: the signals are returned so a better
+    reading can override them, and a block may well deserve a component that
+    is not listed.
 
     Args:
-        slide: 1-based index or objectId of the source slide.
-        top: candidates kept per block.
+        presentation, slide: the source deck and its slide (1-based index or objectId).
+        description: the slide of a new deck, in words: intention and content.
+        avoid: components already planned elsewhere, ranked last.
+        top: candidates kept per block or per intention.
 
-    Returns: ``{slide_id, index, title, blocks: [{kind, zone: {x, y, w, h}, elements,
-    content, candidates: [{component, why, use, variants}]}], slide_level: [{component,
-    why, use}], signals}``.
+    Returns (new deck): ``{description, intents: [{intent, label, why, candidates:
+    [{component, use, variants, why?, avoid?}]}], less_obvious: {component, intent,
+    why, use} | null, avoided?, all_intents?}``.
+    Returns (rework): ``{slide_id, index, title, blocks: [{kind, zone: {x, y, w, h},
+    elements, content, candidates: [{component, why, use, variants}]}], slide_level:
+    [{component, why, use}], signals}``.
 
-    Example: ``suggest_components(old_deck, 7)["blocks"][0]["candidates"][0]["component"]``
+    Example: ``suggest_components(description="répartition du budget par levier")["less_obvious"]``
     """
     from .. import components as registry
+    from ..components import intents
+
+    rework = presentation is not None and slide is not None
+    if rework == (description is not None) or (description is not None and (presentation or slide)):
+        raise ValueError("pass either presentation + slide (a source slide to rework) "
+                         "or description (a slide of a new deck, in words)")
+    cat = {e["name"]: e for e in registry.catalogue()}
+    if description is not None:
+        return intents.suggest(description, cat, avoid=avoid, top=top)
 
     pid = parse_pres_id(presentation)
     pres = slide_service().presentations().get(presentationId=pid).execute()
@@ -417,7 +418,10 @@ def suggest_components(presentation: str, slide: str, top: int = 4) -> dict:
     page_w = size.get("width", {}).get("magnitude", 9144000) / 12700
     page_h = size.get("height", {}).get("magnitude", 5143500) / 12700
     signals, blocks, slide_level = _blocks(sl, page_w, page_h)
-    cat = {e["name"]: e for e in registry.catalogue()}
+    planned = set(avoid or ())
+
+    def planned_last(pairs: list) -> list:
+        return [p for p in pairs if p[0] not in planned] + [p for p in pairs if p[0] in planned]
 
     def describe(name: str, why: str, with_variants: bool = True) -> dict | None:
         e = cat.get(name)
@@ -429,6 +433,6 @@ def suggest_components(presentation: str, slide: str, top: int = 4) -> dict:
         return out
 
     for b in blocks:
-        b["candidates"] = [d for n, why in b["candidates"][:top] if (d := describe(n, why))]
+        b["candidates"] = [d for n, why in planned_last(b["candidates"])[:top] if (d := describe(n, why))]
     return {"slide_id": sl["objectId"], "index": index, "title": signals["title"][:120], "page": {"w": round(page_w, 1), "h": round(page_h, 1)},
-            "blocks": blocks, "slide_level": [d for n, why in slide_level[:top] if (d := describe(n, why, False))], "signals": signals}
+            "blocks": blocks, "slide_level": [d for n, why in planned_last(slide_level)[:top] if (d := describe(n, why, False))], "signals": signals}

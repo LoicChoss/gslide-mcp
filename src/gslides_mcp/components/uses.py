@@ -69,7 +69,8 @@ USES: dict[str, str] = {
     "cocon": "Cocon sémantique ou silo : la page cible au centre, ses pages filles autour, les pages d'action (dons, contact) en navy ; pour un écosystème sans notion de page → hub_spoke ; pour une arborescence à niveaux → tree.",
     "cycle": "Boucle sans fin (cycle de recherche off market → pre purchase → purchase → usage, cycle de vie, boucle d'amélioration) ; pour une suite linéaire → process ; pour un graphe orienté → flowchart.",
     "formula": "Raisonnement en équation : deux à cinq facteurs additionnés (ou multipliés) donnent un résultat (personnalisation + géolocalisation + recherche universelle = ranking moins fiable) ; pour des chiffres qui se composent → stat_box.",
-    "persona_card": "Fiche persona d'une reco UX ou SEO : identité, contexte, jauges, appareils, attentes et freins ; pour une vraie personne (équipe, interlocuteur) → person_card.",
+    "persona_card": "Fiche persona compacte d'une reco UX ou SEO : identité, contexte, jauges, appareils, attentes et freins ; une slide entière par persona avec ses requêtes ou verbatims → persona_sheet ; pour une vraie personne (équipe, interlocuteur) → person_card.",
+    "persona_sheet": "La slide persona pleine largeur (toute la zone de contenu ; elle dessine son en-tête, on supprime le titre du layout, ou header: false pour le garder) : identité, badge de statut, contexte et objectif, attentes et freins (3 chacun au plus), carte menthe de requêtes Google ou de verbatims (5 au plus), pastille de prompts, note de source ; fiche compacte avec jauges et appareils → persona_card.",
     "stack": "Pyramide ou pile de niveaux (pyramide SEO, socle → contenus → notoriété, priorités par couche) ; avec volumes et taux → funnel.",
 
     # --- personnes ---------------------------------------------------------------------
