@@ -73,6 +73,7 @@ A prebuilt bundle is attached to each [GitHub release](https://github.com/jemman
 - **Apps Script web-app URL** / **logo.dev token** — optional, leave empty unless you set those up.
 - **Theme** — default theme for components (`periscope`).
 - **Assets folder (Drive)** — shared folder (id or URL) holding the PNG pictos, logos and screenshots that `card` icons and the `browser` / `laptop` mockups use; local files passed to those props are uploaded there.
+- **Template par défaut** / **Dossier de rangement par défaut** — optional, id or URL: the deck a new presentation starts from when you name none, and the Drive folder it lands in (`get_defaults`). A copy of any other deck still lands next to its source.
 
 The bundle uses the `uv` runtime: Claude Desktop provisions Python and the dependencies from `pyproject.toml` / `uv.lock` itself, so nothing needs to be installed beforehand. You still need to create `credentials.json` once (see [First-run setup](#first-run-setup-oauth)).
 
@@ -89,8 +90,9 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.8.0.mcpb
 
 | Group | Tool | What it does |
 |-------|------|--------------|
-| **Deck** | `create_presentation` | Create a new blank deck, in a given Drive folder (`folder`) or My Drive |
-| | `clone_deck` | Copy an existing deck via Drive, into the source deck's folder unless `parent_folder_id` says otherwise |
+| **Deck** | `create_presentation` | Create a new blank deck, in a given Drive folder (`folder`), the default folder, or My Drive |
+| | `clone_deck` | Copy an existing deck via Drive, into the source deck's folder unless `parent_folder_id` says otherwise (a copy of the default template goes to the default folder) |
+| | `get_defaults` | The default template and folder set in the extension, checked (local server; `null` when unset) |
 | | `move_to_folder` | Move a deck, spreadsheet or any Drive file into another folder (e.g. a chart spreadsheet next to its deck) |
 | | `list_slides` | List slides with index, object ID, and summary |
 | | `inspect_slide` | Inspect all elements on a slide (optionally recursive): geometry, placeholder type, paragraphs with bullets, table cells, image URLs |
@@ -101,7 +103,7 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.8.0.mcpb
 | | `batch_apply` | Raw `batchUpdate` escape hatch for unsupported operations |
 | | `raw_request` | GET/POST any Slides API path under the presentation (Drive refused) |
 | **Rework** | `harvest_deck_assets` | Copy a deck's images (and slide thumbnails) into a Drive folder, returned as stable URLs / `drive:<id>` assets, before rebuilding it on the charter |
-| | `suggest_components` | Split a source slide into blocks and rank the charter components that would present each one, with reasons (see [docs/rework-deck.md](docs/rework-deck.md)) |
+| | `suggest_components` | Split a source slide into blocks and rank the charter components that would present each one, with reasons (see [docs/rework-deck.md](docs/rework-deck.md)); or, given a slide of a new deck in words (`description`), rank candidates by intention with one less obvious pick, `avoid` ranking last the components already planned |
 | **Layout** | `list_layouts` | Masters and layouts with placeholders (geometry), `content_area` per layout and per-slide usage counts |
 | | `screenshot_layout` | Render one layout page inline; `annotate=True` renders the placeholder-key map |
 | | `screenshot_layouts` | Vertical strip of every layout (or a chosen list), captioned by name |
@@ -145,7 +147,7 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.8.0.mcpb
 | **QA** | `screenshot` | Capture a slide as an inline image |
 | | `screenshot_range` | Capture a range of slides |
 | | `overlap_check` | Detect overlapping elements on a slide |
-| **Components** | `list_components` | Catalogue of 85 themed components (KPI, cards, callouts, badges, pills, numbered lists, agenda, big numbers, phase cards, compare / before-after panels, quote, table, heatmap, bar / grouped / line / stacked / combo charts, mini charts, pie, donut, donut rows, gauge, target, funnel, timeline, milestone arrow, process, hub & spoke, semantic cocoon, tree, flowchart, cycle, formula, persona card, stack, matrices, team and logo grids, media-bilan blocks (analysis, source note, stat boxes, takeaways, ad scoreboard, gallery, media plan), design-system brand blocks (pill buttons by ground, content cards on three grounds, hashtags, eyebrow, section header, client ticker, do / don't), workshop and restitution blocks (score matrix, ranked bars, chip cloud, quadrant matrix, next steps, board columns, session plan, attention points, commented bar list), Google-result / browser / laptop / phone mockups) plus themes and the assets folder |
+| **Components** | `list_components` | Index of the catalogue by intention (comparer, répartition, évolution, étapes…), then `names=[…]` for the full entries. 86 themed components (KPI, cards, callouts, badges, pills, numbered lists, agenda, big numbers, phase cards, compare / before-after panels, quote, table, heatmap, bar / grouped / line / stacked / combo charts, mini charts, pie, donut, donut rows, gauge, target, funnel, timeline, milestone arrow, process, hub & spoke, semantic cocoon, tree, flowchart, cycle, formula, persona card and full-width persona sheet, stack, matrices, team and logo grids, media-bilan blocks (analysis, source note, stat boxes, takeaways, ad scoreboard, gallery, media plan), design-system brand blocks (pill buttons by ground, content cards on three grounds, hashtags, eyebrow, section header, client ticker, do / don't), workshop and restitution blocks (score matrix, ranked bars, chip cloud, quadrant matrix, next steps, board columns, session plan, attention points, commented bar list), Google-result / browser / laptop / phone mockups) plus themes and the assets folder |
 | | `insert_component` | Render a component at a position — one atomic batch, grouped as one element; `name` gives readable ids per role (`yt_top_slot_1`), returned in `ids_by_role` |
 | | `draw` | Primitive ops (box, text runs with `==highlight==`, arrowed lines, polyline, arc, ring, table, image from URL or assets folder) in one batch |
 | | `save_component` | Freeze a JSON recipe as a reusable component |

@@ -21,7 +21,8 @@ Everything is one `batchUpdate` per insert, grouped into a single element.
 
 | Tool | Does |
 |---|---|
-| `list_components(theme?)` | Catalogue: every component with `description` (what it draws), `use` (when to pick it and the close alternatives), its props (type, default, choices, required), an example, its source (`builtin` / `recipe`); the available themes; how to add one. |
+| `list_components(theme?, names?)` | Two steps. Without `names`, the index: every component by **intention** (`intents`: faire retenir des chiffres, comparer, répartition, évolution, classer, étapes, structure, constats et recos, personnes, visuels, données, atelier, habillage), each with its `use` (when to pick it and the close alternatives) and variant titles; the available themes; how to add one. With `names`, those components in full: `description`, `use`, `intents`, props (type, default, choices, required), an example, variants, source (`builtin` / `recipe`). |
+| `suggest_components(description=…, avoid?)` | For a slide of a new deck described in words (intention and content): the intentions read in it, ranked candidates per intention, and `less_obvious`, a good fit outside the usual picks. `avoid` (components planned on other slides) ranks them last. With `presentation` + `slide` instead, it reads a source slide to rework ([rework-deck.md](rework-deck.md)). |
 | `insert_component(presentation, slide, component, props, x_pt, y_pt, width_pt, height_pt?, theme?)` | Renders a component at a position, in one atomic batch, grouped. Returns `group_id` (the element to move/delete), `element_ids`, `height_pt`. |
 | `draw(presentation, slide, ops, x_pt, y_pt, theme?, group?)` | Primitive ops on a slide (see below). |
 | `save_component(recipe)` | Validates and stores a JSON recipe under `~/.gslides-mcp/components/`; it is listed and insertable right away. |
@@ -37,6 +38,18 @@ it fits and what tips the choice between neighbours (`stats` vs `kpi_grid`
 vs `bigstat`, `process` vs `flowchart` vs `phase_cards`…). The source is
 `components/uses.py`; a recipe sets its own `use` key. The tables below
 list props; read `list_components()` for the guidance.
+
+Each component also sits under the **intentions** it serves, in
+`components/intents.py` (`INTENTS`, best fits first). The catalogue came
+as one 160 000-character list, sorted alphabetically, and Claude kept to
+a few familiar names; the index groups everything by what a slide has to
+do (about 26 000 characters) and the details come on demand. A new
+component goes into the intentions it serves (a test fails otherwise); a
+recipe declares its own with an `intents` key (index keys), or lands under
+*Autres*. The same module holds `KEYWORDS`, the wording that points at
+given components (« avant / après » → `before_after`), shared by both
+modes of `suggest_components`, and `USUAL`, the picks Claude makes
+unprompted, never offered as `less_obvious`.
 
 | Name | Props | Notes |
 |---|---|---|
@@ -60,6 +73,7 @@ list props; read `list_components()` for the guidance.
 | `cycle` | `steps*` `[{title, text}]`, `box_w`, `gap` | Loop of steps: light boxes with a mint bar, mint arrows; 2 × 2 clockwise for four steps, a ring otherwise. |
 | `formula` | `items*` `[{num, title, text}]` (2–5), `result*`, `operator`, `result_w` | Concept equation: numbered boxes joined by an operator, then « = » and the result (navy header). |
 | `persona_card` | `name*`, `age`, `location`, `photo`, `context`, `brands`, `gauges`, `devices`, `expectations`, `brakes`, `tag`, labels | Persona sheet on a white rounded card: identity, context, brand logos, gauges, devices, expectations / brakes, cyan tag. |
+| `persona_sheet` | `name*`, `age`, `segment`, `role`, `origin`, `photo`, `badge` ({text, color}), `context`, `goal`, `expectations` (≤ 3), `brakes` (≤ 3), `side_label`, `side_items` (≤ 5), `tag`, `note`, `header`, labels | A whole persona slide across the content width: its own header (initial disc or photo, name and age in bold capitals with a mint dot, subtitle, status badge), context + goal then expectations and brakes on the left, a mint card of queries or verbatims on the right, cyan tag and source note below. Every block is measured: a text too long grows its card and comes back in `warnings` (by field) instead of shrinking under the floors or overlapping; a forced `height_pt` too small is kept at the needed height, with a warning. No `side_items`: the left column takes the width; `header: false` keeps the layout's title. |
 | `hub_spoke` | `center*`, `sats*` `[{label, hl}]`, `hub_w`, `hub_h`, `sat_d` | Accent hub linked to round satellites laid out on an ellipse (`hl` = accent outline). |
 | `stack` | `items*` `[{label, sub, fill, color, width}]`, `item_h`, `gap`, `min_ratio` | Centred layers of decreasing width (pyramid / simple funnel). |
 | `bigstat` | `value*`, `label*`, `sub`, `color` | One 54 pt figure, centred. |

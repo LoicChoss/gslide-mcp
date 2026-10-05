@@ -41,6 +41,10 @@ Rôles du thème `periscope`, à passer tels quels dans les props `color` / `col
 
 Pictos blancs recolorables : `bolt`, `download`, `google`, `lightbulb`, `megaphone`, `people`, `search`, `share`, `star`, `video`. Pictos pixel-art du design system (décoratifs, 48 à 120 pt, teintés par le thème) : `px-*` (onze, dernière slide du catalogue). Captures de démo : `screen-demo` (16:9), `laptop-demo`. Les images moissonnées d'un deck source s'emploient par `drive:<id>`. La liste vivante : `list_assets()`.
 
+## Layouts des decks types
+
+- `Img_Droit_Chiffres01` = layout de contenu par défaut des decks SEO. Il porte une image pleine hauteur à droite que toutes les slides du deck suppriment : après `create_slide_from_layout` ou `build_from_outline`, supprimer l'image de droite (`delete_elements`) et élargir le titre à 853 pt (`transform_element`).
+
 ## À enrichir
 
 Ajouter ici, après accord de l'utilisateur, la matière qui a resservi pendant un run : chiffres agence, références par secteur, équipe, méthodologie type, clause juridique.
