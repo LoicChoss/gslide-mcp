@@ -157,6 +157,28 @@ def _utf16_len(s: str) -> int:
     return len(s.encode("utf-16-le")) // 2
 
 
+def _placed(page_id: str, op: dict, ox: float, oy: float) -> dict:
+    """Element properties of a box / text op, with its ``flip`` (``x``, ``y``, ``xy``) or ``rotate``.
+
+    A negative scale mirrors the shape inside the same box (verified live: a
+    flipped TRAPEZOID or RIGHT_TRIANGLE), so the origin moves to the far edge.
+    ``rotate`` (degrees, clockwise) turns the element about its centre; -90
+    reads bottom to top.
+    """
+    x, y, w, h = op["x"] + ox, op["y"] + oy, op["w"], op["h"]
+    if op.get("rotate"):
+        a = math.radians(float(op["rotate"]))
+        c, s = math.cos(a), math.sin(a)
+        cx, cy = x + w / 2, y + h / 2
+        props = _elem_props(page_id, 0, 0, w, h)
+        props["transform"] = {"scaleX": c, "scaleY": c, "shearX": -s, "shearY": s,
+                              "translateX": _emu(cx - (c * w / 2 - s * h / 2)), "translateY": _emu(cy - (s * w / 2 + c * h / 2)), "unit": "EMU"}
+        return props
+    flip = str(op.get("flip") or "")
+    sx, sy = (-1 if "x" in flip else 1), (-1 if "y" in flip else 1)
+    return _elem_props(page_id, x + (w if sx < 0 else 0), y + (h if sy < 0 else 0), w, h, sx, sy)
+
+
 def _elem_props(page_id: str, x: float, y: float, w: float, h: float,
                 sx: int = 1, sy: int = 1) -> dict:
     return {
@@ -369,7 +391,7 @@ class _Canvas:
         oid = self.new_id()
         self.reqs.append({"createShape": {
             "objectId": oid, "shapeType": op.get("shape", "RECTANGLE"),
-            "elementProperties": _elem_props(self.page, op["x"] + self.ox, op["y"] + self.oy, op["w"], op["h"]),
+            "elementProperties": _placed(self.page, op, self.ox, self.oy),
         }})
         fill = op.get("fill")
         props: dict = {
@@ -402,7 +424,7 @@ class _Canvas:
         oid = self.new_id()
         self.reqs.append({"createShape": {
             "objectId": oid, "shapeType": "TEXT_BOX",
-            "elementProperties": _elem_props(self.page, op["x"] + self.ox, op["y"] + self.oy, op["w"], op["h"]),
+            "elementProperties": _placed(self.page, op, self.ox, self.oy),
         }})
         self.ids.append(oid)
         self._text_into(oid, op)
@@ -410,13 +432,14 @@ class _Canvas:
     def line(self, op: dict) -> None:
         self._segment(op["x1"], op["y1"], op["x2"], op["y2"],
                       op.get("color", "ink"), op.get("weight", 1), op.get("dash"),
-                      end_arrow=op.get("end_arrow"), start_arrow=op.get("start_arrow"))
+                      end_arrow=op.get("end_arrow"), start_arrow=op.get("start_arrow"), curve=bool(op.get("curve")))
 
-    def _segment(self, x1, y1, x2, y2, color, weight, dash=None, end_arrow=None, start_arrow=None) -> None:
+    def _segment(self, x1, y1, x2, y2, color, weight, dash=None, end_arrow=None, start_arrow=None, curve=False) -> None:
         oid = self.new_id()
         w, h = x2 - x1, y2 - y1
         self.reqs.append({"createLine": {
-            "objectId": oid, "lineCategory": "STRAIGHT",
+            # CURVED: an S with horizontal tangents at both ends (verified live, also upwards)
+            "objectId": oid, "lineCategory": "CURVED" if curve else "STRAIGHT",
             "elementProperties": _elem_props(self.page, x1 + self.ox, y1 + self.oy, w, h,
                                              sx=-1 if w < 0 else 1, sy=-1 if h < 0 else 1),
         }})

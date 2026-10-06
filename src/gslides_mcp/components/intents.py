@@ -55,11 +55,11 @@ INTENTS: tuple[Intent, ...] = (
            r"|\bcalendrier\b|\bretro-?planning\b|\btimeline\b|\broadmap\b|\bphases?\b|\bjalons?\b|\bd[ée]roul[ée]\b"
            r"|\bentonnoir\b|\bfunnel\b|\bcycle\b|\bboucle\b|\bpipeline\b|\bworkflow\b",
            ("process", "steps", "timeline", "phase_cards", "next_steps", "timeline_arrow", "flowchart", "cycle",
-            "funnel", "session_plan", "arrows")),
+            "funnel", "funnel_stages", "session_plan", "arrows")),
     Intent("structure", "Montrer une structure, un écosystème",
            r"\barborescence|\bstructure\b|\bsilo\b|\bcocon\b|\b[ée]cosyst[eè]me|\bpyramide|\bniveaux\b"
            r"|\borganigramme|\bsatellites?\b|\bformule\b|\b[ée]quation\b|\barchitecture\b|\bmapping\b",
-           ("tree", "hub_spoke", "stack", "cocon", "diagram_compare", "formula", "flowchart")),
+           ("tree", "hub_spoke", "stack", "cocon", "fan_out", "funnel_stages", "diagram_compare", "formula", "flowchart")),
     Intent("messages", "Poser des constats, des recommandations",
            r"\bconstats?\b|\benseignements?\b|\b[àa] retenir\b|\bsynth[eè]se\b|\bconclusion|\brecommandations?\b"
            r"|\brecos?\b|\banalyse\b|\bmessages?\b|\bpoints? (cl[ée]s?|de vigilance|d'attention)\b|\balertes?\b"
@@ -112,7 +112,7 @@ KEYWORDS: list[tuple[str, list[str], str]] = [
     (r"\bid[ée]e re[çc]ue\b|\bmythe\b|\bvrai ou faux\b|\bdo\b.*\bdon'?t\b", ["compare_cards", "do_dont"], "idées reçues ou bonnes / mauvaises pratiques"),
     (r"\bmaquette|\bwireframe|\bsite\b|\bpage d'accueil|\b[ée]cran|\bapp(li)?\b|\bmobile\b", ["browser", "laptop", "phone", "gallery"], "capture d'écran ou maquette"),
     (r"\bpiliers?\b|\bvaleurs?\b|\bconvictions?\b|\bprincipes?\b|\bexpertises?\b|\boffres?\b", ["card_grid", "big_numbers", "content_cards"], "piliers, valeurs ou offres en cartes"),
-    (r"\bentonnoir\b|\bfunnel\b|\bconversion\b|\btunnel\b", ["funnel", "stat_box"], "entonnoir de conversion"),
+    (r"\bentonnoir\b|\bfunnel\b|\bconversion\b|\btunnel\b", ["funnel", "funnel_stages", "stat_box"], "entonnoir de conversion"),
     (r"\bpersona", ["persona_sheet", "persona_card"], "fiche persona"),
     (r"\bcocon\b|\bsilo\b|\bpage cible\b", ["cocon", "tree"], "cocon sémantique ou silo"),
     (r"\bcycle\b|\bboucle\b", ["cycle", "process"], "cycle ou boucle d'étapes"),
@@ -136,6 +136,9 @@ KEYWORDS: list[tuple[str, list[str], str]] = [
     (r"\bpyramide\b|\bsocle\b", ["stack"], "une pyramide de niveaux"),
     (r"\b[ée]cosyst[eè]me\b|\bsatellites?\b", ["hub_spoke"], "un élément central et ses satellites"),
     (r"\bm[ée]thodologie\b|\bmission\b", ["phase_cards"], "les temps d'une mission"),
+    (r"\btofu\b|\bmofu\b|\bbofu\b|\b(haut|milieu|bas) de funnel\b|\b[ée]tages? du funnel\b", ["funnel_stages", "stack"], "les étages d'un funnel (TOFU / MOFU / BOFU)"),
+    (r"\bfan-?out\b|\bsous-requ[êe]tes?\b|\bquestion pos[ée]e [àa] l'ia\b", ["fan_out"], "une question éclatée en sous-requêtes"),
+    (r"\bfragile\b|\br[ée]silien|\bd[ée]pendance\b|\bun seul canal\b", ["diagram_compare", "hub_spoke"], "la dépendance à un canal face à un écosystème"),
 ]
 
 _KEYS = {i.key for i in INTENTS}

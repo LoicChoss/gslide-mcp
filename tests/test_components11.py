@@ -133,3 +133,111 @@ def test_diagram_compare_draws_each_component_in_its_panel_and_darkens_the_dark_
     assert all(boxes[1]["x"] < ln["x2"] < boxes[1]["x"] + boxes[1]["w"] for ln in right)
     with pytest.raises(ValueError, match="panel 2.*hub_spoke"):
         components.render("diagram_compare", {"panels": [panels[0], {"component": "hub_spoke", "props": {}}]}, PERISCOPE, 640)
+
+
+# --- lot C: funnel_stages ------------------------------------------------------------------------
+
+STAGES = [
+    {"title": "TOFU · informationnel, froid", "sub": "« grippe a », « hantavirus france »", "note": "-20 à -50 %", "note_sub": "clic capté par l'IA"},
+    {"title": "MOFU · considération", "sub": "« comment déduire un don »", "note": "partiel", "note_sub": "clic préservé si réassurance"},
+    {"title": "BOFU · transactionnel", "sub": "don · pétition · collecte", "text": "l'action se fait chez vous", "note": "résiste", "note_sub": "clic à forte valeur"},
+]
+
+
+def test_funnel_stages_join_into_one_funnel_with_notes_axis_and_conclusion():
+    ops, h = _render("funnel_stages", {"stages": STAGES, "stage_header": "Étage du funnel", "note_header": "Impact de l'IA sur le clic",
+                                       "axis": "Intention d'agir",
+                                       "conclusion": {"title": "Le focus SEO de Pasteur", "text": "Là où le clic survit à l'IA\n**et où il rapporte : le bas de funnel**"}},
+                     w=640)
+    bodies = _of(ops, "box", "stage")
+    sides = _of(ops, "box", "stage_side")
+    assert [b["fill"] for b in bodies] == ["accent_alt", "surface", "accent"]
+    assert len(sides) == 6 and {s["shape"] for s in sides} == {"RIGHT_TRIANGLE"}
+    lefts, rights = sides[0::2], sides[1::2]
+    assert all(lf["flip"] == "xy" and rt["flip"] == "y" for lf, rt in zip(lefts, rights))
+    # one straight edge: the same slope for every stage, and each stage starts where the line has got to
+    slopes = [lf["w"] / lf["h"] for lf in lefts]
+    assert max(slopes) - min(slopes) < 1e-6
+    tops = [lf["w"] * 2 + b["w"] for lf, b in zip(lefts, bodies)]
+    assert tops == sorted(tops, reverse=True) and all(b["w"] < t for b, t in zip(bodies, tops))
+    for upper, lower, lf in zip(lefts, lefts[1:], lefts[1:]):
+        assert lower["x"] - upper["x"] == pytest.approx(slopes[0] * (lower["y"] - upper["y"]), abs=0.6)
+    # notes on the right, each inside its stage's height
+    notes = _of(ops, "text", "note")
+    assert len(notes) == 3 and all(n["align"] == "END" and n["x"] + n["w"] == pytest.approx(640) for n in notes)
+    assert all(b["y"] <= n["y"] + n["h"] / 2 <= b["y"] + b["h"] for n, b in zip(notes, bodies))
+    assert all(n["x"] > b["x"] + b["w"] + lf["w"] for n, b, lf in zip(notes, bodies, lefts))
+    headers = _of(ops, "text", "column_header")
+    assert len(headers) == 2 and headers[0]["y"] == headers[1]["y"] and headers[0]["y"] + headers[0]["h"] <= bodies[0]["y"]
+    (axis,) = _of(ops, "line", "axis")
+    assert axis["end_arrow"] and axis["y1"] == pytest.approx(bodies[0]["y"]) and axis["y2"] == pytest.approx(bodies[-1]["y"] + bodies[-1]["h"])
+    (label,) = _of(ops, "text", "axis_label")
+    assert label["rotate"] == -90 and "I" in label["text"]
+    (box,) = _of(ops, "box", "conclusion")
+    assert box["fill"] == "surface_dark" and box["y"] > bodies[-1]["y"] + bodies[-1]["h"] and h == pytest.approx(box["y"] + box["h"])
+    title = _of(ops, "text", "conclusion_title")[0]
+    assert title["color"] == "accent" and title["align"] == "CENTER"
+
+
+def test_funnel_stages_without_extras_takes_the_whole_width():
+    ops, h = _render("funnel_stages", {"stages": ["Notoriété", "Considération", "Conversion", "Fidélisation"]}, w=400)
+    bodies, sides = _of(ops, "box", "stage"), _of(ops, "box", "stage_side")
+    assert len(bodies) == 4 and not _of(ops, "text", "note") and not _of(ops, "line", "axis")
+    assert sides[0]["x"] == pytest.approx(0) and sides[1]["x"] + sides[1]["w"] == pytest.approx(400)
+    assert [b["fill"] for b in bodies] == ["accent_alt", "surface", "accent", "surface_dark"]
+    texts = _of(ops, "text", "stage_text")
+    assert texts[3]["runs"][0][0]["color"] == "on_dark" and texts[0]["runs"][0][0]["color"] == "ink"
+    assert h == pytest.approx(bodies[-1]["y"] + bodies[-1]["h"])
+
+
+# --- lot D: vertical tree, fan_out -------------------------------------------------------------
+
+COCON = {"root": {"label": "Pilier", "sub": "Faire un don à Pasteur"}, "children": ["Don & impôts (66 %)", "Votre reçu fiscal", "Ponctuel ou mensuel ?"]}
+
+
+def test_tree_vertical_hangs_the_children_on_a_rail_under_the_root():
+    ops, h = _render("tree", {"layout": "vertical", **COCON}, w=220)
+    (root,) = _of(ops, "box", "root")
+    kids = _of(ops, "box", "child")
+    assert root["fill"] == "accent" and root["x"] == 0 and root["w"] == 220 and len(kids) == 3
+    assert [r[0]["text"] for r in root["runs"]] == ["Pilier", "Faire un don à Pasteur"]
+    assert all(k["x"] >= 18 and k["x"] + k["w"] == pytest.approx(220) for k in kids)
+    assert [k["y"] for k in kids] == sorted(k["y"] for k in kids) and kids[0]["y"] > root["y"] + root["h"]
+    (rail,) = _of(ops, "line", "rail")
+    stubs = _of(ops, "line", "stub")
+    assert rail["y1"] == pytest.approx(root["y"] + root["h"]) and rail["y2"] == pytest.approx(kids[-1]["y"] + kids[-1]["h"] / 2)
+    assert len(stubs) == 3 and all(s["x1"] == rail["x1"] and s["x2"] == pytest.approx(k["x"]) and s["y1"] == pytest.approx(k["y"] + k["h"] / 2)
+                                   for s, k in zip(stubs, kids))
+    assert h == pytest.approx(kids[-1]["y"] + kids[-1]["h"])
+
+
+def test_fan_out_curves_from_the_question_to_each_query_then_to_the_cocon():
+    props = {"source": "« À quelle association donner pour un don ==déductible ?== »",
+             "branches": ["don déductible 66 % ?", "reçu fiscal / cerfa", "plafond de déduction", "don ponctuel ou mensuel ?"],
+             "target": COCON, "source_label": "Question posée à l'IA", "branches_label": "Query fan-out", "target_label": "Cocon « Faire un don »"}
+    ops, h = _render("fan_out", props, w=700)
+    (src,) = _of(ops, "box", "source")
+    assert src["fill"] == "surface_dark"
+    (src_text,) = _of(ops, "text", "source_text")
+    runs = src_text["runs"][0]
+    assert [r["text"] for r in runs] == ["« À quelle association donner pour un don ", "déductible ?", " »"]
+    assert runs[1]["color"] == "accent" and runs[1]["bold"] and runs[0]["color"] == "on_dark"
+    branches = _of(ops, "box", "branch")
+    assert len(branches) == 4 and all(b["fill"] == "background" and b["line"]["color"] == "rule" for b in branches)
+    curves = _of(ops, "line", "fan")
+    assert len(curves) == 4 and all(c["curve"] and c["color"] == "accent" for c in curves)
+    for c, b in zip(curves, branches):
+        assert c["x1"] == pytest.approx(src["x"] + src["w"]) and c["y1"] == pytest.approx(src["y"] + src["h"] / 2)
+        assert c["x2"] == pytest.approx(b["x"]) and c["y2"] == pytest.approx(b["y"] + b["h"] / 2)
+    (dot,) = _of(ops, "box", "dot")
+    assert dot["x"] + dot["w"] / 2 == pytest.approx(src["x"] + src["w"])
+    (arrow,) = _of(ops, "line", "arrow")
+    (root,) = _of(ops, "box", "root")
+    assert arrow["end_arrow"] and branches[0]["x"] + branches[0]["w"] < arrow["x1"] < arrow["x2"] < root["x"]
+    assert root["x"] + root["w"] <= 700.5
+    labels = _of(ops, "text", "column_label")
+    assert len(labels) == 3 and len({lb["y"] for lb in labels}) == 1 and labels[2]["x"] == pytest.approx(root["x"])
+    assert labels[0]["y"] + labels[0]["h"] <= min(b["y"] for b in branches)
+    alone, _ = _render("fan_out", {"source": "Question", "branches": ["a", "b"]}, w=500)
+    assert not _of(alone, "line", "arrow") and not _of(alone, "box", "root") and not _of(alone, "text", "column_label")
+    assert max(b["x"] + b["w"] for b in _of(alone, "box", "branch")) == pytest.approx(500)

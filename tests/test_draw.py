@@ -527,3 +527,29 @@ def test_unnamed_ids_are_unchanged_and_roles_still_reported():
                                         {"op": "text", "x": 0, "y": 0, "w": 60, "h": 40, "text": "a"}],
                                   THEME, prefix="cmp", roles_out=roles)
     assert ids == ["cmp_001", "cmp_002"] and roles == {"value": ["cmp_001"], "text": ["cmp_002"]}
+
+
+def test_box_flip_mirrors_the_shape_inside_its_box():
+    reqs, _ = _run([{"op": "box", "x": 10, "y": 20, "w": 30, "h": 40, "shape": "RIGHT_TRIANGLE", "fill": "mint", "flip": "xy"},
+                    {"op": "box", "x": 10, "y": 20, "w": 30, "h": 40, "shape": "RIGHT_TRIANGLE", "fill": "mint", "flip": "y"}])
+    both, vertical = (c["elementProperties"]["transform"] for c in _of(reqs, "createShape"))
+    assert (both["scaleX"], both["scaleY"], both["translateX"], both["translateY"]) == (-1, -1, 40 * PT, 60 * PT)
+    assert (vertical["scaleX"], vertical["scaleY"], vertical["translateX"], vertical["translateY"]) == (1, -1, 10 * PT, 60 * PT)
+
+
+def test_text_rotate_turns_the_box_about_its_centre():
+    reqs, _ = _run([{"op": "text", "x": 0, "y": 0, "w": 100, "h": 20, "text": "Intention", "rotate": -90}])
+    (create,) = _of(reqs, "createShape")
+    t = create["elementProperties"]["transform"]
+    assert t["scaleX"] == pytest.approx(0, abs=1e-9) and t["scaleY"] == pytest.approx(0, abs=1e-9)
+    assert t["shearX"] == pytest.approx(1) and t["shearY"] == pytest.approx(-1)
+    # the centre stays at (50, 10): x' = shearX * h / 2 + tx, y' = shearY * w / 2 + ty
+    assert (t["translateX"] + 10 * PT) == pytest.approx(50 * PT, abs=1) and (t["translateY"] - 50 * PT) == pytest.approx(10 * PT, abs=1)
+
+
+def test_line_curve_is_a_curved_connector():
+    reqs, _ = _run([{"op": "line", "x1": 0, "y1": 50, "x2": 80, "y2": 10, "curve": True, "color": "navy"},
+                    {"op": "line", "x1": 0, "y1": 0, "x2": 10, "y2": 0, "color": "navy"}])
+    curved, straight = _of(reqs, "createLine")
+    assert curved["lineCategory"] == "CURVED" and straight["lineCategory"] == "STRAIGHT"
+    assert curved["elementProperties"]["transform"]["scaleY"] == -1

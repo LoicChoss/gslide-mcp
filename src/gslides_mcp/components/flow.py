@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from ..themes import Theme
 from . import Component, Prop, register
-from .builtin import INSETS, LEADING, _text_height, fit_text_size
+from .builtin import BOLD_WRAP, INSETS, LEADING, _text_height, fit_text_size
 
 _DARK = {"surface_dark", "surface_dark_2", "ink", "text", "device_frame"}
 
@@ -17,9 +17,41 @@ def _fg(fill: str | None) -> str:
 
 # --- tree -------------------------------------------------------------------------------
 
+def _tree_vertical(root: dict, children: list[dict], w: float, node_h: float, h: float | None) -> tuple[list[dict], float]:
+    """Root on top, children stacked under it in a column, hung on a rail (a file tree, a cocon's pilier and its pages)."""
+    indent, gap, rail_x = 22.0, 8.0, 10.0
+    root_fill = root.get("fill") or "accent"
+    paras = [[{"text": str(root.get("label", "")), "bold": True, "size": 12}]]
+    if root.get("sub"):
+        paras.append([{"text": str(root["sub"]), "bold": False, "size": 11}])
+    root_h = max(node_h, sum(_text_height(r[0]["text"], w, r[0]["size"] * BOLD_WRAP) - INSETS for r in paras) + INSETS + 10)
+    ops: list[dict] = [{"op": "box", "x": 0, "y": 0, "w": w, "h": root_h, "shape": "ROUND_RECTANGLE", "fill": root_fill, "role": "root",
+                        "runs": paras, "style": "card_title", "size": 12, "color": _fg(root_fill), "align": "CENTER", "valign": "MIDDLE"}]
+    lines: list[dict] = []
+    y = root_h + 12
+    cw = w - indent
+    for c in children:
+        text = str(c.get("label", ""))
+        ch = max(node_h, _text_height(text, cw, 11 * BOLD_WRAP))
+        fill = c.get("fill") or "surface"
+        ops.append({"op": "box", "x": indent, "y": y, "w": cw, "h": ch, "shape": "ROUND_RECTANGLE", "fill": fill, "role": "child",
+                    "line": {"color": "accent", "weight": 1.5} if c.get("hl") else None,
+                    "text": text, "style": "card_title", "size": 11, "color": _fg(fill), "align": "START", "valign": "MIDDLE"})
+        lines.append({"op": "line", "x1": rail_x, "y1": y + ch / 2, "x2": indent, "y2": y + ch / 2, "color": "accent", "weight": 1.5, "role": "stub"})
+        y += ch + gap
+    if children:
+        last = ops[-1]
+        lines.insert(0, {"op": "line", "x1": rail_x, "y1": root_h, "x2": rail_x, "y2": last["y"] + last["h"] / 2, "color": "accent",
+                         "weight": 1.5, "role": "rail"})
+        y -= gap
+    return lines + ops, h or (y if children else root_h)
+
+
 def _tree(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     root = p["root"] if isinstance(p["root"], dict) else {"label": str(p["root"])}
     children = [c if isinstance(c, dict) else {"label": str(c)} for c in p["children"]]
+    if p["layout"] == "vertical":
+        return _tree_vertical(root, children, w, float(p["node_h"]), h)
     n = max(1, len(children))
     node_h = float(p["node_h"])
     gap_y, gap_x = float(p["gap_y"]), float(p["gap_x"])
@@ -72,10 +104,12 @@ def _tree(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict],
 
 
 register(Component(
-    name="tree", description="Arborescence / organigramme à deux ou trois niveaux : racine accent, 2 à 5 enfants en rangée reliés par un bus, puis sous-rubriques listées (items) ou petites-filles en boîtes empilées (children) sous chaque enfant.",
+    name="tree", description="Arborescence / organigramme à deux ou trois niveaux : racine accent, 2 à 5 enfants en rangée reliés par un bus, puis sous-rubriques listées (items) ou petites-filles en boîtes empilées (children) sous chaque enfant ; ou en colonne (layout vertical) : racine en haut, enfants en retrait sur un rail.",
     props=[
-        Prop("root", "str", "Racine (texte, ou {label, fill?}).", required=True),
-        Prop("children", "list", "Enfants : {label, items?: [..], children?: [texte ou {label, fill?, hl?}], fill?, hl?} ou texte.", required=True),
+        Prop("root", "str", "Racine (texte, ou {label, sub?, fill?} ; sub = seconde ligne, en colonne).", required=True),
+        Prop("children", "list", "Enfants : {label, items?: [..], children?: [texte ou {label, fill?, hl?}], fill?, hl?} ou texte (en colonne : label, fill, hl).", required=True),
+        Prop("layout", "choice", "bus : enfants en rangée sous la racine ; vertical : enfants empilés en retrait sur un rail (pilier et ses pages).", default="bus",
+             choices=["bus", "vertical"]),
         Prop("node_h", "number", "Hauteur des nœuds.", default=30),
         Prop("gap_y", "number", "Espace vertical racine → enfants.", default=30),
         Prop("gap_x", "number", "Espace entre enfants.", default=10),
