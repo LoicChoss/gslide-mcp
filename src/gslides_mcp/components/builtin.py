@@ -262,6 +262,34 @@ def caps_centre(top: float, size: float) -> float:
     return top + 7 + 0.6 * size
 
 
+def label_top(content_y: float, size: float, gap: float = 6.5) -> float:
+    """Top of a label's text box so that its baseline sits ``gap`` above ``content_y`` (a bar, chips, logos under it).
+
+    A box placed right under a label's text box sits on its descenders: the
+    baseline is 7 + 0.95 × size under the box top, 16.5 pt for 10 pt.
+    """
+    return content_y - gap - (caps_centre(0, size) + 0.35 * size)
+
+
+def round_corner_inset(w: float, h: float, glyph: tuple[float, float] = (INSET_X, 9.5), clearance: float = 8.5,
+                       floor: float = 3.0) -> float:
+    """Inset of a text box inside a ROUND_RECTANGLE ``w`` × ``h`` so its first glyph clears the rounded corner.
+
+    Slides' corner radius is 1/6 of the smaller side: an inset that suits a small
+    card puts the first letters on the curve of a big one (persona_sheet's mint
+    card: 1.7 pt). ``glyph`` is the first glyph's top-left in the text box
+    (Google's left inset, top of 10 pt capitals); ``clearance`` the distance kept
+    to the curve, as on a small card.
+    """
+    r = min(w, h) / 6
+    t = float(floor)
+    while True:
+        gx, gy = t + glyph[0], t + glyph[1]
+        if gx >= r or gy >= r or r - math.hypot(r - gx, r - gy) >= clearance:
+            return t
+        t += 0.5
+
+
 def title_dot(x: float, top: float, size: float, d: float | None = None, fill: str = "accent") -> tuple[dict, float]:
     """Accent dot in front of a title whose text box starts at ``top``; returns (op, advance).
 

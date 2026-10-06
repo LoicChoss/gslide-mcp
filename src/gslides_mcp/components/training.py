@@ -10,7 +10,7 @@ import math
 
 from ..themes import Theme
 from . import Component, Prop, register
-from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height, _wrapped_lines, fit_text_size
+from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height, _wrapped_lines, fit_text_size, label_top, round_corner_inset
 
 # --- cocon ------------------------------------------------------------------------------
 
@@ -298,25 +298,27 @@ def _persona_card(p: dict, theme: Theme, w: float, h: float | None) -> tuple[lis
     if brands:
         ops.append({"op": "text", "x": pad, "y": y, "w": left_w, "h": 12 + INSETS, "text": str(p["brands_label"]), "style": "card_label", "size": 10,
                     "bold": True, "color": "ink", "role": "brands_label"})
+        ly = y - label_top(0, 10)  # the logos start 6.5 pt under the label's baseline
         bx = pad
         for b in brands:
-            ops.append({"op": "image", "x": bx, "y": y + 18, "w": 56, "h": 28, "asset": str(b), "contain": True, "role": "brand"})
+            ops.append({"op": "image", "x": bx, "y": ly, "w": 56, "h": 28, "asset": str(b), "contain": True, "role": "brand"})
             bx += 64
-        y += 18 + 28 + 8
+        y = ly + 28 + 8
     left_bottom = y
     # right column: gauges and devices
     ry = pad
     for g in p["gauges"] or []:
         g = g if isinstance(g, dict) else {"label": str(g), "value": 0.5}
         v = max(0.0, min(1.0, float(g.get("value", 0.5))))
-        ops.append({"op": "text", "x": rx, "y": ry, "w": right_w, "h": 12 + INSETS, "text": str(g.get("label", "")), "style": "card_label", "size": 10,
+        # the label's box starts above the row so that its baseline sits 6.5 pt over the bar
+        ops.append({"op": "text", "x": rx - INSET_X, "y": label_top(ry + 18, 10), "w": right_w + INSET_X, "h": 12 + INSETS, "text": str(g.get("label", "")), "style": "card_label", "size": 10,
                     "bold": True, "color": "ink", "role": "gauge_label"})
         ops.append({"op": "box", "x": rx, "y": ry + 18, "w": right_w, "h": 7, "fill": "surface", "role": "gauge_track"})
         ops.append({"op": "box", "x": rx, "y": ry + 18, "w": max(4.0, right_w * v), "h": 7, "fill": "accent", "role": "gauge"})
         ry += 32
     devices = p["devices"] or []
     if devices:
-        ops.append({"op": "text", "x": rx, "y": ry, "w": right_w, "h": 12 + INSETS, "text": str(p["devices_label"]), "style": "card_label", "size": 10,
+        ops.append({"op": "text", "x": rx - INSET_X, "y": label_top(ry + 18, 10), "w": right_w + INSET_X, "h": 12 + INSETS, "text": str(p["devices_label"]), "style": "card_label", "size": 10,
                     "bold": True, "color": "ink", "role": "devices_label"})
         dx = rx
         for d in devices:
@@ -413,14 +415,19 @@ def _sheet_card(x: float, y: float, w: float, h: float, fill: str, role: str) ->
     return box
 
 
-def _sheet_text(x: float, y: float, w: float, label: str, paras: list[list[dict]], role: str) -> tuple[dict, float]:
-    """A card's text, its label in capitals then ``paras`` (runs), as one box: (op, card height it needs)."""
+def _sheet_text(x: float, y: float, w: float, label: str, paras: list[list[dict]], role: str,
+                inset: float = _SHEET_IN) -> tuple[dict, float]:
+    """A card's text, its label in capitals then ``paras`` (runs), as one box: (op, card height it needs).
+
+    ``inset``: the text box inside its card; a big card needs more than the
+    default to keep its first letters off the rounded corner (``round_corner_inset``).
+    """
     runs = [[{"text": str(label).upper(), "bold": True, "size": 10, "color": "ink"}]] + paras
-    tw = w - 2 * _SHEET_IN
+    tw = w - 2 * inset
     lines = sum(_wrapped_lines("".join(r["text"] for r in para), tw, para[0]["size"]) * para[0]["size"] * LEADING for para in runs)
     th = lines + _SHEET_SPACING * (len(runs) - 1) + INSETS
-    return ({"op": "text", "x": x + _SHEET_IN, "y": y + _SHEET_IN, "w": tw, "h": th, "runs": runs, "style": "caption", "size": 11,
-             "spacing": _SHEET_SPACING, "role": role}, th + 2 * _SHEET_IN)
+    return ({"op": "text", "x": x + inset, "y": y + inset, "w": tw, "h": th, "runs": runs, "style": "caption", "size": 11,
+             "spacing": _SHEET_SPACING, "role": role}, th + 2 * inset)
 
 
 def _sheet_bullets(items: list, marker: str) -> list[list[dict]]:
@@ -482,7 +489,7 @@ def _persona_sheet(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
     # measure every block, then settle the heights
     ctx_paras = ([[{"text": str(p["context"]), "size": 11, "color": "text"}]] if p["context"] else []) + \
                 ([[{"text": "Objectif : " + str(p["goal"]), "bold": True, "size": 11, "color": "ink"}]] if p["goal"] else [])
-    ctx_text, ctx_need = _sheet_text(0, y0, lw, p["context_label"], ctx_paras, "context")
+    ctx_need = _sheet_text(0, y0, lw, p["context_label"], ctx_paras, "context")[1]
     ctx_h = max(_SHEET_CTX, ctx_need)
     if ctx_need > _SHEET_CTX:
         fields = "context and goal" if p["goal"] and p["context"] else ("goal" if p["goal"] else "context")
@@ -499,7 +506,7 @@ def _persona_sheet(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
             warnings.append(f"{key}: {need:.0f} pt of text, the list cards grow from {_SHEET_LISTS:g} pt; shorten the items")
     column = ctx_h + (_SHEET_VGAP + lists_h if has_lists else 0.0)
     if side:
-        side_need = _sheet_text(rx, y0, rw, p["side_label"], _sheet_bullets(side, "ink"), "side")[1]
+        side_need = _sheet_text(rx, y0, rw, p["side_label"], _sheet_bullets(side, "ink"), "side", round_corner_inset(rw, column))[1]
         if side_need > column:
             warnings.append(f"side_items: {side_need:.0f} pt of text, more than the {column:.0f} pt of the left column; shorten them")
             if has_lists:
@@ -530,15 +537,16 @@ def _persona_sheet(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
         height = h
 
     ops = list(head)
+    # each text keeps its first letters off its card's rounded corner, whatever the card's final size
     ops.append(_sheet_card(0, y0, lw, ctx_h, "background", "context_card"))
-    ops.append(ctx_text)
+    ops.append(_sheet_text(0, y0, lw, p["context_label"], ctx_paras, "context", round_corner_inset(lw, ctx_h))[0])
     ly = y0 + ctx_h + _SHEET_VGAP
     for key, label, items, x in lists:
         ops.append(_sheet_card(x, ly, cw, lists_h, "background", f"{key}_card"))
-        ops.append(_sheet_text(x, ly, cw, label, _sheet_bullets(items, "accent"), key)[0])
+        ops.append(_sheet_text(x, ly, cw, label, _sheet_bullets(items, "accent"), key, round_corner_inset(cw, lists_h))[0])
     if side:
         ops.append(_sheet_card(rx, y0, rw, column, "accent", "side_card"))
-        ops.append(_sheet_text(rx, y0, rw, p["side_label"], _sheet_bullets(side, "ink"), "side")[0])
+        ops.append(_sheet_text(rx, y0, rw, p["side_label"], _sheet_bullets(side, "ink"), "side", round_corner_inset(rw, column))[0])
     by = y0 + column + _SHEET_VGAP
     if p["tag"]:
         ops.append({"op": "box", "x": 0, "y": by, "w": lw, "h": _SHEET_TAG, "shape": "ROUND_RECTANGLE", "fill": "cyan", "role": "tag",

@@ -271,3 +271,49 @@ def test_steps_disc_is_centred_on_the_capitals_of_the_first_line(dark):
     for (d, t), (d2, t2) in zip(zip(discs, texts), zip(discs[1:], texts[1:])):
         assert min(d2["y"], t2["y"]) >= max(d["y"] + d["h"], t["y"] + t["h"])
     assert h >= max(discs[-1]["y"] + discs[-1]["h"], texts[-1]["y"] + texts[-1]["h"]) - 0.01
+
+
+# --- personas: text clear of the rounded corners, labels clear of their bars --------------------
+
+def _clearance(card, text, size=10):
+    """Distance from the first glyph of ``text`` to the rounded corner of ``card`` (Slides: radius = 1/6 of the smaller side)."""
+    import math
+    r = min(card["w"], card["h"]) / 6
+    gx, gy = text["x"] + INSET_X - card["x"], _caps_centre({**text, "size": size}) - 0.35 * size - card["y"]
+    if gx >= r or gy >= r:
+        return min(gx, gy) if gx < r else gx
+    return r - math.hypot(r - gx, r - gy)
+
+
+def test_persona_sheet_card_texts_clear_their_rounded_corners():
+    entry = next(e for e in components.catalogue() if e["name"] == "persona_sheet")
+    for props in [entry["example"]["props"]] + [v["props"] for v in entry["variants"]]:
+        ops, _ = _render("persona_sheet", props, w=660)
+        cards = {o["role"][:-5]: o for o in ops if o["op"] == "box" and o.get("role", "").endswith("_card")}
+        texts = {o["role"]: o for o in ops if o["op"] == "text" and o.get("role") in cards}
+        assert cards and set(cards) == set(texts)
+        for role, card in cards.items():
+            assert _clearance(card, texts[role]) >= 8, role
+            assert texts[role]["x"] + texts[role]["w"] <= card["x"] + card["w"] + 0.01
+
+
+def test_persona_card_labels_clear_their_gauges_devices_and_logos():
+    entry = next(e for e in components.catalogue() if e["name"] == "persona_card")
+    ops, _ = _render("persona_card", {**entry["example"]["props"], "brands": ["google", "share"]}, w=600)
+    for label_role, below_role, kind in (("gauge_label", "gauge_track", "box"), ("devices_label", "device", "box"), ("brands_label", "brand", "image")):
+        labels = _of(ops, "text", label_role)
+        belows = _of(ops, kind, below_role)
+        assert labels and belows, label_role
+        for lb in labels:
+            baseline = _caps_centre({**lb, "size": 10}) + 0.35 * 10
+            under = min((b for b in belows if b["y"] > lb["y"]), key=lambda b: b["y"])
+            assert under["y"] - baseline >= 5.5, (label_role, under["y"] - baseline)
+
+
+def test_persona_card_labels_start_on_the_left_edge_of_their_bars_and_chips():
+    entry = next(e for e in components.catalogue() if e["name"] == "persona_card")
+    ops, _ = _render("persona_card", entry["example"]["props"], w=600)
+    track = _of(ops, "box", "gauge_track")[0]
+    chip = _of(ops, "box", "device")[0]
+    assert all(lb["x"] + INSET_X == pytest.approx(track["x"]) for lb in _of(ops, "text", "gauge_label"))
+    assert _of(ops, "text", "devices_label")[0]["x"] + INSET_X == pytest.approx(chip["x"])
