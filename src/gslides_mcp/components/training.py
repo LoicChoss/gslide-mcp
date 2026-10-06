@@ -10,7 +10,7 @@ import math
 
 from ..themes import Theme
 from . import Component, Prop, register
-from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height, _wrapped_lines, fit_text_size, label_top, round_corner_inset
+from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height, _wrapped_lines, fit_text_size, corner_box_offset, label_top, round_corner_inset
 
 # --- cocon ------------------------------------------------------------------------------
 
@@ -353,9 +353,10 @@ def _persona_card(p: dict, theme: Theme, w: float, h: float | None) -> tuple[lis
     if p["tag"]:
         y += 40  # its own band under the lists, so it never covers them
     height = h or (y + pad)
-    if p["tag"]:  # inside the card's rounded corner, rounded itself
+    if p["tag"]:  # inside the card's rounded corner, rounded itself, clear of its curve
         tw = min(150.0, w * 0.3)
-        ops.append({"op": "box", "x": w - tw - 12, "y": height - 32 - 12, "w": tw, "h": 32, "shape": "ROUND_RECTANGLE", "fill": "cyan", "role": "tag",
+        e = corner_box_offset(w, height, tw, 32)
+        ops.append({"op": "box", "x": w - tw - e, "y": height - 32 - e, "w": tw, "h": 32, "shape": "ROUND_RECTANGLE", "fill": "cyan", "role": "tag",
                     "text": str(p["tag"]), "style": "card_title", "size": 11, "bold": True, "color": "ink", "align": "CENTER", "valign": "MIDDLE"})
     frame = {"op": "box", "x": 0, "y": 0, "w": w, "h": height, "shape": "ROUND_RECTANGLE", "fill": "background", "line": {"color": "rule", "weight": 1},
              "role": "card"}

@@ -317,3 +317,22 @@ def test_persona_card_labels_start_on_the_left_edge_of_their_bars_and_chips():
     chip = _of(ops, "box", "device")[0]
     assert all(lb["x"] + INSET_X == pytest.approx(track["x"]) for lb in _of(ops, "text", "gauge_label"))
     assert _of(ops, "text", "devices_label")[0]["x"] + INSET_X == pytest.approx(chip["x"])
+
+
+def test_persona_card_tag_sits_inside_the_rounded_corner_of_the_card():
+    import math
+    entry = next(e for e in components.catalogue() if e["name"] == "persona_card")
+    for w in (420, 600, 700):
+        ops, h = _render("persona_card", entry["example"]["props"], w=w)
+        (card,) = _of(ops, "box", "card")
+        (tag,) = _of(ops, "box", "tag")
+        big, small = min(card["w"], card["h"]) / 6, min(tag["w"], tag["h"]) / 6  # Slides: radius = 1/6 of the smaller side
+        # centre of the tag's bottom-right corner arc, seen from the centre of the card's
+        dx = (card["x"] + card["w"] - big) - (tag["x"] + tag["w"] - small)
+        dy = (card["y"] + card["h"] - big) - (tag["y"] + tag["h"] - small)
+        gap = min(card["x"] + card["w"] - tag["x"] - tag["w"], card["y"] + card["h"] - tag["y"] - tag["h"])
+        if dx < 0 and dy < 0:  # the tag's corner is in the card's rounded corner: its arc must stay inside the curve
+            gap = min(gap, big - (math.hypot(dx, dy) + small))
+        assert gap >= 6, (w, gap)
+        lists = _of(ops, "text", "list")
+        assert all(tag["y"] >= t["y"] + t["h"] for t in lists)

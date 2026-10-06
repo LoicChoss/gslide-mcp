@@ -80,7 +80,9 @@ def test_persona_card_sections_and_initials_without_photo():
     devices = _of(ops, "box", "device")
     assert [d["fill"] for d in devices] == ["cyan", "surface"] and devices[0]["text"] == "Mobile"
     (tag,) = _of(ops, "box", "tag")
-    assert len(_of(ops, "text", "list")) == 2 and tag["y"] + tag["h"] == h - 12 and tag["x"] + tag["w"] == 520 - 12 and tag["shape"] == "ROUND_RECTANGLE"
+    # set in the card's corner, as far from its right edge as from its bottom (clear of the curve: test_components11)
+    assert len(_of(ops, "text", "list")) == 2 and tag["shape"] == "ROUND_RECTANGLE"
+    assert h - tag["y"] - tag["h"] == pytest.approx(520 - tag["x"] - tag["w"]) and 520 - tag["x"] - tag["w"] >= 12
     ops, _ = _render("persona_card", {"name": "Léa", "photo": "screen-demo"}, w=400)
     assert _of(ops, "image", "photo")[0]["asset"] == "screen-demo"
 

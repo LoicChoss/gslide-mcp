@@ -290,6 +290,17 @@ def round_corner_inset(w: float, h: float, glyph: tuple[float, float] = (INSET_X
         t += 0.5
 
 
+def corner_box_offset(card_w: float, card_h: float, box_w: float, box_h: float, margin: float = 8.0) -> float:
+    """Distance from the card's edges of a ROUND_RECTANGLE box set in a ROUND_RECTANGLE card's corner (a tag).
+
+    Both radii are 1/6 of their smaller side: 12 pt from the edges of a
+    315 pt card put a tag's corner on the card's 52 pt curve. The box's own
+    rounded corner keeps ``margin`` from the card's curve, and from its edges.
+    """
+    big, small = min(card_w, card_h) / 6, min(box_w, box_h) / 6
+    return max(margin, big - small - (big - margin - small) / math.sqrt(2))
+
+
 def title_dot(x: float, top: float, size: float, d: float | None = None, fill: str = "accent") -> tuple[dict, float]:
     """Accent dot in front of a title whose text box starts at ``top``; returns (op, advance).
 
