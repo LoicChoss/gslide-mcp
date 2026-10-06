@@ -12,7 +12,9 @@ import math
 
 from ..themes import Theme
 from . import Component, Prop, register
-from .builtin import BOLD_WRAP, INSETS, _donut, _fmt, _nice_max, _text_height, fit_text_size
+from .builtin import BOLD_WRAP, INSET_X, INSETS, _donut, _fmt, _nice_max, _text_height, fit_text_size, word_fit_size
+
+_DARK_FILLS = {"surface_dark", "surface_dark_2", "ink", "text"}
 
 
 def _fmt_fr(v: float) -> str:
@@ -180,43 +182,181 @@ register(Component(
 ))
 
 
+_HUB_FG = {"accent": "on_accent", "accent_alt": "ink", "surface": "ink", "background": "ink"}
+
+
+def _on(fill: str) -> str:
+    """Text colour on a fill: light on the dark roles, the theme's pairing otherwise."""
+    return "on_dark" if fill in _DARK_FILLS else _HUB_FG.get(fill, "ink")
+
+
 def _hub_spoke(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
-    height = h or 260
-    sats = list(p["sats"])
+    from .people import _logo_op
+
+    sats = [s if isinstance(s, dict) else {"label": str(s)} for s in p["sats"]]
     n = max(1, len(sats))
     hub_w, hub_h = float(p["hub_w"]), float(p["hub_h"])
+    if p["hub_shape"] == "disc":
+        hub_w = hub_h
     d = float(p["sat_d"])
-    cx, cy = w / 2, height / 2
-    rx = max(hub_w / 2 + d / 2 + 6, w / 2 - d / 2 - 4)
-    ry = max(hub_h / 2 + d / 2 + 6, height / 2 - d / 2 - 4)
-    rx, ry = min(rx, w / 2 - d / 2 - 4), min(ry, height / 2 - d / 2 - 4)
-    centers = []
-    for i in range(n):
-        a = math.radians(-90 + 360 * i / n)
-        centers.append((cx + rx * math.cos(a), cy + ry * math.sin(a)))
-    lines = [{"op": "line", "x1": cx, "y1": cy, "x2": sx, "y2": sy, "color": "ink", "weight": 1.75} for sx, sy in centers]
-    circles = []
+    dark = bool(p["dark"])
+    if len(sats) == 1:
+        # one satellite: a dependency in line, the block on the left, the satellite on the right
+        height = h or max(hub_h, d) + 8
+        cy = height / 2
+        hub_x, hub_y = 0.0, cy - hub_h / 2
+        centers = [(w - d / 2, cy)]
+    else:
+        height = h or 260
+        cx, cy = w / 2, height / 2
+        rx = max(hub_w / 2 + d / 2 + 6, w / 2 - d / 2 - 4)
+        ry = max(hub_h / 2 + d / 2 + 6, height / 2 - d / 2 - 4)
+        rx, ry = min(rx, w / 2 - d / 2 - 4), min(ry, height / 2 - d / 2 - 4)
+        centers = []
+        for i in range(n):
+            a = math.radians(-90 + 360 * i / n)
+            centers.append((cx + rx * math.cos(a), cy + ry * math.sin(a)))
+        hub_x, hub_y = cx - hub_w / 2, cy - hub_h / 2
+    hcx, hcy = hub_x + hub_w / 2, hub_y + hub_h / 2
+    link_color = p["link_color"] or ("muted" if dark else "ink")
+    lines = []
+    for sx, sy in centers:
+        line = {"op": "line", "x1": hcx, "y1": hcy, "x2": sx, "y2": sy, "color": link_color, "weight": float(p["link_weight"]), "role": "link"}
+        if p["link_dash"]:
+            line["dash"] = "DASH"
+        lines.append(line)
+    circles: list[dict] = []
     for sat, (sx, sy) in zip(sats, centers):
-        circles.append({"op": "box", "x": sx - d / 2, "y": sy - d / 2, "w": d, "h": d, "shape": "ELLIPSE", "fill": "background",
-                        "line": {"color": "accent" if sat.get("hl") else "ink", "weight": 2.5},
-                        "text": str(sat.get("label", "")), "style": "caption", "size": 10, "bold": True, "color": "ink",
-                        "align": "CENTER", "valign": "MIDDLE"})
-    hub = {"op": "box", "x": cx - hub_w / 2, "y": cy - hub_h / 2, "w": hub_w, "h": hub_h, "fill": "accent", "role": "hub",
-           "text": str(p["center"]), "style": "card_title", "size": 12, "color": "on_accent", "align": "CENTER", "valign": "MIDDLE"}
-    return lines + circles + [hub], height
+        logo = _logo_op(sat, sx - d * 0.28, sy - d * 0.28, d * 0.56, d * 0.56, p["logo_tint"])
+        if sat.get("hl"):
+            outline = {"color": "accent", "weight": 2.5}
+        elif dark:
+            outline = None  # white discs on the dark ground
+        elif logo:
+            outline = {"color": "rule", "weight": 1.5}
+        else:
+            outline = {"color": "ink", "weight": 2.5}
+        disc = {"op": "box", "x": sx - d / 2, "y": sy - d / 2, "w": d, "h": d, "shape": "ELLIPSE", "fill": "background",
+                "line": outline, "role": "sat"}
+        if logo:
+            circles += [disc, {**logo, "role": "logo"}]
+        else:
+            circles.append({**disc, "text": str(sat.get("label", "")), "style": "caption", "size": 10, "bold": True, "color": "ink",
+                            "align": "CENTER", "valign": "MIDDLE"})
+    fill = p["hub_fill"] or "accent"
+    fg = _on(fill)
+    hub_ops: list[dict] = [{"op": "box", "x": hub_x, "y": hub_y, "w": hub_w, "h": hub_h, "fill": fill, "role": "hub",
+                            "shape": "ELLIPSE" if p["hub_shape"] == "disc" else "ROUND_RECTANGLE"}]
+    text = {"text": str(p["center"]), "style": "card_title", "size": 12, "bold": True, "color": fg, "align": "CENTER", "valign": "MIDDLE"}
+    if p["hub_logo"]:
+        # picto on top (tinted like the text), the name under it
+        ls = hub_h * 0.34
+        top = hub_y + hub_h * 0.16
+        hub_ops.append({"op": "image", "x": hcx - ls / 2, "y": top, "w": ls, "h": ls, "asset": str(p["hub_logo"]),
+                        "contain": True, "tint": fg, "role": "hub_logo"})
+        hub_ops.append({"op": "text", "x": hub_x, "y": top + ls, "w": hub_w, "h": hub_y + hub_h * 0.94 - top - ls,
+                        **text, "size": 11, "role": "hub_text"})
+    elif p["hub_shape"] == "disc":
+        # an ellipse keeps its text in the inscribed rectangle (« Marq / ue »): the name goes in a box over the disc
+        size = word_fit_size(str(p["center"]), hub_w, 12, floor=9)
+        hub_ops.append({"op": "text", "x": hub_x - INSET_X, "y": hub_y, "w": hub_w + 2 * INSET_X, "h": hub_h,
+                        **text, "size": size, "small_ok": size < 11, "role": "hub_text"})
+    else:
+        hub_ops[0].update(text)
+    return lines + circles + hub_ops, height
 
 
 register(Component(
-    name="hub_spoke", description="Schéma archipel : bloc central accent relié à des satellites ronds (contour accent pour les mis en avant).",
+    name="hub_spoke", description="Schéma archipel : bloc central (rectangle arrondi ou disque, logo possible) relié à des satellites ronds, libellés ou logos ; un seul satellite = dépendance en ligne (bloc à gauche, lien pointillé possible) ; version fond sombre.",
     props=[
         Prop("center", "str", "Texte du bloc central.", required=True),
-        Prop("sats", "list", "Satellites : {label, hl?}.", required=True),
+        Prop("sats", "list", "Satellites : {label, hl?, logo? (asset), logo_url?} — un logo remplace le libellé dans un disque blanc.", required=True),
         Prop("hub_w", "number", "Largeur du bloc central.", default=130),
-        Prop("hub_h", "number", "Hauteur du bloc central.", default=72),
+        Prop("hub_h", "number", "Hauteur du bloc central (diamètre en disque).", default=72),
         Prop("sat_d", "number", "Diamètre des satellites.", default=76),
+        Prop("hub_shape", "choice", "Bloc central : box (rectangle arrondi) ou disc.", default="box", choices=["box", "disc"]),
+        Prop("hub_fill", "color", "Fond du bloc central (rôle) ; texte clair sur un fond sombre.", default="accent"),
+        Prop("hub_logo", "image", "Picto ou logo du dossier d'assets au-dessus du texte du bloc (teinté comme le texte)."),
+        Prop("logo_tint", "color", "Teinte des logos d'assets des satellites (pictos blancs) ; vide = couleurs d'origine."),
+        Prop("link_dash", "bool", "Liens en pointillés.", default=False),
+        Prop("link_color", "color", "Couleur des liens (défaut : encre, gris sur fond sombre)."),
+        Prop("link_weight", "number", "Épaisseur des liens.", default=1.75),
+        Prop("dark", "bool", "Sur fond sombre : liens gris, satellites blancs sans contour.", default=False),
     ],
     render=_hub_spoke,
     example={"center": "Site de marque", "sats": [{"label": "SEO"}, {"label": "Google Ads", "hl": True}, {"label": "Social"}, {"label": "Emailing"}, {"label": "Presse"}]},
+    tags=["schémas"],
+))
+
+
+# --- diagram_compare ------------------------------------------------------------------------
+
+def _diagram_compare(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
+    from . import get, render, shift
+
+    panels = list(p["panels"])
+    if not 2 <= len(panels) <= 3:
+        raise ValueError("diagram_compare: 2 or 3 panels")
+    n = len(panels)
+    gap, pad, dh = float(p["gap"]), float(p["pad"]), float(p["diagram_h"])
+    pw = (w - (n - 1) * gap) / n
+    inner = pw - 2 * pad
+    drawn: list[tuple[list[dict], float]] = []
+    for i, panel in enumerate(panels):
+        dark = panel.get("ground", "light") == "dark"
+        name = str(panel.get("component") or "")
+        props = dict(panel.get("props") or {})
+        ops: list[dict] = []
+        y = pad
+        if panel.get("eyebrow"):
+            ops.append({"op": "text", "x": pad, "y": y, "w": inner, "h": 14 + INSETS, "text": str(panel["eyebrow"]).upper(),
+                        "style": "card_title", "size": 11, "bold": True, "color": "accent" if dark else "ink", "role": "eyebrow"})
+            y += 14 + INSETS + 6
+        if name:
+            try:
+                spec = get(name)
+                if dark and "dark" not in props and any(pr.name == "dark" for pr in spec.props):
+                    props["dark"] = True
+                sub, sh = render(name, props, theme, inner, dh)
+            except ValueError as e:
+                raise ValueError(f"diagram_compare: panel {i + 1} ({name}): {e}") from None
+            ops.extend(shift(sub, pad, y + max(0.0, (dh - sh) / 2)))
+            y += max(dh, sh) + 12
+        if panel.get("text"):
+            th = _text_height(str(panel["text"]), inner, 12)
+            ops.append({"op": "text", "x": pad, "y": y, "w": inner, "h": th, "markdown": str(panel["text"]), "style": "body",
+                        "size": 12, "color": "on_dark" if dark else "text", "role": "panel_text"})
+            y += th
+        drawn.append((ops, y + pad))
+    height = h or max(ph for _, ph in drawn)
+    out: list[dict] = []
+    for i, (panel, (ops, _)) in enumerate(zip(panels, drawn)):
+        x = i * (pw + gap)
+        dark = panel.get("ground", "light") == "dark"
+        out.append({"op": "box", "x": x, "y": 0, "w": pw, "h": height, "shape": "ROUND_RECTANGLE",
+                    "fill": "surface_dark" if dark else "surface", "role": "panel"})
+        out.extend(shift(ops, x, 0))
+    return out, height
+
+
+register(Component(
+    name="diagram_compare", description="Deux ou trois schémas face à face : panneaux arrondis clair / sombre avec titre en capitales, un composant du catalogue dessiné dans chacun (hub_spoke, stack, cycle…) et un texte dessous.",
+    props=[
+        Prop("panels", "list", "Panneaux : {ground: light | dark, eyebrow, component, props, text (markdown)} ; un panneau sombre passe dark: true au composant qui a cette prop.", required=True),
+        Prop("diagram_h", "number", "Hauteur commune des schémas.", default=170),
+        Prop("gap", "number", "Espace entre panneaux.", default=20),
+        Prop("pad", "number", "Marge intérieure des panneaux.", default=20),
+    ],
+    render=_diagram_compare,
+    example={"panels": [
+        {"eyebrow": "Modèle fragile", "component": "hub_spoke",
+         "props": {"center": "Google", "hub_fill": "surface_dark", "hub_w": 110, "hub_h": 64, "sat_d": 70,
+                   "sats": [{"label": "Votre site", "hl": True}], "link_dash": True, "link_color": "accent", "link_weight": 3},
+         "text": "Tout le trafic dépend d'un seul canal.\nUne mise à jour d'algorithme et l'audience décroche."},
+        {"ground": "dark", "eyebrow": "Modèle résilient", "component": "hub_spoke",
+         "props": {"center": "Marque", "hub_shape": "disc", "hub_h": 64, "sat_d": 46,
+                   "sats": [{"label": "ChatGPT"}, {"label": "Claude"}, {"label": "Google"}, {"label": "Reddit"}, {"label": "Pinterest"}]},
+         "text": "Plusieurs points de contact se relaient.\nLa visibilité ne dépend plus d'un seul algorithme."}]},
     tags=["schémas"],
 ))
 
@@ -246,7 +386,6 @@ _STACK_PALETTES = {
     "brand": ("surface_dark", "accent", "surface_dark", "accent_alt"),
 }
 _STACK_FG = {"surface_dark": "on_dark", "surface_dark_2": "on_dark", "accent": "on_accent", "accent_alt": "ink"}
-_DARK_FILLS = {"surface_dark", "surface_dark_2", "ink", "text"}
 
 
 def _stack(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:

@@ -36,7 +36,7 @@ INTENTS: tuple[Intent, ...] = (
            r"\bcompar|\bvs\b|\bversus\b|\bface [àa]\b|\bavant\b.*\bapr[eè]s\b|\bmythes?\b|\bid[ée]es? re[çc]ues?\b"
            r"|\bdiff[ée]rences?\b|\bconcurren|\bbenchmark|\bplut[oô]t que\b|\bn-1\b|\bbonnes? pratiques?\b",
            ("compare_cards", "before_after", "kpi_cards", "mini_charts", "chart_grouped", "stat_pair", "do_dont",
-            "compare_bars", "serp", "table")),
+            "diagram_compare", "compare_bars", "serp", "table")),
     Intent("repartition", "Montrer une répartition",
            r"\br[ée]partition|\bparts? de\b|\bmix\b|\bventil|\bpoids\b|\bpar (levier|canal|source|r[ée]gie|support)s?\b"
            r"|\bdistribution\b|\bsources? de trafic\b|\bcanaux\b",
@@ -59,7 +59,7 @@ INTENTS: tuple[Intent, ...] = (
     Intent("structure", "Montrer une structure, un écosystème",
            r"\barborescence|\bstructure\b|\bsilo\b|\bcocon\b|\b[ée]cosyst[eè]me|\bpyramide|\bniveaux\b"
            r"|\borganigramme|\bsatellites?\b|\bformule\b|\b[ée]quation\b|\barchitecture\b|\bmapping\b",
-           ("tree", "hub_spoke", "stack", "cocon", "formula", "flowchart")),
+           ("tree", "hub_spoke", "stack", "cocon", "diagram_compare", "formula", "flowchart")),
     Intent("messages", "Poser des constats, des recommandations",
            r"\bconstats?\b|\benseignements?\b|\b[àa] retenir\b|\bsynth[eè]se\b|\bconclusion|\brecommandations?\b"
            r"|\brecos?\b|\banalyse\b|\bmessages?\b|\bpoints? (cl[ée]s?|de vigilance|d'attention)\b|\balertes?\b"
