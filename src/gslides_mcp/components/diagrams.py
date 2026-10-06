@@ -12,7 +12,7 @@ import math
 
 from ..themes import Theme
 from . import Component, Prop, register
-from .builtin import INSETS, _donut, _fmt, _nice_max, _text_height
+from .builtin import BOLD_WRAP, INSETS, _donut, _fmt, _nice_max, _text_height, fit_text_size
 
 
 def _fmt_fr(v: float) -> str:
@@ -241,8 +241,12 @@ register(Component(
     tags=["graphiques"],
 ))
 
-_STACK_FILLS = ("surface_dark", "surface_dark_2", "surface")
+_STACK_PALETTES = {
+    "navy": ("surface_dark", "surface_dark_2", "surface"),
+    "brand": ("surface_dark", "accent", "surface_dark", "accent_alt"),
+}
 _STACK_FG = {"surface_dark": "on_dark", "surface_dark_2": "on_dark", "accent": "on_accent", "accent_alt": "ink"}
+_DARK_FILLS = {"surface_dark", "surface_dark_2", "ink", "text"}
 
 
 def _stack(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
@@ -250,32 +254,52 @@ def _stack(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
     n = max(1, len(items))
     item_h, gap = float(p["item_h"]), float(p["gap"])
     min_w = w * float(p["min_ratio"])
+    fills = _STACK_PALETTES[p["palette"]]
     ops: list[dict] = []
+    dark_seen = 0
     for i, it in enumerate(items):
         iw = float(it.get("width") or (w - (w - min_w) * i / max(n - 1, 1)))
-        fill = it.get("fill") or _STACK_FILLS[i % len(_STACK_FILLS)]
+        fill = it.get("fill") or fills[i % len(fills)]
         fg = it.get("color") or _STACK_FG.get(fill, "ink")
         y = i * (item_h + gap)
         x = w / 2 - iw / 2
-        ops.append({"op": "box", "x": x, "y": y, "w": iw, "h": item_h, "fill": fill, "role": "layer"})
+        ops.append({"op": "box", "x": x, "y": y, "w": iw, "h": item_h, "shape": "ROUND_RECTANGLE", "fill": fill, "role": "layer"})
+        tx, tw = x, iw
+        if p["numbered"] or it.get("num"):
+            # on dark layers the number takes the accents in turn (mint, then acid), as in the mock-up
+            if fill in _DARK_FILLS:
+                num_col = ("accent", "accent_alt")[dark_seen % 2]
+                dark_seen += 1
+            else:
+                num_col = "ink"
+            ops.append({"op": "text", "x": x + 10, "y": y, "w": 40, "h": item_h, "text": str(it.get("num") or f"{i + 1:02d}"),
+                        "style": "label", "size": 11, "bold": True, "color": num_col, "valign": "MIDDLE", "role": "num"})
+            tx, tw = x + 34, iw - 68  # keep the centred text clear of the number, symmetrically
+        label = str(it.get("label", ""))
         if it.get("sub"):
-            ops.append({"op": "text", "x": x, "y": y + 4, "w": iw, "h": 18 + INSETS, "text": str(it.get("label", "")),
-                        "style": "label", "size": 12, "bold": True, "color": fg, "align": "CENTER"})
-            ops.append({"op": "text", "x": x, "y": y + item_h / 2, "w": iw, "h": item_h / 2 - 2, "text": str(it["sub"]),
-                        "style": "caption", "size": 10.5, "color": fg, "align": "CENTER"})
+            # one line each: a narrow layer shrinks its text instead of wrapping over the sub-line
+            ls = fit_text_size(label, tw / BOLD_WRAP, 12, floor=9.5)
+            ss = fit_text_size(str(it["sub"]), tw, 10.5, floor=9)
+            ops.append({"op": "text", "x": tx, "y": y + 4, "w": tw, "h": 18 + INSETS, "text": label,
+                        "style": "label", "size": ls, "small_ok": ls < 11, "bold": True, "color": fg, "align": "CENTER", "role": "label"})
+            ops.append({"op": "text", "x": tx, "y": y + item_h / 2, "w": tw, "h": item_h / 2 - 2, "text": str(it["sub"]),
+                        "style": "caption", "size": ss, "small_ok": ss < 10, "color": fg, "align": "CENTER", "role": "sub"})
         else:
-            ops.append({"op": "text", "x": x, "y": y, "w": iw, "h": item_h, "text": str(it.get("label", "")),
-                        "style": "label", "bold": True, "color": fg, "align": "CENTER", "valign": "MIDDLE"})
+            ops.append({"op": "text", "x": tx, "y": y, "w": tw, "h": item_h, "text": label,
+                        "style": "label", "bold": True, "color": fg, "align": "CENTER", "valign": "MIDDLE", "role": "label"})
     return ops, n * (item_h + gap) - gap
 
 
 register(Component(
-    name="stack", description="Pile centrée (pyramide, entonnoir simple) : couches de largeur décroissante avec libellé et sous-texte.",
+    name="stack", description="Pile centrée (pyramide, entonnoir simple) : couches arrondies de largeur décroissante avec libellé et sous-texte, numéro « 01 » optionnel à gauche.",
     props=[
-        Prop("items", "list", "Couches, du haut vers le bas : {label, sub?, fill?, color?, width?}.", required=True),
+        Prop("items", "list", "Couches, du haut vers le bas : {label, sub?, num?, fill?, color?, width?}.", required=True),
         Prop("item_h", "number", "Hauteur d'une couche.", default=48),
         Prop("gap", "number", "Espace entre couches.", default=8),
         Prop("min_ratio", "number", "Largeur de la dernière couche (fraction de la largeur).", default=0.45),
+        Prop("numbered", "bool", "Numéro 01, 02… à gauche de chaque couche (menthe puis acide sur fond sombre, encre sinon) ; `num` d'un item le remplace.", default=False),
+        Prop("palette", "choice", "Fonds par défaut : navy (navy, navy 2, gris) ou brand (navy, menthe, navy, acide).", default="navy",
+             choices=list(_STACK_PALETTES)),
     ],
     render=_stack,
     example={"items": [{"label": "Notoriété", "sub": "Haut de funnel"}, {"label": "Considération"}, {"label": "Conversion", "fill": "accent"}]},

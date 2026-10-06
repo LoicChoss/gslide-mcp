@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from ..themes import Theme
 from . import Component, Prop, get, register, shift, validate
-from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height, rendered_row_h, image_row_ops
+from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height, rendered_row_h, image_row_ops, title_dot
 
 DASH = {"color": "divider", "weight": 1, "dash": "DASH"}
 
@@ -331,7 +331,7 @@ def _media_plan(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[
     y += 26
     for lv in levers:
         name = str(lv.get("name", "")).upper()
-        ops.append({"op": "box", "x": 0, "y": y + 4, "w": 10, "h": 10, "shape": "ELLIPSE", "fill": "accent", "role": "dot"})
+        ops.append(title_dot(0, y - 3, 11, d=10)[0])  # centred on the capitals of the name
         ops.append({"op": "text", "x": 16, "y": y - 3, "w": left_w - 16, "h": 14 + INSETS, "text": name, "style": "card_title",
                     "size": 11, "bold": True, "role": "lever"})
         lx = 16 + INSET_X + len(name) * 11 * 0.62 + 8

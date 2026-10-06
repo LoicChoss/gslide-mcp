@@ -8,6 +8,7 @@ text styles only. Each ``render(props, theme, w, h)`` returns
 
 from __future__ import annotations
 
+import math
 import re
 
 from ..themes import Theme
@@ -73,6 +74,20 @@ def fit_text_size(text: str, width: float, size: float, max_lines: int = 1, floo
     while s > floor and _wrapped_lines(text, width, s) > max_lines:
         s = round(s - step, 1)
     return max(floor, s)
+
+
+BOLD_WRAP = 1.15  # bold glyphs run wider than the wrap estimate's average
+
+
+def word_fit_size(text: str, width: float, size: float, floor: float = 11.0, glyph: float = 0.6) -> float:
+    """Largest size ≤ ``size`` (on a 0.5 pt step, down to ``floor``) at which the longest
+    word of ``text`` fits on one line of ``width`` pt: the renderer cuts a word wider than
+    its box (« d'engageme / nt »). ``glyph`` is a bold lowercase glyph, measured at 0.58."""
+    longest = max((len(word) for word in str(text).split()), default=0)
+    if not longest:
+        return float(size)
+    fit = (width - 2 * INSET_X) / (longest * glyph)
+    return max(float(floor), min(float(size), math.floor(fit * 2) / 2))
 
 
 def _fmt(v) -> str:
@@ -234,6 +249,22 @@ _CARD = {
 }
 
 
+CARD_TITLE_SIZE = 15.0
+
+
+def title_dot(x: float, top: float, size: float, d: float | None = None, fill: str = "accent") -> tuple[dict, float]:
+    """Accent dot in front of a title whose text box starts at ``top``; returns (op, advance).
+
+    Measured live (Barlow, top-anchored Google text box): capitals are 0.7 × size
+    tall and centred 7 + 0.6 × size under the box top. The dot is the cap height
+    by default and centred on the capitals; ``advance`` (dot + 0.9 dot) is where
+    the title's text starts, so its box goes at ``x + advance - INSET_X``.
+    """
+    d = float(d if d is not None else 0.7 * size)
+    cy = top + 7 + 0.6 * size
+    return {"op": "box", "x": x, "y": cy - d / 2, "w": d, "h": d, "shape": "ELLIPSE", "fill": fill, "role": "dot"}, 1.9 * d
+
+
 def _card(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     fill, line, head_col, big_col, body_col, num_col = _CARD[p["variant"]]
     inner = w - 2 * PAD
@@ -259,15 +290,19 @@ def _card(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict],
         y += 42
     dot: list[dict] = []
     if p["title"]:
+        title = str(p["title"])
+        # a narrow card shrinks the title until its longest word fits, rather than cut it
+        size = word_fit_size(title, inner - (1.9 * 0.7 * CARD_TITLE_SIZE if p["dot"] else 0), CARD_TITLE_SIZE)
         tx = PAD
         if p["dot"]:
-            # in the text column (after Google's left inset), centred on the caps
-            dot.append({"op": "box", "x": PAD + INSET_X, "y": y + 7.5, "w": 7, "h": 7, "shape": "ELLIPSE", "fill": "accent"})
-            tx = PAD + 11
-        title_h = _text_height(str(p["title"]).upper(), w - tx - PAD, 10.5 * 1.1)  # caps are wider
-        texts.append({"op": "text", "x": tx, "y": y, "w": w - tx - PAD, "h": title_h, "text": str(p["title"]).upper(),
-                      "style": "card_title", "color": head_col})
-        y += title_h + 2
+            # in the text column (after Google's left inset), the cap height, centred on the caps
+            op, advance = title_dot(PAD + INSET_X, y, size)
+            dot.append(op)
+            tx = PAD + advance
+        title_h = _wrapped_lines(title, w - tx - PAD, size * BOLD_WRAP) * size * LEADING + INSETS
+        texts.append({"op": "text", "x": tx, "y": y, "w": w - tx - PAD, "h": title_h, "text": title,
+                      "style": "card_title", "size": size, "color": head_col})
+        y += title_h + 4
     if p["body"]:
         body_h = (h - y - PAD) if h else _text_height(p["body"], inner, 11)
         texts.append({"op": "text", "x": PAD, "y": y, "w": inner, "h": body_h, "markdown": str(p["body"]),
@@ -280,13 +315,13 @@ def _card(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict],
 
 
 register(Component(
-    name="card", description="Carte plate : fond clair/sombre/menthe/acide, contour, ou sans fond (plain), avec picto, libellé caps, gros chiffre, numéro, titre (point accent) et corps markdown.",
+    name="card", description="Carte plate : fond clair/sombre/menthe/acide, contour, ou sans fond (plain), avec picto, libellé caps, gros chiffre, numéro, titre 15 pt (point accent centré sur ses capitales) et corps markdown.",
     props=[
         Prop("variant", "choice", "Habillage de la carte.", default="light", choices=list(_CARD)),
         Prop("label", "str", "Petit libellé en capitales en tête."),
         Prop("big", "str", "Gros chiffre ou valeur."),
         Prop("num", "str", "Numéro en haut à droite (01, 02…)."),
-        Prop("title", "str", "Titre en capitales."),
+        Prop("title", "str", "Titre (15 pt gras, casse telle quelle)."),
         Prop("body", "markdown", "Corps de la carte (markdown : gras, puces)."),
         Prop("dot", "bool", "Point accent devant le titre.", default=False),
         Prop("icon", "image", "Picto dans un disque blanc en tête : nom d'un PNG du dossier d'assets Drive (ex. 'bolt') ou chemin local."),
