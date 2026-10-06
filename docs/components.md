@@ -55,7 +55,7 @@ unprompted, never offered as `less_obvious`.
 |---|---|---|
 | `kpi` | `value*`, `label*`, `delta`, `note`, `dark` | Accent bar, big value, label (+ small muted `note`: « Collecte (GA4) »); `delta` colored by its sign (`+` positive, otherwise negative). |
 | `kpi_grid` | `items*` `[{value, label, delta, note}]`, `cols`, `rows`, `row_gap`, `dark` | `kpi` repeated in columns; `rows` adds bold row labels on the left (« Marque » / « Hors marque »), one KPI row each. |
-| `card` | `variant` (`light` `dark` `mint` `acid` `outline` `plain`), `label`, `big`, `num`, `title`, `body` (markdown), `dot`, `icon`, `icon_color` | The flat card pattern, rounded corners (square for `plain`); natural height follows the content. `icon` names a PNG of the assets folder (`bolt`, `people`…) drawn in a white disc, tinted with `icon_color` (default `ink`). |
+| `card` | `variant` (`light` `dark` `mint` `acid` `outline` `plain`), `label`, `big`, `num`, `title`, `body` (markdown), `dot`, `icon`, `icon_color` | The flat card pattern, rounded corners (square for `plain`); natural height follows the content. The title is bold 15 pt as typed (mint on `dark`), shrunk until its longest word fits a narrow card; `dot` puts a cap-height accent disc centred on its capitals, one diameter before the text (`title_dot`, also used by `media_plan`). `icon` names a PNG of the assets folder (`bolt`, `people`…) drawn in a white disc, tinted with `icon_color` (default `ink`). |
 | `card_grid` | `cards*` (list of `card` props), `cols`, `gap` | Rows of cards with equalised heights — the "three pillars" slide. |
 | `callout` | `type` (`info` `idea` `warn` `alert` `dark`), `title`, `body*` (markdown) | Flat box with an accent bar on the left. |
 | `badge` | `text*`, `fill`, `color`, `mono` | Small uppercase tag; width follows the text. `mono` = lowercase code-like tag in Roboto Mono, rounded (« signal doux »). |
@@ -74,8 +74,10 @@ unprompted, never offered as `less_obvious`.
 | `formula` | `items*` `[{num, title, text}]` (2–5), `result*`, `operator`, `result_w` | Concept equation: numbered boxes joined by an operator, then « = » and the result (navy header). |
 | `persona_card` | `name*`, `age`, `location`, `photo`, `context`, `brands`, `gauges`, `devices`, `expectations`, `brakes`, `tag`, labels | Persona sheet on a white rounded card: identity, context, brand logos, gauges, devices, expectations / brakes, cyan tag. |
 | `persona_sheet` | `name*`, `age`, `segment`, `role`, `origin`, `photo`, `badge` ({text, color}), `context`, `goal`, `expectations` (≤ 3), `brakes` (≤ 3), `side_label`, `side_items` (≤ 5), `tag`, `note`, `header`, labels | A whole persona slide across the content width: its own header (initial disc or photo, name and age in bold capitals with a mint dot, subtitle, status badge), context + goal then expectations and brakes on the left, a mint card of queries or verbatims on the right, cyan tag and source note below. Every block is measured: a text too long grows its card and comes back in `warnings` (by field) instead of shrinking under the floors or overlapping; a forced `height_pt` too small is kept at the needed height, with a warning. No `side_items`: the left column takes the width; `header: false` keeps the layout's title. |
-| `hub_spoke` | `center*`, `sats*` `[{label, hl}]`, `hub_w`, `hub_h`, `sat_d` | Accent hub linked to round satellites laid out on an ellipse (`hl` = accent outline). |
-| `stack` | `items*` `[{label, sub, fill, color, width}]`, `item_h`, `gap`, `min_ratio` | Centred layers of decreasing width (pyramid / simple funnel). |
+| `hub_spoke` | `center*`, `sats*` `[{label, hl, logo, logo_url}]`, `hub_w`, `hub_h`, `sat_d`, `hub_shape` (`box` `disc`), `hub_fill`, `hub_logo`, `logo_tint`, `link_dash`, `link_color`, `link_weight`, `dark` | Rounded hub (or disc) linked to round satellites laid out on an ellipse (`hl` = accent outline). A satellite with a logo shows it in a white disc instead of its label; `hub_logo` puts a picto above the hub's name, tinted like it. One satellite lays the dependency in line (hub left, satellite right). `dark`: grey links, white discs without outline, for a navy ground. |
+| `stack` | `items*` `[{label, sub, num, fill, color, width}]`, `item_h`, `gap`, `min_ratio`, `numbered`, `palette` (`navy` `brand`) | Centred rounded layers of decreasing width (pyramid / simple funnel), label and sub-line kept on one line each. `numbered` writes 01, 02… on the left (mint then acid on dark layers, ink otherwise); `palette: brand` = navy, mint, navy, acid. |
+| `funnel_stages` | `stages*` `[{title, sub, text, note, note_sub, fill, color}]`, `stage_header`, `note_header`, `axis`, `conclusion` `{title, text}`, `top_ratio`, `bottom_ratio`, `note_ratio`, `gap`, `min_h` | Qualitative TOFU / MOFU / BOFU funnel: stages on one straight edge (each a rectangle and two mirrored right triangles — a Slides `TRAPEZOID` keeps a slope of a quarter of its height), bold title, italic sub, bold line; reading column on the right (bold value, grey precision), tracked column headers, rotated axis label with a down arrow, navy conclusion box. |
+| `diagram_compare` | `panels*` `[{ground (light dark), eyebrow, component, props, text}]`, `diagram_h`, `gap`, `pad` | Two or three catalogue components side by side in rounded panels (`surface` / navy), caps eyebrow (ink / mint), a sentence under each, heights equalised. A dark panel passes `dark: true` to a component that has the prop. |
 | `bigstat` | `value*`, `label*`, `sub`, `color` | One 54 pt figure, centred. |
 | `stats` | `items*` `[{value, label, sub}]`, `color` | Row of centred figures, optional caption under each. |
 | `pill` | `text*`, `color`, `outline`, `size`, `count` | Capsule, filled or outlined (uppercase), width follows the text; `count` ≥ 2 appends « ×n ». |
@@ -126,7 +128,8 @@ Charts and diagrams (lot 4):
 | `target` | `rings*` `[{label, value, color}]`, `max`, `thickness`, `gap`, `center`, `legend` | Concentric rings, each filled to its percentage from 12 o'clock (radial bar chart), legend. |
 | `chart_stacked` | `labels*`, `series*` `[{name, values, color}]`, `horizontal`, `max`, `unit`, `show_values`, `legend`, `legend_pos`, `bar_h`, `gap`, `y_axis`, `dividers`, `title`, `panel` | Stacked bars, horizontal (default) or vertical columns with graduated Y axis and period dividers (« ISF | IFI »), totals, legend. |
 | `chart_combo` | `labels*`, `bars*` `{name, values, color}`, `line*` `{name, values, color}`, `unit`, `unit2`, `y_max`, `y2_max`, `y_axis`, `show_values` (`auto`), `markers` (`auto`), `legend`, `legend_pos` (`top`), `dividers`, `title`, `panel` | Bars on the left axis + thin line on the right axis, two graduated axes, legend on top. Values and markers are shown automatically up to 12 points (a daily series stays clean); dense category labels are thinned (first and last always shown). |
-| `tree` | `root*`, `children*` `[{label, items, fill, hl}]`, `node_h`, `gap_y`, `gap_x` | Two-level sitemap / org chart: accent root, children on a bus, bulleted sub-items under each. |
+| `tree` | `root*`, `children*` `[{label, items, fill, hl}]`, `layout` (`bus` `vertical`), `node_h`, `gap_y`, `gap_x` | Two-level sitemap / org chart: accent root, children on a bus, bulleted sub-items under each. `vertical`: root on top (`{label, sub}` on two lines), children stacked in a column, hung on a mint rail (a pilier and its pages). |
+| `fan_out` | `source*` (`==x==` in mint), `branches*`, `target` `{root, children}`, `source_label`, `branches_label`, `target_label`, `source_size`, `branch_h`, `gap` | Query fan-out: the question in a navy block, curved mint connectors from a dot on its edge to outlined query boxes, then an arrow to a vertical `tree` (pilier and pages); tracked column labels. |
 | `flowchart` | `nodes*` `[{id, label, sub, col, row, fill, color, shape, hl, w}]`, `edges` (`[from, to]` or `{from, to, label, dash, color}`), `cols`, `node_w`, `node_h`, `gap_x`, `gap_y` | Nodes on a grid, elbow connectors with arrowheads (forward, vertical, and backward through a lane under the grid), edge labels. |
 
 Bilan média (reporting régies + GA4; reference: the agency's generated PPTX bilans):
@@ -313,12 +316,13 @@ Coordinates in points, relative to the tool's `x_pt`/`y_pt`; colors are
 roles, tokens or `#RRGGBB`; `style` names a theme text style.
 
 ```
-box       x y w h [fill] [line {color, weight}] [shape]  (+ any text key below)
+box       x y w h [fill] [line {color, weight}] [shape] [flip x|y|xy] [rotate]  (+ any text key below)
 text      x y w h  text | markdown | runs=[[{text, bold, italic, color, size, font, highlight}], …]
           [style] [size] [color] [bold] [italic] [align] [valign] [spacing] [highlight]
+          [rotate]  degrees, clockwise, about the centre (-90 reads bottom to top)
           (markdown ==x== → text background in the highlight role)
-line      x1 y1 x2 y2 [color] [weight] [dash] [end_arrow] [start_arrow]
-          (arrow | open | dot | stealth | none)
+line      x1 y1 x2 y2 [color] [weight] [dash] [end_arrow] [start_arrow] [curve]
+          (arrow | open | dot | stealth | none); curve: an S with horizontal tangents
 polyline  points=[[x, y], …] [color] [weight] [dash] [end_arrow]   arrow on the last segment
 arc       cx cy r a0 a1 weight [color]           degrees, 0 = east, clockwise
 ring      cx cy r thickness segments=[{value, color}] [start] [span] [render]   span < 360 = gauge;

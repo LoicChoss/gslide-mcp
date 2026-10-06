@@ -241,3 +241,14 @@ def test_fan_out_curves_from_the_question_to_each_query_then_to_the_cocon():
     alone, _ = _render("fan_out", {"source": "Question", "branches": ["a", "b"]}, w=500)
     assert not _of(alone, "line", "arrow") and not _of(alone, "box", "root") and not _of(alone, "text", "column_label")
     assert max(b["x"] + b["w"] for b in _of(alone, "box", "branch")) == pytest.approx(500)
+
+
+@pytest.mark.parametrize("name", ["card", "card_grid", "stack", "hub_spoke", "tree", "diagram_compare", "funnel_stages", "fan_out"])
+def test_examples_and_variants_render_in_both_themes(name):
+    entry = next(e for e in components.catalogue() if e["name"] == name)
+    assert entry["use"] and entry["variants"]
+    for theme in (PERISCOPE, themes.load("default")):
+        for props in [entry["example"]["props"]] + [v["props"] for v in entry["variants"]]:
+            ops, height = components.render(name, props, theme, 640)
+            draw.ops_to_requests("s", ops, theme, prefix="cmp", resolve_asset=_assets)
+            assert height > 0
