@@ -117,8 +117,8 @@ def _funnel_stages(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
     height = bottom
     if p["conclusion"]:
         c = p["conclusion"] if isinstance(p["conclusion"], dict) else {"title": str(p["conclusion"])}
-        cw, pad = top_w, 18.0
-        cy = bottom + 24
+        cw, pad = top_w, 14.0
+        cy = bottom + 16
         inner = cw - 2 * pad
         title_h = _wrapped_lines(str(c.get("title", "")), inner, 15 * BOLD_WRAP) * 15 * LEADING + INSETS if c.get("title") else 0.0
         text_h = _text_height(str(c["text"]), inner, 11.5) if c.get("text") else 0.0
