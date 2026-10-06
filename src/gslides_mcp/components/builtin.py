@@ -252,16 +252,25 @@ _CARD = {
 CARD_TITLE_SIZE = 15.0
 
 
+def caps_centre(top: float, size: float) -> float:
+    """Height of the centre of the capitals of the first line of a top-anchored text box starting at ``top``.
+
+    Measured live (Barlow, Google's insets): capitals are 0.7 × size tall and
+    centred 7 + 0.6 × size under the box top, from 11 to 24 pt within 0.2 pt.
+    A marker in front of a text (dot, numbered disc) is centred on it.
+    """
+    return top + 7 + 0.6 * size
+
+
 def title_dot(x: float, top: float, size: float, d: float | None = None, fill: str = "accent") -> tuple[dict, float]:
     """Accent dot in front of a title whose text box starts at ``top``; returns (op, advance).
 
-    Measured live (Barlow, top-anchored Google text box): capitals are 0.7 × size
-    tall and centred 7 + 0.6 × size under the box top. The dot is the cap height
-    by default and centred on the capitals; ``advance`` (dot + 0.9 dot) is where
-    the title's text starts, so its box goes at ``x + advance - INSET_X``.
+    The dot is the cap height (0.7 × size) by default and centred on the
+    capitals; ``advance`` (dot + 0.9 dot) is where the title's text starts, so
+    its box goes at ``x + advance - INSET_X``.
     """
     d = float(d if d is not None else 0.7 * size)
-    cy = top + 7 + 0.6 * size
+    cy = caps_centre(top, size)
     return {"op": "box", "x": x, "y": cy - d / 2, "w": d, "h": d, "shape": "ELLIPSE", "fill": fill, "role": "dot"}, 1.9 * d
 
 
@@ -434,18 +443,24 @@ register(Component(
 
 def _steps(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     dark = p["dark"]
+    size = float(theme.text_style("step_text").get("size") or 11)
+    d = 23.0
+    # the disc is centred on the capitals of the item's first line (it sat 4 pt above them)
+    disc_dy = caps_centre(0, size) - d / 2
+    top = max(0.0, -disc_dy)
     ops: list[dict] = []
     y = 0.0
     bottom = 0.0
     for i, item in enumerate(p["items"]):
-        item_h = max(23, _text_height(item, w - 32, 11))
-        bottom = y + 2 + item_h
-        ops.append({"op": "box", "x": 0, "y": y, "w": 23, "h": 23, "shape": "ELLIPSE",
+        text_h = _text_height(item, w - 32, size)
+        ty = y + top
+        ops.append({"op": "box", "x": 0, "y": ty + disc_dy, "w": d, "h": d, "shape": "ELLIPSE",
                     "fill": "step_bg_dark" if dark else "step_bg", "text": str(i + 1), "style": "step_number",
                     "color": "step_number_dark" if dark else None, "align": "CENTER", "valign": "MIDDLE"})
-        ops.append({"op": "text", "x": 32, "y": y + 2, "w": w - 32, "h": item_h, "markdown": str(item),
+        ops.append({"op": "text", "x": 32, "y": ty, "w": w - 32, "h": text_h, "markdown": str(item),
                     "style": "step_text", "color": "on_dark" if dark else None})
-        y += item_h + 10
+        bottom = max(ty + disc_dy + d, ty + text_h)
+        y = bottom + 8
     return ops, h or bottom
 
 

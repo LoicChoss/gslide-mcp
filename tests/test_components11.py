@@ -252,3 +252,22 @@ def test_examples_and_variants_render_in_both_themes(name):
             ops, height = components.render(name, props, theme, 640)
             draw.ops_to_requests("s", ops, theme, prefix="cmp", resolve_asset=_assets)
             assert height > 0
+
+
+# --- steps: the disc on the first line of its text ------------------------------------------
+
+@pytest.mark.parametrize("dark", [False, True])
+def test_steps_disc_is_centred_on_the_capitals_of_the_first_line(dark):
+    items = ["Audit technique", "Plan de **contenus**", "Netlinking : une phrase assez longue pour passer sur deux lignes dans une colonne étroite"]
+    ops, h = _render("steps", {"items": items, "dark": dark}, w=260)
+    discs = [o for o in _of(ops, "box") if o.get("shape") == "ELLIPSE"]
+    texts = _of(ops, "text")
+    texts = [t for t in texts if "markdown" in t]
+    assert len(discs) == len(texts) == 3
+    size = PERISCOPE.text_style("step_text")["size"]
+    for d, t in zip(discs, texts):
+        assert d["y"] + d["h"] / 2 == pytest.approx(_caps_centre({**t, "size": size}))
+    # rows do not overlap and the height covers the last disc and text
+    for (d, t), (d2, t2) in zip(zip(discs, texts), zip(discs[1:], texts[1:])):
+        assert min(d2["y"], t2["y"]) >= max(d["y"] + d["h"], t["y"] + t["h"])
+    assert h >= max(discs[-1]["y"] + discs[-1]["h"], texts[-1]["y"] + texts[-1]["h"]) - 0.01
