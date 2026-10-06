@@ -2,7 +2,7 @@
 
 All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/) (0.x: minor bumps may change tool signatures).
 
-## [Unreleased]
+## [0.9.0] — 2026-10-06
 
 ### Added
 
@@ -24,6 +24,7 @@ All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachang
 
 ### Changed
 
+- **Markers and labels placed from the text's real metrics** (Barlow in a Google text box: capitals centred 7 + 0.6 × size under the box top, baseline at 7 + 0.95 × size; a ROUND_RECTANGLE's corner radius is 1/6 of its smaller side), all verified live: `steps` centres its number disc on the capitals of the item's first line (it sat 4 pt above the text); `persona_sheet` sizes each card's text inset from the card's corner radius (the mint card's first letters were 1.7 pt from its curve); `persona_card` puts its gauge, device and brand labels 6.5 pt above their bars, chips and logos (they sat on the descenders), starts them on the bars' left edge, and sets its cyan tag inside the card's rounded corner.
 - **`card` title and dot**: the dot sat 2.5 pt above the capitals of the title and 4.5 pt from its text. It is now the cap height, centred on the capitals from measured Barlow metrics (cap height 0.7 × size, centre 7 + 0.6 × size under the box top) and one diameter from the text; `media_plan`'s lever dot is centred the same way. The title keeps its case at 15 pt (« Sécuriser » mock-up) instead of 11 pt capitals, shrinking until its longest word fits a narrow card.
 
 - **PowerPoint requests go elsewhere**: Claude picked this server (and the skill) as soon as someone asked for a PowerPoint. The server now sends `instructions` — Google Slides only; a PowerPoint, PPT, `.pptx` or Keynote is made with the usual PowerPoint tooling unless the user explicitly wants it in Google Slides. `create_presentation` and `export_pres` say the same (`export_pres` downloads an existing deck, it does not make a PowerPoint), and the skill's description no longer matches a PowerPoint request.
