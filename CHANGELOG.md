@@ -2,6 +2,12 @@
 
 All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/) (0.x: minor bumps may change tool signatures).
 
+## [Unreleased]
+
+### Changed
+
+- The default template and folder also work on the hosted server: `GSLIDES_MCP_DEFAULT_TEMPLATE` and `GSLIDES_MCP_DEFAULT_FOLDER` in its environment give the whole team one template and one folder (a connector takes nothing but its URL in Claude, so there is no per-person setting there). `get_defaults`, the docs and the skill no longer say local only.
+
 ## [0.9.0] — 2026-10-06
 
 ### Added

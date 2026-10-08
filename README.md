@@ -92,7 +92,7 @@ npx @anthropic-ai/mcpb pack . dist/gslide-mcp-0.9.0.mcpb
 |-------|------|--------------|
 | **Deck** | `create_presentation` | Create a new blank deck, in a given Drive folder (`folder`), the default folder, or My Drive |
 | | `clone_deck` | Copy an existing deck via Drive, into the source deck's folder unless `parent_folder_id` says otherwise (a copy of the default template goes to the default folder) |
-| | `get_defaults` | The default template and folder set in the extension, checked (local server; `null` when unset) |
+| | `get_defaults` | The default template and folder, checked (`null` when unset): the extension's fields locally, the server's environment when hosted |
 | | `move_to_folder` | Move a deck, spreadsheet or any Drive file into another folder (e.g. a chart spreadsheet next to its deck) |
 | | `list_slides` | List slides with index, object ID, and summary |
 | | `inspect_slide` | Inspect all elements on a slide (optionally recursive): geometry, placeholder type, paragraphs with bullets, table cells, image URLs |

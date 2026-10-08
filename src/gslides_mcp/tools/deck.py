@@ -50,8 +50,9 @@ def _describe_default(drv, file_id: str, mime: str, kind: str) -> dict:
 def get_defaults() -> dict:
     """The template a new deck starts from, and the Drive folder it lands in, when the user names none.
 
-    Both are set once in the Claude Desktop extension (*Template par défaut*,
-    *Dossier de rangement par défaut*), local server only. Call it when the
+    Both are set once: in the Claude Desktop extension on a local server
+    (*Template par défaut*, *Dossier de rangement par défaut*), on the server
+    for the whole team when hosted. Call it when the
     user asks for a deck without giving a reference deck: when ``template`` is
     set, say in one line which template and which folder you use, then read
     its layouts as for any template; when it is ``null`` or carries ``error``,

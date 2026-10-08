@@ -1,9 +1,10 @@
 """The template a new deck starts from, and the folder it lands in, when the user names none.
 
-Set once in the Desktop bundle: ``GSLIDES_MCP_DEFAULT_TEMPLATE`` (*Template par
-défaut*) and ``GSLIDES_MCP_DEFAULT_FOLDER`` (*Dossier de rangement par défaut*),
-each an id or a URL. Local server only: the hosted connector takes nothing but
-its URL in Claude, so there is no per-person setting there.
+``GSLIDES_MCP_DEFAULT_TEMPLATE`` (*Template par défaut*) and
+``GSLIDES_MCP_DEFAULT_FOLDER`` (*Dossier de rangement par défaut*), each an id or a
+URL. Locally, the two fields of the Desktop bundle: one person's own. Hosted, the
+server's environment: one template and one folder for the whole team, since the
+connector takes nothing but its URL in Claude.
 """
 
 from __future__ import annotations
