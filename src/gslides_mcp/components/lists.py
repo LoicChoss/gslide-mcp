@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from ..themes import Theme
 from . import Component, Prop, register, shift
-from .builtin import INSETS, LEADING, PAD, _text_height
+from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height
 
 _DARK = {"surface_dark", "surface_dark_2", "ink", "text", "device_frame"}
 
@@ -31,25 +31,41 @@ def _agenda(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict
     size = float(p["size"])
     color = "on_dark" if p["dark"] else "ink"
     text_h = size * LEADING + INSETS
-    ops: list[dict] = []
+    entries = []
     for i, it in enumerate(items):
-        num, title = (it.get("num"), it.get("title", "")) if isinstance(it, dict) else (None, it)
-        num = str(num) if num is not None else f"{i + 1:02d}"
+        num, title, current = (it.get("num"), it.get("title", ""), bool(it.get("current"))) if isinstance(it, dict) else (None, it, False)
+        entries.append((str(num) if num is not None else f"{i + 1:02d}", str(title), current))
+    # the chip grows with the row (16 pt in a 24 pt row); a date or a longer label widens it into a rounded pill
+    chip_h = max(16.0, row - 8)
+    chip_size = 11.0 if chip_h >= 24 else 10.0
+    longest = max((len(n) for n, _, _ in entries), default=2)
+    wide = longest > 3
+    chip_w = max(28.0, longest * chip_size * 0.6 + 2 * INSET_X + 10) if wide else 28.0
+    ops: list[dict] = []
+    for i, (num, title, current) in enumerate(entries):
         y = i * row
-        ops.append({"op": "box", "x": 0, "y": y + (row - 16) / 2, "w": 28, "h": 16, "fill": "chip", "role": "chip",
-                    "text": num, "style": "badge", "size": 10, "color": "on_chip", "align": "CENTER", "valign": "MIDDLE"})
-        ops.append({"op": "text", "x": 38, "y": y + (row - text_h) / 2, "w": w - 38, "h": text_h, "text": str(title),
+        fill = "accent" if current else p["chip_fill"]
+        chip: dict = {"op": "box", "x": 0, "y": y + (row - chip_h) / 2, "w": chip_w, "h": chip_h, "fill": fill, "role": "chip",
+                      "text": num, "style": "badge", "size": chip_size, "color": "on_dark" if fill in _DARK else "on_chip",
+                      "align": "CENTER", "valign": "MIDDLE"}
+        if wide:
+            chip["shape"] = "ROUND_RECTANGLE"
+        ops.append(chip)
+        ops.append({"op": "text", "x": chip_w + 10, "y": y + (row - text_h) / 2, "w": w - chip_w - 10, "h": text_h, "text": title,
                     "style": "label", "size": size, "color": color, "valign": "MIDDLE"})
     return ops, h or row * len(items)
 
 
 register(Component(
-    name="agenda", description="Sommaire : chip numérotée (acide) + titre de section par ligne (dark=True sur fond sombre).",
+    name="agenda", description="Sommaire : chip numérotée (acide) + titre de section par ligne (dark=True sur fond sombre) ; "
+                               "avec des dates en guise de numéros, un calendrier en pastilles arrondies, l'échéance en cours en menthe.",
     props=[
-        Prop("items", "list", "Sections : texte, ou {num, title}.", required=True),
+        Prop("items", "list", "Sections : texte, ou {num, title, current} ; num peut être une date (« 13 · 14 · 15 oct. ») : "
+                              "la pastille s'élargit et s'arrondit ; current la passe en menthe.", required=True),
         Prop("dark", "bool", "Texte clair (fond sombre).", default=False),
         Prop("size", "number", "Taille des titres.", default=12),
-        Prop("row_h", "number", "Hauteur d'une ligne.", default=24),
+        Prop("row_h", "number", "Hauteur d'une ligne ; la pastille fait 8 pt de moins (40 pour un calendrier).", default=24),
+        Prop("chip_fill", "color", "Fond des pastilles (surface : gris, pour un calendrier).", default="chip"),
     ],
     render=_agenda,
     example={"items": ["Contexte & objectifs", "Accompagnement créatif", "Méthodologie", {"num": "A", "title": "Annexes"}]},

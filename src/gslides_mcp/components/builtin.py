@@ -165,8 +165,38 @@ def _kpi(p: dict, theme: Theme, w: float, h: float | None, value_size: float | N
         ops.append(delta)
     if p["delta"] or delta_row:
         height += text_size * 1.2 + INSETS - 2
+    if p.get("tile"):
+        return _kpi_tile(ops, p, w, h, height)
     ops.insert(0, {"op": "box", "x": 0, "y": 0, "w": 5, "h": height, "fill": "accent", "role": "bar"})
     return ops, h or height
+
+
+TILE_X = 8.0       # kpi tile: text boxes this far in, the glyphs 15 pt from the edge, clear of the rounded corner
+TILE_TOP = 10.0    # the value box starts 4 pt above the stack: its capitals sit ~18 pt under the tile top
+TILE_BOTTOM = 6.0
+TILE_GAP = 10.0    # between tiles, across and down
+
+
+def _kpi_tile(ops: list[dict], p: dict, w: float, h: float | None, height: float) -> tuple[list[dict], float]:
+    """The memo-deck KPI tile: the same stack in a rounded surface tile, no accent bar.
+
+    On grey the delta cannot be mint or coral: it is ink and bold, and its
+    sign becomes ▲ / ▼ (« ▲ +3,2 % vs 2024 »); a delta without a sign
+    (« 104 € en 2024 ») is a plain comparison line.
+    """
+    dark = p["dark"]
+    moved = []
+    for op in ops:
+        o = {**op, "x": TILE_X, "w": w - 2 * TILE_X, "y": op["y"] + TILE_TOP}
+        if o.get("role") == "delta":
+            text = str(p["delta"]).strip()
+            arrow = "▲ " if text.startswith("+") else "▼ " if text.startswith(("-", "−")) else ""
+            o.update({"text": text if text.startswith(("▲", "▼")) else arrow + text, "bold": True, "color": "on_dark" if dark else "ink"})
+        moved.append(o)
+    tile_h = h or (height + TILE_TOP + TILE_BOTTOM)
+    tile = {"op": "box", "x": 0, "y": 0, "w": w, "h": tile_h, "shape": "ROUND_RECTANGLE",
+            "fill": "surface_dark_2" if dark else "surface", "role": "tile"}
+    return [tile] + moved, tile_h
 
 
 register(Component(
@@ -177,6 +207,8 @@ register(Component(
         Prop("delta", "str", "Variation signée, ex. '+12 %' ou '-3,4 pts'. Le signe pilote la couleur."),
         Prop("note", "str", "Précision en petit après le libellé, ex. '(GA4)' ou '(régie)'."),
         Prop("dark", "bool", "Texte clair pour fond sombre.", default=False),
+        Prop("tile", "bool", "Tuile grise arrondie sans barre accent ; le delta passe en encre gras avec ▲ / ▼ "
+                             "(« +3,2 % vs 2024 » → « ▲ +3,2 % vs 2024 »), un delta sans signe reste une ligne de comparaison.", default=False),
     ],
     render=_kpi, example={"value": "196 623 €", "label": "Collecte", "note": "(GA4)", "delta": "+108,49 %"}, tags=["chiffres"],
 ))
@@ -191,22 +223,36 @@ def _kpi_grid(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[di
     rows = [str(r) for r in (p["rows"] or [])]
     cols = min(KPI_MAX_COLS, int(p["cols"] or (-(-len(items) // len(rows)) if rows else len(items)) or 1))
     x0 = ROW_LABEL_W if rows else 0.0
-    col_w = (w - x0) / cols
+    tile = bool(p["tile"])
+    # tiles fill the width with one gap between them; bare KPIs keep 12 pt after each column
+    col_w = (w - x0 + TILE_GAP) / cols if tile else (w - x0) / cols
+    kpi_w = col_w - (TILE_GAP if tile else 12)
     specs = [{"value": item.get("value", ""), "label": item.get("label", ""), "note": item.get("note"),
-              "delta": item.get("delta"), "dark": p["dark"]} for item in items]
+              "delta": item.get("delta"), "dark": p["dark"], "tile": tile} for item in items]
     # one geometry for the whole grid: the narrowest value sets the size, the longest label
     # the label height, any delta reserves the delta line — so every row aligns KPI to KPI
-    size = min((_kpi_value_size(str(sp["value"]), col_w - 12) for sp in specs), default=KPI_VALUE_SIZE)
+    size = min((_kpi_value_size(str(sp["value"]), kpi_w) for sp in specs), default=KPI_VALUE_SIZE)
     text_size = 9.0 if rows else 11.0  # with row labels the columns are narrower: smaller label and delta, same big value
     # a label that would take three lines shrinks (down to 9 pt) before it wraps that far
-    text_size = min((fit_text_size(str(sp["label"]) + (" " + str(sp["note"]) if sp.get("note") else ""), col_w - 12 - PAD, text_size,
+    text_size = min((fit_text_size(str(sp["label"]) + (" " + str(sp["note"]) if sp.get("note") else ""), kpi_w - PAD, text_size,
                                    max_lines=2, floor=9.0) for sp in specs), default=text_size)
-    label_h = max((_kpi_label_h(sp, col_w - 12, text_size) for sp in specs), default=18.0)
     delta_row = any(sp["delta"] for sp in specs)
-    rendered = [_kpi(sp, theme, col_w - 12, None, value_size=size, label_h=label_h, delta_row=delta_row, text_size=text_size)
+    own_h = [_kpi_label_h(sp, kpi_w, text_size) for sp in specs]
+    # the labels of the KPIs with a delta set the label line; a KPI without one runs its label
+    # into the free delta line (« > 1/3 / du financement vient de la générosité ») rather than
+    # pushing every delta of the grid one line down
+    label_h = max((lh for sp, lh in zip(specs, own_h) if sp["delta"] or not delta_row), default=18.0)
+    if delta_row:
+        label_h = max(label_h, max(own_h) - (text_size * 1.2 + INSETS - 2))
+    rendered = [_kpi(sp, theme, kpi_w, None, value_size=size, label_h=label_h, delta_row=delta_row, text_size=text_size)
                 for sp in specs]
-    # rows never overlap: the gap grows with the row height (wrapped label + delta)
-    row_gap = max(float(p["row_gap"]), max((sh for _, sh in rendered), default=0.0) + 12)
+    for (sub, _), lh in zip(rendered, own_h):
+        for op in sub:
+            if op.get("role") == "label" and lh > op["h"]:
+                op["h"] = lh
+    tallest = max((sh for _, sh in rendered), default=0.0)
+    # rows never overlap: the gap grows with the row height (wrapped label + delta); tiles sit one gap apart
+    row_gap = tallest + TILE_GAP if tile else max(float(p["row_gap"]), tallest + 12)
     ops: list[dict] = []
     height = 0.0
     for i, (sub, sub_h) in enumerate(rendered):
@@ -214,7 +260,8 @@ def _kpi_grid(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[di
         ops.extend(shift(sub, x0 + (i % cols) * col_w, y))
         height = max(height, y + sub_h)
     for r, label in enumerate(rows):
-        ops.append({"op": "text", "x": 0, "y": r * row_gap + 12, "w": ROW_LABEL_W - 8, "h": 40, "text": label, "style": "label",
+        y, lh = (r * row_gap, tallest) if tile else (r * row_gap + 12, 40)
+        ops.append({"op": "text", "x": 0, "y": y, "w": ROW_LABEL_W - 8, "h": lh, "text": label, "style": "label",
                     "bold": True, "color": "on_dark" if p["dark"] else "ink", "valign": "MIDDLE", "role": "row_label"})
     return ops, h or height
 
@@ -225,8 +272,9 @@ register(Component(
         Prop("items", "list", "Liste de {value, label, delta?, note?}.", required=True),
         Prop("cols", "number", "Nombre de colonnes, 4 au plus (défaut : un par item, ou items / rows) ; au-delà, les KPI passent à la ligne, deux lignes par slide."),
         Prop("rows", "list", "Libellés de ligne en gras à gauche, un par rangée ; cols = indicateurs par rangée."),
-        Prop("row_gap", "number", "Hauteur d'une rangée en pt.", default=90),
+        Prop("row_gap", "number", "Hauteur d'une rangée en pt (ignorée avec tile : les tuiles sont espacées de 10 pt).", default=90),
         Prop("dark", "bool", "Texte clair pour fond sombre.", default=False),
+        Prop("tile", "bool", "KPI en tuiles grises arrondies de même hauteur, sans barre accent, deltas en encre avec ▲ / ▼ (voir kpi).", default=False),
     ],
     render=_kpi_grid,
     example={"items": [{"value": "18 336 040", "label": "Impressions", "delta": "+170,50 %"}, {"value": "101 216", "label": "Clics", "delta": "+109,71 %"},

@@ -1,4 +1,4 @@
-"""Text-block components: bigstat, stats, pill, checklist, chevrons, arrows.
+"""Text-block components: bigstat (bare or in a panel beside a text), stats (row or list), pill, checklist, chevrons, arrows.
 
 Same contract as ``builtin``: ``render(props, theme, w, h) -> (ops, height)``
 at origin, theme roles and named text styles only.
@@ -8,14 +8,66 @@ from __future__ import annotations
 
 from ..themes import Theme
 from . import Component, Prop, register
-from .builtin import INSETS, LEADING, _text_height
+from .builtin import BOLD_WRAP, INSET_X, INSETS, LEADING, _text_height, _wrapped_lines
 
 _DARK_FILLS = {"surface_dark", "surface_dark_2", "ink", "text"}
 
 
 # --- bigstat / stats ---------------------------------------------------------------------
 
+PANEL_FILLS = {"dark": ("surface_dark", "on_dark"), "surface": ("surface", "ink"), "accent": ("accent", "ink")}
+PANEL_MIN_H = 220.0
+PANEL_TEXT = 12.0
+PANEL_PAD = 16.0
+
+
+def _bigstat_panel(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
+    """The figure in a tall panel (navy by default), its source at the foot, and the text column beside it.
+
+    From the Pasteur paid-media deck: « -30 à -40 % / Audience SEO / 09/2026
+    vs N-1 * » centred in a navy panel, « * Source Tendances SEMRUSH » at its
+    foot, a bold lead and paragraphs with a ==highlighted== passage on the right.
+    """
+    fill, fg = PANEL_FILLS[p["panel"]] if p["panel"] else (None, None)
+    text = p["text"]
+    pw = w * float(p["panel_w"]) if text else w
+    tx = pw + 24
+    tw = w - tx
+    text_h = _text_height(str(text), tw, PANEL_TEXT) if text else 0.0
+    panel_h = h or max(text_h, PANEL_MIN_H)
+    inner = pw - 2 * PANEL_PAD
+    value = str(p["value"])
+    # the figure stays on one line: it shrinks to the panel (Barlow bold digits ≈ 0.58 × size)
+    size = max(20.0, min(40.0, (inner - 2 * INSET_X) / max(1, len(value) * 0.58)))
+    value_color = p["color"] or fg or "ink"
+    label_size, sub_size = 15.0, 11.0
+    label_h = _text_height(str(p["label"]), inner, label_size)
+    group = [("value", value, size * 1.2 + INSETS, {"style": "stat_value", "size": round(size, 1), "color": value_color}),
+             ("label", str(p["label"]), label_h, {"style": "label", "size": label_size, "color": fg or "ink"})]
+    if p["sub"]:
+        group.append(("sub", str(p["sub"]), sub_size * 1.2 + INSETS, {"style": "label", "size": sub_size, "color": fg or "muted"}))
+    source_h = 10 * 1.2 + INSETS if p["source"] else 0.0
+    group_h = sum(gh for _, _, gh, _ in group)
+    # the figure group centred in the panel, above the source line
+    y = max(PANEL_PAD, (panel_h - source_h - group_h) / 2)
+    ops: list[dict] = []
+    if fill:
+        ops.append({"op": "box", "x": 0, "y": 0, "w": pw, "h": panel_h, "fill": fill, "role": "panel"})
+    for role, t, gh, style in group:
+        ops.append({"op": "text", "x": PANEL_PAD, "y": y, "w": inner, "h": gh, "text": t, "align": "CENTER", "role": role, **style})
+        y += gh - 4
+    if p["source"]:
+        ops.append({"op": "text", "x": PANEL_PAD, "y": panel_h - PANEL_PAD + 4 - source_h, "w": inner, "h": source_h, "text": str(p["source"]),
+                    "style": "caption", "size": 10, "color": fg or "muted", "align": "CENTER", "role": "source"})
+    if text:
+        ops.append({"op": "text", "x": tx, "y": 0, "w": tw, "h": panel_h, "markdown": str(text), "style": "body", "size": PANEL_TEXT,
+                    "highlight": p["highlight"], "valign": "MIDDLE", "role": "text"})
+    return ops, panel_h
+
+
 def _bigstat(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
+    if p["panel"] or p["text"]:
+        return _bigstat_panel(p, theme, w, h)
     color = p["color"]
     ops: list[dict] = [
         {"op": "text", "x": 0, "y": 0, "w": w, "h": 64 + INSETS, "text": str(p["value"]), "style": "stat_value",
@@ -32,19 +84,77 @@ def _bigstat(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
 
 
 register(Component(
-    name="bigstat", description="Un chiffre spectaculaire centré (54 pt) avec son libellé et un sous-texte optionnel.",
+    name="bigstat", description="Un chiffre spectaculaire centré (54 pt) avec son libellé et un sous-texte optionnel ; "
+                                "ou dans un panneau haut (navy, gris, menthe) avec sa source en pied et une colonne de texte à côté.",
     props=[
         Prop("value", "str", "Le chiffre, formaté.", required=True),
         Prop("label", "str", "Libellé sous le chiffre.", required=True),
-        Prop("sub", "str", "Précision en petit."),
-        Prop("color", "color", "Couleur du chiffre et du libellé (rôle du thème)."),
+        Prop("sub", "str", "Précision en petit (période, périmètre)."),
+        Prop("color", "color", "Couleur du chiffre et du libellé (rôle du thème) ; avec panel, celle du chiffre seul."),
+        Prop("panel", "choice", "Panneau derrière le chiffre : dark (navy, texte blanc), surface (gris), accent (menthe).",
+             choices=list(PANEL_FILLS)),
+        Prop("source", "str", "Source en petit au pied du panneau (« * Source Tendances SEMRUSH »)."),
+        Prop("text", "markdown", "Colonne de texte à droite du chiffre : **chapô gras**, paragraphes séparés par une ligne vide, ==passage surligné==."),
+        Prop("panel_w", "number", "Part de la largeur prise par le chiffre quand il y a du texte.", default=0.36),
+        Prop("highlight", "color", "Couleur du ==surlignage== du texte.", default="highlight_alt"),
     ],
     render=_bigstat, example={"value": "+42 %", "label": "de trafic organique", "sub": "vs 2025, à périmètre constant"},
     tags=["chiffres"],
 ))
 
 
+LIST_LABEL, LIST_SUB = 13.0, 11.0  # stats list: bold title and grey line next to each figure
+LIST_GAP = 6.0
+
+
+def _stat_items(items) -> list[tuple[str, str, str | None]]:
+    return [(str(it.get("value", "")), str(it.get("label", "")), it.get("sub")) if isinstance(it, dict) else (str(it[0]), str(it[1]), None)
+            for it in items]
+
+
+def _stats_list(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
+    """Figures in a column on the left, each with a bold title and a grey line beside it.
+
+    The memo-deck rows: grey rounded bands with ``tile`` (notation grid, points
+    of progress), bare lines without (« profil moyen du testateur »). One value
+    size and one row height for the whole list, so the figures line up.
+    """
+    rows = _stat_items(p["items"])
+    tile = bool(p["tile"])
+    pad = 8.0 if tile else 0.0
+    size = 22.0 if tile else 18.0
+    longest = max((len(v) for v, _, _ in rows), default=1)
+    value_w = float(p["value_w"] or min(max(longest * size * 0.6 + 2 * INSET_X + 8, w * 0.12), w * 0.32))
+    # a figure never wraps: it shrinks to its column (Barlow bold digits ≈ 0.58 × size)
+    size = max(12.0, min(size, (value_w - 2 * INSET_X) / (longest * 0.58)))
+    tx = pad + value_w + 6
+    tw = w - tx - pad
+    heights = [(_wrapped_lines(label, tw, LIST_LABEL * BOLD_WRAP) * LIST_LABEL
+                + (_wrapped_lines(str(sub), tw, LIST_SUB) * LIST_SUB if sub else 0)) * LEADING + INSETS for _, label, sub in rows]
+    row_h = max(max(heights, default=0.0), size * 1.2 + INSETS) + (12 if tile else 0)
+    if h and rows:
+        row_h = max(row_h, (h - (len(rows) - 1) * LIST_GAP) / len(rows))
+    color = p["color"] or "ink"  # mint figures vanish on a grey band
+    # a title over a grey line is bold; a bare label (« 70 % de femmes ») stays roman next to its bold figure
+    titled = any(sub for _, _, sub in rows)
+    ops: list[dict] = []
+    for i, (value, label, sub) in enumerate(rows):
+        y = i * (row_h + LIST_GAP)
+        if tile:
+            ops.append({"op": "box", "x": 0, "y": y, "w": w, "h": row_h, "shape": "ROUND_RECTANGLE", "fill": "surface", "role": "row"})
+        ops.append({"op": "text", "x": pad, "y": y, "w": value_w, "h": row_h, "text": value, "style": "stat_value", "size": round(size, 1),
+                    "color": color, "valign": "MIDDLE", "role": "value"})
+        paras = [[{"text": label, "bold": titled, "size": LIST_LABEL, "color": "ink"}]]
+        if sub:
+            paras.append([{"text": str(sub), "size": LIST_SUB, "color": "muted"}])
+        ops.append({"op": "text", "x": tx, "y": y, "w": tw, "h": row_h, "runs": paras, "style": "label", "valign": "MIDDLE", "role": "text"})
+    height = len(rows) * row_h + max(0, len(rows) - 1) * LIST_GAP
+    return ops, h or height
+
+
 def _stats(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
+    if p["layout"] == "list":
+        return _stats_list(p, theme, w, h)
     items = list(p["items"])
     n = max(1, len(items))
     per_w = w / n
@@ -66,10 +176,15 @@ def _stats(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
 
 
 register(Component(
-    name="stats", description="Rangée de chiffres clés centrés (valeur 38 pt + libellé), répartis sur la largeur.",
+    name="stats", description="Rangée de chiffres clés centrés (valeur 38 pt + libellé), répartis sur la largeur ; ou, en liste, "
+                              "un chiffre à gauche de chaque ligne avec titre gras et précision grise, en bandeaux gris arrondis ou nus.",
     props=[
         Prop("items", "list", "Chiffres : {value, label, sub?} (ou paires [value, label]).", required=True),
-        Prop("color", "color", "Couleur des chiffres (rôle du thème)."),
+        Prop("color", "color", "Couleur des chiffres (rôle du thème ; encre par défaut en liste)."),
+        Prop("layout", "choice", "row : chiffres côte à côte ; list : une ligne par chiffre, label en titre gras, sub en précision grise.",
+             default="row", choices=["row", "list"]),
+        Prop("tile", "bool", "En liste : chaque ligne dans un bandeau gris arrondi.", default=False),
+        Prop("value_w", "number", "En liste : largeur de la colonne des chiffres (défaut : selon le plus long)."),
     ],
     render=_stats, example={"items": [{"value": "12", "label": "pays couverts"}, {"value": "3", "label": "langues"}, {"value": "98 %", "label": "de satisfaction"}]},
     tags=["chiffres"],

@@ -29,7 +29,7 @@ class Intent:
 
 INTENTS: tuple[Intent, ...] = (
     Intent("chiffres", "Faire retenir des chiffres",
-           r"\bchiffres?\b|\bkpis?\b|\bindicateurs?\b|\bm[ée]triques?\b|\bstatistiques?\b|\btaux\b|\bscores?\b"
+           r"\bchiffres?\b|\bchiffr[ée]e?s?\b|\bkpis?\b|\bindicateurs?\b|\bm[ée]triques?\b|\bstatistiques?\b|\btaux\b|\bscores?\b"
            r"|\bpourcentages?\b|[\d,.]+\s?%",
            ("kpi_grid", "kpi", "stats", "bigstat", "kpi_cards", "stat_pair", "stat_box", "gauge", "target")),
     Intent("comparer", "Comparer des options, des acteurs, un avant et un après",
@@ -84,7 +84,7 @@ INTENTS: tuple[Intent, ...] = (
            r"|\birritants?\b",
            ("board_columns", "chip_cloud", "ranked_bars", "quadrant_matrix", "score_matrix", "session_plan")),
     Intent("habillage", "Habiller une slide : titres, sommaire, tags, boutons",
-           r"\bsommaire\b|\bagenda\b|\bordre du jour\b|\bintercalaire\b|\bchapitre\b|\bsection\b|\bcta\b"
+           r"\bsommaire\b|\bagenda\b|\bordre du jour\b|\bintercalaire\b|\bchapitre\b|\bsection\b|\bouverture de (lot|partie)\b|\bcta\b"
            r"|\bboutons?\b|\bhashtags?\b|\btags?\b|\bnuancier\b|\bpalette\b|\bcontrastes?\b|\baccessibilit[ée]\b",
            ("section_header", "agenda", "eyebrow", "hashtags", "badge", "pill", "button", "button_row",
             "content_card", "content_cards", "palette", "source_note")),
@@ -139,6 +139,10 @@ KEYWORDS: list[tuple[str, list[str], str]] = [
     (r"\btofu\b|\bmofu\b|\bbofu\b|\b(haut|milieu|bas) de funnel\b|\b[ée]tages? du funnel\b", ["funnel_stages", "stack"], "les étages d'un funnel (TOFU / MOFU / BOFU)"),
     (r"\bfan-?out\b|\bsous-requ[êe]tes?\b|\bquestion pos[ée]e [àa] l'ia\b", ["fan_out"], "une question éclatée en sous-requêtes"),
     (r"\bfragile\b|\br[ée]silien|\bd[ée]pendance\b|\bun seul canal\b", ["diagram_compare", "hub_spoke"], "la dépendance à un canal face à un écosystème"),
+    (r"\bdates? cl[ée]s\b|\b[ée]ch[ée]ancier\b|\b[ée]ch[ée]ances\b", ["agenda", "timeline"], "dates clés en liste"),
+    (r"\bouverture de (lot|partie|section)\b|\bintercalaire\b|\blot \d+\b", ["section_header"], "ouverture de lot ou de partie"),
+    (r"\bchiffres? comment[ée]s?\b|\bgrille de notation\b|\bprofil moyen\b|\bpoints? de progression\b", ["stats"], "chiffres commentés en liste"),
+    (r"\bconstat chiffr[ée]\b|\bchiffre\b.*\b(expliqu|comment|analys)", ["bigstat"], "un constat chiffré expliqué"),
 ]
 
 _KEYS = {i.key for i in INTENTS}

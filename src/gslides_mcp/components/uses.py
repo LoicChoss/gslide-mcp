@@ -8,11 +8,11 @@ Written for the model reading ``list_components``.
 
 USES: dict[str, str] = {
     # --- chiffres ---------------------------------------------------------------------
-    "kpi": "Un indicateur avec sa variation (sessions +8 %) dans un bilan ou un reporting ; plusieurs côte à côte → kpi_grid ; sans variation et plus spectaculaire → bigstat ou stats ; version encadrée avec picto et point de série → kpi_cards.",
-    "kpi_grid": "Rangée(s) de 2 à 6 indicateurs avec deltas (audience actuelle, résultats de campagne) ; pour des chiffres de fierté sans variation → stats ; pour des cartes bordées avec picto → kpi_cards.",
+    "kpi": "Un indicateur avec sa variation (sessions +8 %) dans un bilan ou un reporting ; plusieurs côte à côte → kpi_grid ; sans variation et plus spectaculaire → bigstat ou stats ; version encadrée avec picto et point de série → kpi_cards ; tile=True pour la tuile grise d'une fiche mémo (▲ / ▼ en encre).",
+    "kpi_grid": "Rangée(s) de 2 à 6 indicateurs avec deltas (audience actuelle, résultats de campagne) ; pour des chiffres de fierté sans variation → stats ; pour des cartes bordées avec picto → kpi_cards ; tile=True met chaque KPI dans une tuile grise de même hauteur (fiche mémo, chiffres clés à côté d'un graphique).",
     "kpi_cards": "Comparer des sources ou canaux chiffrés (ChatGPT / Perplexity / Copilot, Google / Meta) avec valeur et variation dans des cartes bordées, un point de couleur par carte ; sans carte ni picto → kpi_grid.",
-    "bigstat": "Un seul chiffre choc qui porte la slide (+42 % de trafic, 1 site sur 3) avec libellé et précision ; plusieurs chiffres → stats ; avec une variation signée → kpi.",
-    "stats": "Rangée de 3 à 5 chiffres de fierté ou de contexte (25 ans, 4 M€, 50 clients) sur une slide « qui sommes-nous » ou un chapeau de résultats ; avec deltas → kpi_grid ; un seul → bigstat ; avant → après → stat_pair.",
+    "bigstat": "Un seul chiffre choc qui porte la slide (+42 % de trafic, 1 site sur 3) avec libellé et précision ; plusieurs chiffres → stats ; avec une variation signée → kpi ; panel (navy, gris, menthe) + text pour le chiffre dans un panneau haut avec sa source et le commentaire à côté (constat chiffré expliqué).",
+    "stats": "Rangée de 3 à 5 chiffres de fierté ou de contexte (25 ans, 4 M€, 50 clients) sur une slide « qui sommes-nous » ou un chapeau de résultats ; avec deltas → kpi_grid ; un seul → bigstat ; avant → après → stat_pair ; layout=list pour une liste de chiffres commentés, chacun avec un titre et une précision (grille de notation, points de progression, profil moyen), tile=True en bandeaux gris.",
     "stat_pair": "Montrer un avant → après chiffré (pages indexées 16 913 → 15 588, erreurs 404 divisées par six) ; pour une comparaison de listes ou de structures → before_after ; pour des variations en % → kpi.",
     "big_numbers": "Deux à quatre principes ou règles numérotés « 1 2 3 » avec titre surligné et paragraphe (nos convictions, trois règles d'arborescence) ; pour des étapes ordonnées avec picto et sous-texte → numbered_list ; pour des phases de mission → phase_cards.",
 
@@ -30,7 +30,7 @@ USES: dict[str, str] = {
     "logo_wall": "Mur de références clients ou de partenaires, logos seuls en grille (sur fond sombre avec dark=True) ; pour expliquer chaque outil → logo_grid.",
 
     # --- texte ---------------------------------------------------------------------
-    "agenda": "La slide sommaire : sections numérotées avec chip acide (dark=True sur le layout sombre) ; pour des étapes avec picto et sous-texte → numbered_list ; pour une liste simple → chevrons.",
+    "agenda": "La slide sommaire : sections numérotées avec chip acide (dark=True sur le layout sombre) ; pour des étapes avec picto et sous-texte → numbered_list ; pour une liste simple → chevrons ; des dates en guise de numéros en font un calendrier en pastilles avec `chip_fill: surface`, `row_h: 40` et `current` sur l'échéance ; pour une frise datée → timeline.",
     "numbered_list": "Leviers, priorités, sources, piliers en liste verticale numérotée avec titre + sous-texte (disque picto « #1 » ou chip carrée), cartes et connecteur optionnels ; pour de courtes étapes markdown sans titre → steps ; pour des phases de mission détaillées → phase_cards ; pour 3 principes en colonnes → big_numbers.",
     "steps": "Une courte suite d'étapes ou d'actions en markdown (audit, plan, netlinking) avec pastilles numérotées ; avec titre, sous-texte et picto → numbered_list ; en blocs fléchés horizontaux → process.",
     "checklist": "Ce qui est fait / à faire, livrables cochés, pré-requis, périmètre couvert ou non ; avec `groups`, une checklist de publication ou d'audit en sections numérotées sur deux colonnes ; pour une liste sans notion d'état → chevrons ou arrows ; pour des critères comparés entre solutions → table.",
@@ -103,7 +103,7 @@ USES: dict[str, str] = {
     "eyebrow": "Le sur-titre tracké en capitales (« DIGITALE DEPUIS 1999 », un nom de section) au-dessus d'un titre ; pour un tag coloré → badge.",
     "content_card": "Une carte éditoriale du site : réalisation, engagement, show reel, avec eyebrow, titre, texte, hashtags et CTA, sur fond blanc, cyan, dark ou jaune ; plusieurs → content_cards ; carte de constat ou de chiffre → card.",
     "content_cards": "Trois cartes éditoriales sur trois fonds (blanc / cyan / dark), hauteurs égalisées, CTA alignés en bas ; pour des cartes de constats sans CTA → card_grid.",
-    "section_header": "L'en-tête de section signature (eyebrow, titre avec surlignage jaune, paragraphe, hashtags) en ouverture d'une partie ou d'une slide manifeste ; pour un sommaire → agenda.",
+    "section_header": "L'en-tête de section signature (eyebrow, titre avec surlignage jaune, paragraphe, hashtags) en ouverture d'une partie ou d'une slide manifeste ; kicker + icon + stats pour une ouverture de lot ou de partie (« LOT 1 » géant, picto pixel, trois chiffres clés en pied, sur fond menthe ou jaune) ; pour un sommaire → agenda.",
     "client_ticker": "Le bandeau de références clients en texte seul sur fond sombre ; avec logos → logo_wall.",
     "do_dont": "Ton et vocabulaire : paires ✓ / ✕ de verbatims commentés (on-brand / off-brand) ; idée reçue vs réponse → compare_cards ; listes avant / après → before_after.",
 

@@ -53,8 +53,8 @@ unprompted, never offered as `less_obvious`.
 
 | Name | Props | Notes |
 |---|---|---|
-| `kpi` | `value*`, `label*`, `delta`, `note`, `dark` | Accent bar, big value, label (+ small muted `note`: « Collecte (GA4) »); `delta` colored by its sign (`+` positive, otherwise negative). |
-| `kpi_grid` | `items*` `[{value, label, delta, note}]`, `cols`, `rows`, `row_gap`, `dark` | `kpi` repeated in columns; `rows` adds bold row labels on the left (« Marque » / « Hors marque »), one KPI row each. |
+| `kpi` | `value*`, `label*`, `delta`, `note`, `dark`, `tile` | Accent bar, big value, label (+ small muted `note`: « Collecte (GA4) »); `delta` colored by its sign (`+` positive, otherwise negative). `tile`: the same stack in a grey rounded tile, no bar, the delta in bold ink with ▲ / ▼ from its sign (a delta without sign, « 104 € en 2024 », is a plain comparison line). |
+| `kpi_grid` | `items*` `[{value, label, delta, note}]`, `cols`, `rows`, `row_gap`, `dark`, `tile` | `kpi` repeated in columns; `rows` adds bold row labels on the left (« Marque » / « Hors marque »), one KPI row each. A KPI without delta runs a long label into the free delta line. `tile`: tiles of one height filling the width, 10 pt apart across and down (`row_gap` ignored). |
 | `card` | `variant` (`light` `dark` `mint` `acid` `outline` `plain`), `label`, `big`, `num`, `title`, `body` (markdown), `dot`, `icon`, `icon_color` | The flat card pattern, rounded corners (square for `plain`); natural height follows the content. The title is bold 15 pt as typed (mint on `dark`), shrunk until its longest word fits a narrow card; `dot` puts a cap-height accent disc centred on its capitals, one diameter before the text (`title_dot`, also used by `media_plan`). `icon` names a PNG of the assets folder (`bolt`, `people`…) drawn in a white disc, tinted with `icon_color` (default `ink`). |
 | `card_grid` | `cards*` (list of `card` props), `cols`, `gap` | Rows of cards with equalised heights — the "three pillars" slide. |
 | `callout` | `type` (`info` `idea` `warn` `alert` `dark`), `title`, `body*` (markdown) | Flat box with an accent bar on the left. |
@@ -78,8 +78,8 @@ unprompted, never offered as `less_obvious`.
 | `stack` | `items*` `[{label, sub, num, fill, color, width}]`, `item_h`, `gap`, `min_ratio`, `numbered`, `palette` (`navy` `brand`) | Centred rounded layers of decreasing width (pyramid / simple funnel), label and sub-line kept on one line each. `numbered` writes 01, 02… on the left (mint then acid on dark layers, ink otherwise); `palette: brand` = navy, mint, navy, acid. |
 | `funnel_stages` | `stages*` `[{title, sub, text, note, note_sub, fill, color}]`, `stage_header`, `note_header`, `axis`, `conclusion` `{title, text}`, `top_ratio`, `bottom_ratio`, `note_ratio`, `gap`, `min_h` | Qualitative TOFU / MOFU / BOFU funnel: stages on one straight edge (each a rectangle and two mirrored right triangles — a Slides `TRAPEZOID` keeps a slope of a quarter of its height), bold title, italic sub, bold line; reading column on the right (bold value, grey precision), tracked column headers, rotated axis label with a down arrow, navy conclusion box. |
 | `diagram_compare` | `panels*` `[{ground (light dark), eyebrow, component, props, text}]`, `diagram_h`, `gap`, `pad` | Two or three catalogue components side by side in rounded panels (`surface` / navy), caps eyebrow (ink / mint), a sentence under each, heights equalised. A dark panel passes `dark: true` to a component that has the prop. |
-| `bigstat` | `value*`, `label*`, `sub`, `color` | One 54 pt figure, centred. |
-| `stats` | `items*` `[{value, label, sub}]`, `color` | Row of centred figures, optional caption under each. |
+| `bigstat` | `value*`, `label*`, `sub`, `color`, `panel` (`dark` `surface` `accent`), `source`, `text` (markdown), `panel_w` (0.36), `highlight` | One 54 pt figure, centred. With `panel` and / or `text`: the figure, label and sub centred in a tall panel (navy by default with white text), `source` at its foot, the `text` column beside it (bold lead, paragraphs, `==highlight==`, centred on the panel); the figure shrinks to stay on one line. |
+| `stats` | `items*` `[{value, label, sub}]`, `color`, `layout` (`row` `list`), `tile`, `value_w` | Row of centred figures, optional caption under each. `layout: list`: one line per figure, the figure in a left column (one size for all), the label as a bold title with `sub` as a grey line (roman when no item has a sub), all rows one height; `tile` puts each line in a grey rounded band. |
 | `pill` | `text*`, `color`, `outline`, `size`, `count` | Capsule, filled or outlined (uppercase), width follows the text; `count` ≥ 2 appends « ×n ». |
 | `checklist` | `items` (text or `{text, done}`), `gap`, `color`, `groups` `[{title, items}]`, `cols`, `group_gap` | Square boxes; done items are filled with a tick. `groups` makes numbered sections in columns with compact boxes. |
 | `chevrons` / `arrows` | `items*`, `size`, `spacing` | One text box, one paragraph per item, › (accent) or → prefix. |
@@ -101,7 +101,7 @@ Text and structure (lot 4):
 
 | Name | Props | Notes |
 |---|---|---|
-| `agenda` | `items*` (text or `{num, title}`), `dark`, `size`, `row_h` | Table of contents: acid chip with the number, section title. `dark=True` on a dark layout. |
+| `agenda` | `items*` (text or `{num, title, current}`), `dark`, `size`, `row_h`, `chip_fill` (`chip`) | Table of contents: acid chip with the number, section title. `dark=True` on a dark layout. The chip is 8 pt shorter than the row; a `num` longer than three characters (a date) widens all chips into rounded pills: with `chip_fill: surface`, `row_h: 40` and `current` on one item (mint), a calendar of key dates. |
 | `numbered_list` | `items*` `[{title, sub, icon}]`, `marker` (`circle` `square`), `start`, `card`, `connector`, `gap` | Vertical list: accent disc (picto or number) + `#n` + title/sub, or square chip + uppercase title. Optional light cards and a vertical accent connector. |
 | `big_numbers` | `items*` `[{num, title, text}]`, `cols`, `row_gap`, `highlight` | "1 2 3" columns: 54 pt figure, highlighted bold title (line breaks allowed), centred paragraph. |
 | `phase_cards` | `phases*` `[{num, title, text, icon, note, deliverables}]`, `cols`, `gap`, `num_size` | Methodology cards: big accent number above an accent-outlined card, picto + note row, "LIVRABLES" list with → bullets. Heights equalised per row. |
@@ -159,7 +159,7 @@ Design system (brand, from the Periscope design system v1.0):
 | `eyebrow` | `text*`, `tracking`, `dark`, `color`, `size`, `align` | Tracked uppercase label (thin spaces between letters: Slides has no letter spacing). |
 | `content_card` | `ground`, `eyebrow`, `title*` (markdown), `text` (markdown), `tags`, `cta`, `cta_variant` | Editorial card on one of the grounds: tracked eyebrow, title, text, inline hashtags, pill CTA following the ground. |
 | `content_cards` | `cards*` (content_card props), `cols`, `gap` | Row of content cards, heights equalised, CTAs pinned to the bottom. |
-| `section_header` | `title*` (markdown, `==…==` highlighted), `eyebrow`, `text`, `tags`, `highlight` (`highlight_alt`), `size`, `dark`, `align` | The signature section opener: eyebrow, yellow-highlighted title, paragraph, hashtags. |
+| `section_header` | `title*` (markdown, `==…==` highlighted), `eyebrow`, `text`, `tags`, `highlight` (`highlight_alt`), `size`, `dark`, `align`, `kicker`, `icon`, `icon_size` (112), `icon_color`, `stats` `[{value, label}]` | The signature section opener: eyebrow, yellow-highlighted title, paragraph, hashtags. As a lot opener (on a mint or yellow slide): `kicker` « LOT 1 » at 54 pt over the title, a pixel `icon` top right (ink, accent on dark; the texts keep clear of it), `stats` as big figures with a label along the foot, pinned to the bottom when the height is given. |
 | `client_ticker` | `names*`, `dark`, `separator`, `size`, `pad` | Text-only client band, bold names separated by accent dots on a dark band. |
 | `do_dont` | `pairs*` `[{do, dont, do_note, dont_note}]`, `do_label`, `dont_label`, `gap` | ✓ / ✕ pairs of quoted copy with a note, on `success_bg` / `danger_bg`. |
 
@@ -180,7 +180,7 @@ Workshop and restitution blocks (light grounds: transparent or `surface` panels;
 Pixel icons: `scripts/make_pixel_icons.py` writes the design-system pixel-art set
 (`assets/pixel-icons/px-envelope.png`, `px-heart`, `px-chat`, `px-chart`,
 `px-arrow-out`, `px-play`, `px-leaf`, `px-cursor`, `px-spark`, `px-chevron`,
-`px-submarine`) as white-on-transparent PNGs; once uploaded to the assets folder
+`px-plus`, `px-feather`, `px-submarine`) as white-on-transparent PNGs; once uploaded to the assets folder
 they work like any picto (`card.icon`, `logo_wall`, `draw` image ops, tinted by the
 theme). Keep them decorative and between 48 and 120 pt, as the design system says.
 

@@ -4,6 +4,22 @@ All notable changes to gslide-mcp. Format: [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Added
+
+Variants drawn from the Pasteur « KPI à retenir » memo deck and its paid-media slide, as props of existing components rather than new ones:
+
+- **`kpi` / `kpi_grid` `tile`**: grey rounded tiles of one height, no accent bar, the delta in bold ink with ▲ / ▼ from its sign (« ▲ +3,2 % vs 2024 »); an unsigned delta is a plain comparison line (« 104 € en 2024 »).
+- **`stats` `layout: list`**: one line per figure, the figure in a left column, a bold title and a grey line beside it (grille de notation, points de progression), `tile` for grey bands; bare and roman for a portrait in figures (profil moyen du testateur).
+- **`agenda` as a calendar**: a date as `num` widens the chips into rounded pills, `chip_fill: surface` greys them, `current` lights the current one in mint; the chip follows `row_h`.
+- **`section_header` as a lot opener**: `kicker` (« LOT 1 » at 54 pt), a pixel `icon` top right, `stats` along the foot, pinned to the bottom when the height is given.
+- **`bigstat` `panel` + `text`**: the figure, its period and its `source` in a tall navy (or grey, or mint) panel, the explanation beside it with a `==highlighted==` passage.
+- Pixel icons `px-plus` and `px-feather` (`scripts/make_pixel_icons.py`).
+- `suggest_components` hears « dates clés », « ouverture de lot », « grille de notation », « profil moyen », « constat chiffré ».
+
+### Fixed
+
+- `kpi_grid`: a KPI without delta whose label takes two lines no longer pushes every delta of the grid one line down; its label runs into the free delta line.
+
 ### Changed
 
 - The default template and folder also work on the hosted server: `GSLIDES_MCP_DEFAULT_TEMPLATE` and `GSLIDES_MCP_DEFAULT_FOLDER` in its environment give the whole team one template and one folder (a connector takes nothing but its URL in Claude, so there is no per-person setting there). `get_defaults`, the docs and the skill no longer say local only.

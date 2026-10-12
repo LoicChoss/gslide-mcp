@@ -17,6 +17,9 @@ VARIANTS: dict[str, list[dict]] = {
         {"title": "sans variation, note de source",
          "when": "Indicateur d'état sans comparaison de période (audience du mois, stock de pages) ; la note précise la source.",
          "props": {"value": "4 391", "label": "Sessions", "note": "(GA4)"}},
+        {"title": "tuile grise",
+         "when": "Un chiffre clé de fiche mémo : tuile grise arrondie, ligne de comparaison en encre avec ▲ / ▼.",
+         "props": {"value": "21,5 M€", "label": "Collecte individus", "delta": "+3,2 % vs 2024", "tile": True}},
     ],
     "kpi_grid": [
         {"title": "2 colonnes",
@@ -30,6 +33,13 @@ VARIANTS: dict[str, list[dict]] = {
         {"title": "3 colonnes sans variation",
          "when": "Chiffres de contexte sans période de comparaison (première campagne, audit initial).",
          "props": {"items": [{"value": "12 400", "label": "Visites"}, {"value": "620", "label": "Leads", "note": "formulaire"}, {"value": "5,0 %", "label": "Taux de conversion"}], "cols": 3}},
+        {"title": "tuiles grises 2 × 3 (fiche mémo)",
+         "when": "Les chiffres clés d'un client ou d'un marché à côté d'un graphique : tuiles grises de même hauteur, variation ▲ / ▼ "
+                 "ou ligne de comparaison (« 104 € en 2024 ») en encre ; poser la grille sur la moitié gauche de la slide.",
+         "props": {"tile": True, "cols": 2,
+                   "items": [{"value": "21,5 M€", "label": "Collecte individus", "delta": "+3,2 % vs 2024"}, {"value": "196 K", "label": "Donateurs actifs", "delta": "-2,3 % vs 2024"},
+                             {"value": "110 €", "label": "Contribution moyenne", "delta": "104 € en 2024"}, {"value": "29,4 K", "label": "Donateurs recrutés", "delta": "-15 % vs 2024"},
+                             {"value": "74,9 M€", "label": "Libéralités (legs + AV)", "delta": "+14,9 % vs 2024"}, {"value": "> 1/3", "label": "du financement vient de la générosité"}]}},
     ],
     "kpi_cards": [
         {"title": "2 cartes larges",
@@ -40,6 +50,32 @@ VARIANTS: dict[str, list[dict]] = {
         {"title": "5 chiffres courts, couleur accent",
          "when": "Rangée dense de chiffres de fierté (ans, clients, pays…) sur une slide « qui sommes-nous ».",
          "props": {"items": [["25", "ans"], ["60", "periscopers"], ["4 M€", "de CA"], ["120", "clients"], ["98 %", "de satisfaction"]], "color": "accent_dark"}},
+        {"title": "liste en bandeaux gris",
+         "when": "Des chiffres qu'il faut commenter un par un (grille de notation, points de progression) : le chiffre à gauche, "
+                 "un titre gras et une précision grise à droite, une ligne par chiffre.",
+         "props": {"layout": "list", "tile": True,
+                   "items": [{"value": "2 %", "label": "des 90 K leads en base deviennent donateurs", "sub": "CdC : définir les indicateurs de suivi et la stratégie de conversion"},
+                             {"value": "6 %", "label": "des dons digitaux réaffectés après la prospection S2 2025", "sub": "Matchback systématique : peu d'adhérence entre offline et digital"},
+                             {"value": "756", "label": "PA souscrits en ligne en 2025", "sub": "Échéance moyenne 18,6 €"},
+                             {"value": "480 K€", "label": "de valeur annuelle Google Grants (40 K€ par mois)", "sub": "SEA = levier principal"}]}},
+        {"title": "liste nue (profil moyen)",
+         "when": "Un portrait en chiffres dans une demi-colonne (profil moyen du testateur, du donateur) : chiffre gras et libellé, sans fond.",
+         "props": {"layout": "list",
+                   "items": [["70 %", "de femmes"], ["87,5 ans", "âge au décès"], ["79,5 ans", "âge à la rédaction du testament"],
+                             ["61 %", "ne sont pas donateurs"], ["11,3 ans", "de fidélité moyenne des donateurs"]]}},
+    ],
+    "bigstat": [
+        {"title": "panneau navy et colonne de texte",
+         "when": "Un constat chiffré qu'il faut expliquer : le chiffre, sa période et sa source dans un panneau haut, "
+                 "le chapô gras et les paragraphes à côté, le passage clé ==surligné==.",
+         "props": {"value": "-30 à -40 %", "label": "Audience SEO", "sub": "09/2026 vs N-1 *", "panel": "dark", "source": "* Source Tendances SEMRUSH",
+                   "text": "**Moins de clics, c'est moins d'occurrences de la marque, moins de données first party, moins de gens dans nos bassins de remarketing.**\n\n"
+                           "Cette perte de trafic est aussi une perte de matière première pour tout le paid media qui suit.\n\n"
+                           "Une partie de la baisse de septembre s'explique par des pathologies moins recherchées, mais aussi ==par des recherches "
+                           "absorbées par la réponse de l'IA Overview de Google== (avec un taux de clic plus faible)."}},
+        {"title": "panneau gris seul",
+         "when": "Le chiffre choc dans une colonne étroite, avec sa source au pied, à côté d'un autre composant.",
+         "props": {"value": "1 site sur 3", "label": "perd du trafic SEO", "sub": "septembre 2026", "panel": "surface", "source": "Source : Search Console"}},
     ],
     "big_numbers": [
         {"title": "2 colonnes, surlignage cyan",
@@ -132,6 +168,13 @@ VARIANTS: dict[str, list[dict]] = {
         {"title": "court : sur-titre et titre",
          "when": "Chapeau de section au-dessus d'un composant qui prend la slide.",
          "props": {"eyebrow": "Résultats", "title": "Une collecte ==doublée== en un an.", "size": 20}},
+        {"title": "ouverture de lot : LOT 1, picto pixel, chiffres clés",
+         "when": "Slide intercalaire d'un lot ou d'une partie, sur fond menthe ou jaune (set_background) : « LOT 1 » géant, titre sur deux lignes, "
+                 "picto pixel à droite, trois chiffres en pied ; donner la hauteur de la zone de contenu pour coller les chiffres en bas.",
+         "props": {"kicker": "LOT 1", "title": "Collecte Grand Public\n& Taxe d'apprentissage", "size": 24, "icon": "px-heart",
+                   "stats": [{"value": "15,7 M€", "label": "collectés en 2025 par le Grand Public (+1,6 %)"},
+                             {"value": "189 K", "label": "donateurs actifs, en baisse de 2,5 %"},
+                             {"value": "≥ 3 %/an", "label": "de croissance visée sur 5 ans"}]}},
     ],
     "button": [
         {"title": "contour sur blanc",
@@ -158,6 +201,17 @@ VARIANTS: dict[str, list[dict]] = {
         {"title": "numérotation reprise à 4",
          "when": "Suite d'une liste commencée sur la slide précédente.",
          "props": {"items": [{"title": "Mesurer", "sub": "Tableau de bord mensuel"}, {"title": "Ajuster", "sub": "Revue trimestrielle"}], "start": 4, "card": True}},
+    ],
+    "agenda": [
+        {"title": "calendrier en pastilles",
+         "when": "Les dates clés d'un appel d'offres ou d'un projet en liste : la date dans une pastille grise arrondie, "
+                 "l'échéance en cours en menthe (current), l'étape à droite ; pour une frise horizontale → timeline.",
+         "props": {"chip_fill": "surface", "row_h": 40,
+                   "items": [{"num": "13 · 14 · 15 oct.", "title": "Soutenances (2 h)", "current": True},
+                             {"num": "16 · 17 nov.", "title": "Secondes soutenances (facultatif)"},
+                             {"num": "27 nov.", "title": "Choix du candidat retenu"},
+                             {"num": "2 janv. 2027", "title": "Démarrage du contrat"},
+                             {"num": "→ 28 févr. 2027", "title": "Phase de transition"}]}},
     ],
 
     # --- graphiques ---------------------------------------------------------------------

@@ -1,7 +1,8 @@
 """Brand components from the Periscope design system (v1.0, 2026): buttons that
 follow their ground, content cards on three grounds, plain hashtags, the
-section header with its yellow highlight, the client ticker, tracked
-eyebrows and the voice do / don't pairs.
+section header with its yellow highlight (or as a lot opener: giant kicker,
+pixel icon, key figures at the foot), the client ticker, tracked eyebrows and
+the voice do / don't pairs.
 
 Design-system rules carried here: every button is a pill; on white it is
 filled dark or outlined dark, on dark outlined white or cyan, on cyan or
@@ -277,35 +278,80 @@ register(Component(
 
 # --- section_header ----------------------------------------------------------------------------
 
+KICKER_SIZE = 54.0       # « LOT 1 » over the title of a lot opener
+HEADER_STAT_SIZE = 36.0  # the figures along the foot of a lot opener
+HEADER_STAT_GAP = 16.0
+
+
+def _header_stats(items: list, w: float, color: str, align: str) -> tuple[list[dict], float]:
+    """Big figures side by side with a short label under each, the foot of a lot opener."""
+    rows = [(str(it.get("value", "")), str(it.get("label", ""))) if isinstance(it, dict) else (str(it[0]), str(it[1])) for it in items]
+    n = max(1, len(rows))
+    cw = (w - (n - 1) * HEADER_STAT_GAP) / n
+    longest = max((len(v) for v, _ in rows), default=1)
+    # one size for the row, the longest figure on one line (Barlow bold digits ≈ 0.58 × size)
+    size = max(20.0, min(HEADER_STAT_SIZE, (cw - 2 * INSET_X) / (longest * 0.58)))
+    vh = size * 1.2 + INSETS
+    lh = max((_text_height(label, cw, 12) for _, label in rows), default=0.0)
+    ops: list[dict] = []
+    for i, (value, label) in enumerate(rows):
+        x = i * (cw + HEADER_STAT_GAP)
+        ops.append({"op": "text", "x": x, "y": 0, "w": cw, "h": vh, "text": value, "style": "title", "size": round(size, 1), "color": color,
+                    "align": align, "role": "stat_value"})
+        ops.append({"op": "text", "x": x, "y": vh - 6, "w": cw, "h": lh, "text": label, "style": "body", "size": 12, "color": color,
+                    "align": align, "role": "stat_label"})
+    return ops, vh - 6 + lh
+
+
 def _section_header(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     dark = p["dark"]
     color = "on_dark" if dark else "ink"
     size = float(p["size"])
     ops: list[dict] = []
     y = 0.0
+    hw = w  # the texts keep clear of the icon
+    if p["icon"]:
+        d = float(p["icon_size"])
+        hw = w - d - 24
+        ops.append({"op": "image", "x": w - d, "y": 0, "w": d, "h": d, "asset": str(p["icon"]), "contain": True,
+                    "tint": p["icon_color"] or ("accent" if dark else "ink"), "role": "icon"})
     if p["eyebrow"]:
-        ops.append({"op": "text", "x": 0, "y": y, "w": w, "h": 12 + INSETS, "text": _tracked(p["eyebrow"]), "style": "card_label", "size": 10,
+        ops.append({"op": "text", "x": 0, "y": y, "w": hw, "h": 12 + INSETS, "text": _tracked(p["eyebrow"]), "style": "card_label", "size": 10,
                     "bold": True, "color": "accent" if dark else "ink", "align": p["align"], "role": "eyebrow"})
         y += 22
-    th = _text_height(p["title"], w, size)  # bold Barlow titles run narrower than the estimate
-    ops.append({"op": "text", "x": 0, "y": y, "w": w, "h": th, "markdown": str(p["title"]), "style": "title", "size": size, "color": color,
+    if p["kicker"]:
+        kh = KICKER_SIZE * 1.2 + INSETS
+        ops.append({"op": "text", "x": 0, "y": y, "w": hw, "h": kh, "text": str(p["kicker"]), "style": "title", "size": KICKER_SIZE,
+                    "color": color, "align": p["align"], "role": "kicker"})
+        y += kh - 4
+    th = _text_height(p["title"], hw, size)  # bold Barlow titles run narrower than the estimate
+    ops.append({"op": "text", "x": 0, "y": y, "w": hw, "h": th, "markdown": str(p["title"]), "style": "title", "size": size, "color": color,
                 "highlight": p["highlight"], "align": p["align"], "role": "title"})
     y += th + 4
     if p["text"]:
-        bh = _text_height(p["text"], w, 12)
-        ops.append({"op": "text", "x": 0, "y": y, "w": w, "h": bh, "markdown": str(p["text"]), "style": "body", "size": 12, "color": color,
+        bh = _text_height(p["text"], hw, 12)
+        ops.append({"op": "text", "x": 0, "y": y, "w": hw, "h": bh, "markdown": str(p["text"]), "style": "body", "size": 12, "color": color,
                     "align": p["align"], "role": "body"})
         y += bh + 6
     if p["tags"]:
-        sub, sh = _hashtags({"items": p["tags"], "dark": dark, "color": None, "size": 11, "align": p["align"]}, theme, w, None)
+        sub, sh = _hashtags({"items": p["tags"], "dark": dark, "color": None, "size": 11, "align": p["align"]}, theme, hw, None)
         ops.extend(shift(sub, 0, y))
         y += sh
+    if p["icon"]:
+        y = max(y, float(p["icon_size"]))
+    if p["stats"]:
+        sub, sh = _header_stats(list(p["stats"]), w, color, p["align"])
+        # at the foot of the box when it is given (a lot opener fills the slide), else under the title
+        sy = max(y + 28, (h - sh) if h else 0.0)
+        ops.extend(shift(sub, 0, sy))
+        y = sy + sh
     return ops, h or y
 
 
 register(Component(
     name="section_header",
-    description="En-tête de section signature : eyebrow tracké, titre avec ==surlignage jaune== du mot clé, paragraphe, hashtags inline.",
+    description="En-tête de section signature : eyebrow tracké, titre avec ==surlignage jaune== du mot clé, paragraphe, hashtags inline ; "
+                "en ouverture de lot : « LOT 1 » géant, picto pixel à droite, chiffres clés en pied.",
     props=[
         Prop("title", "markdown", "Titre, avec ==…== sur le passage à surligner.", required=True),
         Prop("eyebrow", "str", "Sur-titre en capitales espacées."),
@@ -315,6 +361,11 @@ register(Component(
         Prop("size", "number", "Taille du titre.", default=22),
         Prop("dark", "bool", "Sur fond sombre.", default=False),
         Prop("align", "choice", "Alignement.", default="START", choices=["START", "CENTER"]),
+        Prop("kicker", "str", "Très grand mot au-dessus du titre (54 pt) : « LOT 1 », « 02 », « PARTIE 3 »."),
+        Prop("icon", "image", "Picto pixel en haut à droite (asset du dossier Drive, ex. 'px-heart'), teinté encre (accent sur fond sombre)."),
+        Prop("icon_size", "number", "Côté du picto en pt (48 à 120 selon la charte).", default=112),
+        Prop("icon_color", "color", "Teinte du picto (défaut : encre, accent sur fond sombre)."),
+        Prop("stats", "list", "Chiffres clés en pied : {value, label} (ou paires), côte à côte ; collés en bas quand la hauteur est donnée."),
     ],
     render=_section_header,
     example={"eyebrow": "Équipe", "title": "60 periscopers pour concevoir des expériences ==éco-conçues==.",
