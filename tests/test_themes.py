@@ -52,12 +52,12 @@ def test_user_theme_dir_overrides_and_extends(tmp_path, monkeypatch):
         "extends": "periscope",
         "colors": {"acme_red": "#AA0000"},
         "roles": {"accent": "acme_red"},
-        "text_styles": {"label": {"size": 12}},
+        "text_styles": {"label": {"size": 14}},
     }), encoding="utf-8")
     t = themes.load("acme")
     assert t.color("accent") == {"red": pytest.approx(0.667, abs=0.01), "green": 0, "blue": 0}
     assert t.color("ink")["blue"] == pytest.approx(0.235, abs=0.01)  # inherited
-    assert t.text_style("label")["size"] == 12
+    assert t.text_style("label")["size"] == 14
     assert t.text_style("label")["color"] == "text"  # merged, not replaced
     assert "acme" in themes.available() and "periscope" in themes.available()
 
@@ -67,13 +67,18 @@ def test_unknown_theme_lists_available():
         themes.load("nope")
 
 
-def test_text_rules_floor_sizes_except_tables():
+def test_text_rules_floor_sizes_body_small_and_tables():
     t = themes.load("periscope")
-    assert t.text_style("body", size=8)["size"] == 11        # body text never under 11 pt
-    assert t.text_style("caption", size=7)["size"] == 10     # labels never under 10 pt
-    assert t.text_style("table_cell", size=9)["size"] == 9   # tables keep their charter size
-    assert t.text_style(None, size=8)["size"] == 11
+    assert t.text_style("body", size=8)["size"] == 13        # body text never under 13 pt
+    assert t.text_style("card_body")["size"] == 13 and t.size("label") == 13
+    assert t.text_style("caption", size=7)["size"] == 10     # captions, legends, badges never under 10 pt
+    assert t.text_style("table_cell")["size"] == 12          # tables start at 12 pt…
+    assert t.text_style("table_cell", size=9)["size"] == 10.5  # …and never go under 10.5 pt
+    assert t.text_style(None, size=8)["size"] == 13
     assert t.text_style("kpi_value")["size"] == 22           # nothing shrinks
+    # small_ok: only chart internals, eyebrows, badges and sources may go under their floor
+    assert t.small_ok("chart_value") and t.small_ok("card_label") and t.small_ok("badge") and t.small_ok("caption", "source")
+    assert not t.small_ok("body") and not t.small_ok("label") and not t.small_ok("caption")
     for name, st in t.text_styles.items():
         floor = t.size_floor(name)
         assert floor is None or st["size"] >= floor, name

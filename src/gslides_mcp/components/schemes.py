@@ -9,12 +9,14 @@ rectangle and two mirrored right triangles, which take any slope.
 
 from __future__ import annotations
 
+import math
 import re
 
 from ..themes import Theme
 from . import Component, Prop, register, render, shift
 from .brand import _tracked
-from .builtin import BOLD_WRAP, INSETS, LEADING, _text_height, _wrapped_lines
+from .builtin import BOLD_WRAP, GLYPH_WRAP, INSET_X, INSETS, LEADING, _text_height, _wrapped_lines
+from .diagrams import _word_fits, warning
 
 _STAGE_FILLS = ("accent_alt", "surface", "accent", "surface_dark", "surface_dark_2")
 _DARK = {"surface_dark", "surface_dark_2", "ink", "text"}
@@ -24,19 +26,43 @@ def _fg(fill: str) -> str:
     return "on_dark" if fill in _DARK else ("on_accent" if fill == "accent" else "ink")
 
 
+HEADER_SIZE = 10.0  # column titles: tracked capitals, at the caption floor
+HEADER_H = HEADER_SIZE * LEADING + INSETS
+
+
 def _header(text: str, x: float, y: float, w: float, align: str = "START", role: str = "column_header") -> dict:
-    return {"op": "text", "x": x, "y": y, "w": w, "h": 12 + INSETS, "text": _tracked(text), "style": "caption", "size": 10,
+    return {"op": "text", "x": x, "y": y, "w": w, "h": HEADER_H, "text": _tracked(text), "style": "caption", "size": HEADER_SIZE,
             "bold": True, "color": "muted", "align": align, "role": role}
+
+
+def _md_h(text: str, width: float, size: float) -> float:
+    """Box height of a short markdown text: a line with ``**bold**`` wraps with the wider bold glyphs."""
+    lines = 0
+    for line in str(text).split("\n"):
+        bold = "**" in line or "__" in line
+        lines += _wrapped_lines(re.sub(r"\*\*|__|==|\*|`", "", line), width, size * (BOLD_WRAP if bold else 1.0))
+    return max(1, lines) * size * LEADING + INSETS
 
 
 # --- funnel_stages ---------------------------------------------------------------------------
 
-_STAGE_RUNS = (("title", 12.5, True, False), ("sub", 10.5, False, True), ("text", 10.5, True, False))
+# a stage: its title at the body size (bold), then the sub-title and the strong line as 10.5 pt small lines
+_STAGE_RUNS = (("title", None, True, False), ("sub", 10.5, False, True), ("text", 10.5, True, False))
 
 
-def _stage_paras(st: dict, color: str) -> list[list[dict]]:
-    return [[{"text": str(st[key]), "size": size, "bold": bold, "italic": italic, "color": color}]
+def _stage_paras(st: dict, color: str, title_size: float) -> list[list[dict]]:
+    return [[{"text": str(st[key]), "size": size or title_size, "bold": bold, "italic": italic, "color": color}]
             for key, size, bold, italic in _STAGE_RUNS if st.get(key)]
+
+
+def _note_paras(st: dict) -> list[list[dict]]:
+    """The reading column: the value (14 pt bold) and its precision (10.5 pt grey)."""
+    note = []
+    if st.get("note"):
+        note.append([{"text": str(st["note"]), "size": 14, "bold": True, "color": "ink"}])
+    if st.get("note_sub"):
+        note.append([{"text": str(st["note_sub"]), "size": 10.5, "bold": False, "color": "muted"}])
+    return note
 
 
 def _paras_h(paras: list[list[dict]], width: float) -> float:
@@ -72,17 +98,21 @@ def _funnel_stages(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
             ops.append(_header(str(p["stage_header"]), 0, 0, w / 2 if notes else w))
         if p["note_header"] and notes:
             ops.append(_header(str(p["note_header"]), w / 2, 0, w / 2, "END"))
-        top = 12 + INSETS + 12
+        top = HEADER_H + 10.5
 
     fills = [s.get("fill") or _STAGE_FILLS[i % len(_STAGE_FILLS)] for i, s in enumerate(stages)]
-    paras = [_stage_paras(s, s.get("color") or _fg(f)) for s, f in zip(stages, fills)]
-    # heights follow the text, measured at each stage's bottom width, which depends on the heights: settle twice
+    title_size = max(12.5, theme.size("label"))
+    paras = [_stage_paras(s, s.get("color") or _fg(f), title_size) for s, f in zip(stages, fills)]
+    notes_h = [_paras_h(_note_paras(s), note_w) if (s.get("note") or s.get("note_sub")) else 0.0 for s in stages]
+    # heights follow the text (and the note beside it), measured at each stage's bottom width,
+    # which depends on the heights: settle twice
     heights = [min_h] * n
     for _ in range(3):
         total = sum(heights) + gap * (n - 1)
         ys = [sum(heights[:i]) + gap * i for i in range(n)]
         width_at = (lambda yy, total=total: top_w - (top_w - bot_w) * yy / total)
-        heights = [max(min_h, _paras_h(pa, _text_w(width_at(y), width_at(y + hh))) + 12) for pa, y, hh in zip(paras, ys, heights)]
+        heights = [max(min_h, _paras_h(pa, _text_w(width_at(y), width_at(y + hh))) + 12, nh + 4)
+                   for pa, y, hh, nh in zip(paras, ys, heights, notes_h)]
     total = sum(heights) + gap * (n - 1)
     k = (top_w - bot_w) / total  # width lost per point of height
     y = top
@@ -98,21 +128,17 @@ def _funnel_stages(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
             tw = _text_w(wt, wb)
             ops.append({"op": "text", "x": cx - tw / 2, "y": y, "w": tw, "h": hh, "runs": pa, "style": "caption", "size": 10.5,
                         "align": "CENTER", "valign": "MIDDLE", "role": "stage_text"})
+            ops += [warning("funnel_stages", "étage", run["text"]) for (run,) in pa if not _word_fits(run["text"], tw, run["size"], run["bold"])]
         if st.get("note") or st.get("note_sub"):
-            note = []
-            if st.get("note"):
-                note.append([{"text": str(st["note"]), "size": 14, "bold": True, "color": "ink"}])
-            if st.get("note_sub"):
-                note.append([{"text": str(st["note_sub"]), "size": 10.5, "bold": False, "color": "muted"}])
-            ops.append({"op": "text", "x": w - note_w, "y": y, "w": note_w, "h": hh, "runs": note, "style": "caption", "size": 10.5,
-                        "align": "END", "valign": "MIDDLE", "role": "note"})
+            ops.append({"op": "text", "x": w - note_w, "y": y, "w": note_w, "h": hh, "runs": _note_paras(st), "style": "caption",
+                        "size": 10.5, "align": "END", "valign": "MIDDLE", "role": "note"})
         y += hh + gap
     bottom = top + total
     if p["axis"]:
         ops.append({"op": "line", "x1": axis_w - 8, "y1": top, "x2": axis_w - 8, "y2": bottom, "color": "divider", "weight": 1,
                     "end_arrow": "open", "role": "axis"})
         ops.append({"op": "text", "x": (axis_w - 16) / 2 - total / 2, "y": top + total / 2 - 10, "w": total, "h": 20,
-                    "text": _tracked(str(p["axis"])), "style": "caption", "size": 9.5, "small_ok": True, "bold": True, "color": "muted",
+                    "text": _tracked(str(p["axis"])), "style": "axis", "size": 9.5, "small_ok": True, "bold": True, "color": "muted",
                     "align": "CENTER", "valign": "MIDDLE", "rotate": -90, "role": "axis_label"})
     height = bottom
     if p["conclusion"]:
@@ -120,8 +146,9 @@ def _funnel_stages(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
         cw, pad = top_w, 14.0
         cy = bottom + 16
         inner = cw - 2 * pad
+        bs = theme.size("body")
         title_h = _wrapped_lines(str(c.get("title", "")), inner, 15 * BOLD_WRAP) * 15 * LEADING + INSETS if c.get("title") else 0.0
-        text_h = _text_height(str(c["text"]), inner, 11.5) if c.get("text") else 0.0
+        text_h = _md_h(str(c["text"]), inner, bs) if c.get("text") else 0.0
         ch = pad + title_h + (4 if title_h and text_h else 0) + text_h + pad
         x = cx - cw / 2
         ops.append({"op": "box", "x": x, "y": cy, "w": cw, "h": ch, "shape": "ROUND_RECTANGLE", "fill": "surface_dark", "role": "conclusion"})
@@ -132,7 +159,7 @@ def _funnel_stages(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
             ty += title_h + 4
         if text_h:
             ops.append({"op": "text", "x": x + pad, "y": ty, "w": inner, "h": text_h, "markdown": str(c["text"]), "style": "body",
-                        "size": 11.5, "color": "on_dark", "align": "CENTER", "role": "conclusion_text"})
+                        "size": bs, "color": "on_dark", "align": "CENTER", "role": "conclusion_text"})
         height = cy + ch
     return ops, h or height
 
@@ -187,9 +214,11 @@ def _fan_out(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
     bx = src_w + conn
     tx = bx + br_w + arrow_w
     labels = [(p["source_label"], 0.0), (p["branches_label"], bx), (p["target_label"] if target else None, tx)]
-    top = 12 + INSETS + 10 if any(t for t, _ in labels) else 0.0
+    top = HEADER_H + 8.5 if any(t for t, _ in labels) else 0.0
+    bs = theme.size("body")
     # branches: one per line, the box grows with a long query
-    bh = [max(float(p["branch_h"]), _text_height(b, br_w, 11)) for b in branches]
+    bh = [max(float(p["branch_h"]), _text_height(b, br_w, bs)) for b in branches]
+    warns: list[dict] = [warning("fan_out", "sous-requête", b) for b in branches if not _word_fits(b, br_w, bs)]
     gap = float(p["gap"])
     stack_h = sum(bh) + gap * (len(bh) - 1)
     tree_ops: list[dict] = []
@@ -197,8 +226,17 @@ def _fan_out(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
     if target:
         tree = {"layout": "vertical", "root": target.get("root", ""), "children": target.get("children") or []}
         tree_ops, tree_h = render("tree", tree, theme, w - tx, None)
-    size = float(p["source_size"])
-    src_text_h = _text_height(re.sub(r"==(.+?)==", r"\1", str(p["source"])), src_w - 36, size * BOLD_WRAP)
+    # the question: 15 pt, down to the body size when a word is wider than its block (never under it)
+    source = str(p["source"])
+    widest = max([len(word) * GLYPH_WRAP * (BOLD_WRAP if k % 2 else 1.0)
+                  for k, part in enumerate(re.split(r"==(.+?)==", source)) for word in part.split()] or [0.0])
+    avail = src_w - 24 - 2 * INSET_X
+    size = max(float(p["source_size"]), bs)
+    if widest and widest * size > avail:
+        size = max(bs, math.floor(avail / widest * 2) / 2)
+        if widest * size > avail + 0.01:
+            warns.append(warning("fan_out", "question", source))
+    src_text_h = _text_height(re.sub(r"==(.+?)==", r"\1", source), src_w - 36, size * BOLD_WRAP)
     src_h = max(src_text_h + 36, stack_h * 0.8)
     body_h = max(stack_h, tree_h, src_h)
     cy = top + body_h / 2
@@ -214,7 +252,7 @@ def _fan_out(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
     for text, hh in zip(branches, bh):
         curves.append({"op": "line", "x1": src_w, "y1": cy, "x2": bx, "y2": y + hh / 2, "curve": True, "color": "accent", "weight": 1.5, "role": "fan"})
         boxes.append({"op": "box", "x": bx, "y": y, "w": br_w, "h": hh, "shape": "ROUND_RECTANGLE", "fill": "background",
-                      "line": {"color": "rule", "weight": 1}, "text": text, "style": "body", "size": 11, "color": "ink", "align": "START", "valign": "MIDDLE",
+                      "line": {"color": "rule", "weight": 1}, "text": text, "style": "body", "size": bs, "color": "ink", "align": "START", "valign": "MIDDLE",
                       "role": "branch"})
         y += hh + gap
     ops.extend(curves + boxes)  # the curves end under the boxes' outlines
@@ -223,7 +261,7 @@ def _fan_out(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
         ops.append({"op": "line", "x1": bx + br_w + 10, "y1": cy, "x2": tx - 10, "y2": cy, "color": "ink", "weight": 1.5,
                     "end_arrow": "arrow", "role": "arrow"})
         ops.extend(shift(tree_ops, tx, cy - tree_h / 2))
-    return ops, h or (top + body_h)
+    return ops + warns, h or (top + body_h)
 
 
 register(Component(

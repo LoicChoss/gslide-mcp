@@ -12,9 +12,91 @@ import math
 
 from ..themes import Theme
 from . import Component, Prop, register
-from .builtin import BOLD_WRAP, INSET_X, INSETS, _donut, _fmt, _nice_max, _text_height, fit_text_size, word_fit_size
+from .builtin import (BOLD_WRAP, GLYPH_WRAP, INSET_X, INSETS, LEADING, _donut, _fmt, _nice_max, _text_height, _wrapped_lines,
+                      caps_centre, fit_text_size, label_top, rendered_row_h, table_text_size)
 
 _DARK_FILLS = {"surface_dark", "surface_dark_2", "ink", "text"}
+
+
+def _lines_h(text: str, width: float, size: float, bold: bool = False) -> float:
+    """Height of ``text``'s lines wrapped in a ``width`` pt box (insets excluded), bold glyphs running wider."""
+    return _wrapped_lines(text, width, size * (BOLD_WRAP if bold else 1.0)) * size * LEADING
+
+
+def _box_h(text: str, width: float, size: float, bold: bool = False) -> float:
+    """Text-box height for ``text`` in ``width`` pt, insets included."""
+    return _lines_h(text, width, size, bold) + INSETS
+
+
+def _word_fits(text: str, width: float, size: float, bold: bool = False) -> bool:
+    """Whether the longest word of ``text`` holds on one line of a ``width`` pt box (the renderer cuts it otherwise)."""
+    longest = max((len(word) for word in str(text).split()), default=0)
+    return longest * GLYPH_WRAP * size * (BOLD_WRAP if bold else 1.0) <= width - 2 * INSET_X + 0.01
+
+
+def _half_up(v: float) -> float:
+    """``v`` rounded up to the half point: a grown box keeps round coordinates."""
+    return math.ceil(v * 2 - 1e-9) / 2
+
+
+def warning(component: str, field: str, text: str) -> dict:
+    """The note to the caller for a text that cannot hold at the charter floor (insert_component returns it in ``warnings``)."""
+    short = str(text) if len(str(text)) <= 40 else str(text)[:39] + "…"
+    return {"op": "warning", "text": f"{component} : {field} « {short} » trop long, raccourcir"}
+
+
+# --- labels in discs ------------------------------------------------------------------
+
+CAPS_BOLD = 1.3      # bold capitals run this much wider than the wrap estimate (persona_sheet)
+DISC_CLEAR = 2.0     # a disc's label keeps this far inside its outline
+DISC_BOLD = 0.58     # a bold lowercase glyph, measured (word_fit_size)
+
+
+def disc_fit(text: str, d: float, size: float, bold: bool = True) -> float | None:
+    """Text width (insets excluded) at which ``text`` at ``size`` holds inside a disc of diameter ``d``; None if it cannot.
+
+    Slides writes an ELLIPSE's own text in its inscribed rectangle (0.707 d, less
+    the 14.4 pt side insets) and breaks a word wider than that: a disc's label
+    goes in an overlay text box instead, as wide as the chord at the top and
+    bottom of its lines, so its corners stay inside the disc.
+    """
+    r = d / 2 - DISC_CLEAR
+    line = size * LEADING
+    longest = max((len(word) for word in str(text).split()), default=0) * size * (DISC_BOLD if bold else 0.5)
+    for n in range(1, 10):
+        half = ((n - 1) * line + size) / 2  # the glyphs: n - 1 line steps plus one line's ascenders and descenders
+        if half >= r:
+            return None
+        chord = 2 * math.sqrt(r * r - half * half)
+        if longest <= chord and _wrapped_lines(text, chord + 2 * INSET_X, size * (BOLD_WRAP if bold else 1.0)) <= n:
+            return chord
+    return None
+
+
+def disc_need(text: str, size: float, bold: bool = True) -> float:
+    """Smallest diameter (whole points) of a disc that holds ``text`` at ``size``."""
+    d = float(math.ceil(2 * DISC_CLEAR + size * LEADING))
+    while disc_fit(text, d, size, bold) is None and d < 600:
+        d += 1.0
+    return d
+
+
+def disc_label(cx: float, cy: float, d: float, text: str, size: float, floor: float | None = None, *, style: str = "caption",
+               bold: bool = True, color: str = "ink", role: str = "label") -> tuple[dict, bool]:
+    """Overlay text op centred on a disc: (op, fits). The size goes from ``size`` down to ``floor`` (default: no shrink)
+    on 0.5 pt steps; a label that does not hold at ``floor`` keeps it, and ``fits`` is False (the caller warns)."""
+    s, low = float(size), float(floor if floor is not None else size)
+    chord = disc_fit(text, d, s, bold)
+    while chord is None and s - 0.5 >= low - 1e-9:
+        s = round(s - 0.5, 1)
+        chord = disc_fit(text, d, s, bold)
+    fits = chord is not None
+    if not fits:
+        s, chord = low, 0.86 * d
+    bw = chord + 2 * INSET_X
+    bh = max(d, _box_h(text, bw, s, bold))
+    return ({"op": "text", "x": cx - bw / 2, "y": cy - bh / 2, "w": bw, "h": bh, "text": str(text), "style": style, "size": s,
+             "bold": bold, "color": color, "align": "CENTER", "valign": "MIDDLE", "role": role}, fits)
 
 
 def _fmt_fr(v: float) -> str:
@@ -33,8 +115,15 @@ def _funnel(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict
     pct = p["pct"]
     show_first = pct in ("first", "both")
     show_prev = pct in ("prev", "both")
-    row_h = (h / n) if h else 34.0
+    ls, cs = theme.size("label"), theme.size("caption")
     label_w = float(p["label_w"] or w * 0.22)
+    # each label (bold, wrapped in its column) with its sub-label under it, centred on the bar: a row holds the tallest
+    blocks = [(_lines_h(str(it.get("label", "")), label_w, ls, True), _lines_h(str(it["sub"]), label_w, cs) if it.get("sub") else 0.0)
+              for it in items]
+    need = max([(lab + sub + 6) if sub else (lab + INSETS + 2) for lab, sub in blocks] or [0.0])
+    row_h = (h / n) if h else max(34.0, _half_up(need))
+    warns = [warning("funnel", "libellé", it.get("label", "")) for it, (lab, sub) in zip(items, blocks)
+             if h and ((lab + sub + 2) if sub else lab + INSETS) > row_h + 0.01]
     longest = max((len(f"{_fmt_fr(float(it.get('value', 0)))}{p['unit'] or ''}") for it in items), default=1)
     value_w = max(float(p["value_w"]), longest * 7.4 + 16)  # 12 pt bold Barlow + insets
     pill_w = 40.0
@@ -46,12 +135,14 @@ def _funnel(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict
     bar_h = min(float(p["bar_h"]), row_h * 0.62)
     unit = p["unit"] or ""
     ops: list[dict] = []
-    for i, (it, v) in enumerate(zip(items, values)):
+    for i, (it, v, (lab, sub)) in enumerate(zip(items, values, blocks)):
         cy = i * row_h + row_h / 2
         if it.get("sub"):
-            ops.append({"op": "text", "x": 0, "y": cy - 20, "w": label_w, "h": 20, "text": str(it.get("label", "")),
-                        "style": "label", "bold": True, "align": "END", "valign": "BOTTOM"})
-            ops.append({"op": "text", "x": 0, "y": cy - 2, "w": label_w, "h": 16, "text": str(it["sub"]),
+            # the label then its sub-label, top-anchored, the pair centred on the bar
+            ly = cy - (lab + sub) / 2 - INSETS / 2
+            ops.append({"op": "text", "x": 0, "y": ly, "w": label_w, "h": lab + INSETS, "text": str(it.get("label", "")),
+                        "style": "label", "bold": True, "align": "END"})
+            ops.append({"op": "text", "x": 0, "y": ly + lab, "w": label_w, "h": sub + INSETS, "text": str(it["sub"]),
                         "style": "caption", "align": "END"})
         else:
             ops.append({"op": "text", "x": 0, "y": cy - row_h / 2, "w": label_w, "h": row_h, "text": str(it.get("label", "")),
@@ -78,18 +169,20 @@ def _funnel(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict
                         "align": "CENTER", "valign": "MIDDLE"})
     height = n * row_h
     if pct != "none" and p["legend"]:
-        ly = height + 4
+        ty = height                           # legend texts' top; each square centred on its capitals
+        sq_y = caps_centre(ty, cs) - 5
         lx = w - 6
-        if show_prev:
-            lx -= 126
-            ops.append({"op": "box", "x": lx, "y": ly + 3, "w": 10, "h": 10, "fill": None, "line": {"color": "ink", "weight": 1.25}})
-            ops.append({"op": "text", "x": lx + 14, "y": ly - 4, "w": 112, "h": 16 + INSETS, "text": "% de l'étape précédente", "style": "caption"})
-        if show_first:
-            lx -= 105
-            ops.append({"op": "box", "x": lx, "y": ly + 3, "w": 10, "h": 10, "fill": "accent"})
-            ops.append({"op": "text", "x": lx + 14, "y": ly - 4, "w": 92, "h": 16 + INSETS, "text": "% de la 1re étape", "style": "caption"})
+        entries = ([("% de la 1re étape", {"fill": "accent"})] if show_first else []) + \
+                  ([("% de l'étape précédente", {"fill": None, "line": {"color": "ink", "weight": 1.25}})] if show_prev else [])
+        for text, marker in reversed(entries):  # laid from the right edge
+            tw = len(text) * GLYPH_WRAP * cs + 2 * INSET_X + 2
+            lx -= tw
+            ops.append({"op": "text", "x": lx, "y": ty, "w": tw, "h": cs * LEADING + INSETS, "text": text, "style": "caption"})
+            lx -= 14
+            ops.append({"op": "box", "x": lx, "y": sq_y, "w": 10, "h": 10, **marker})
+            lx -= 12
         height += 20
-    return ops, height
+    return ops + warns, height
 
 
 register(Component(
@@ -116,22 +209,39 @@ def _timeline(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[di
     phases = list(p["phases"])
     n = max(1, len(phases))
     step = w / max(n - 0.5, 1)
+    ls, bs = theme.size("label"), theme.size("body")
+    widths = [min(step - 8, w - i * step + 4) for i in range(n)]  # the last phase's texts stop at the right edge
+    # the phase titles stay visibly larger than their text (body + 2); in narrow phases they come down together,
+    # to the body size at the least, so that no word is cut
+    title_size = bs + 2
+    for ph, tw in zip(phases, widths):
+        longest = max((len(word) for word in str(ph.get("title", "")).split()), default=0)
+        if longest:
+            title_size = min(title_size, math.floor((tw - 2 * INSET_X) / (longest * GLYPH_WRAP * BOLD_WRAP) * 2) / 2)
+    title_size = max(title_size, theme.size("card_title"))
     ops: list[dict] = [{"op": "line", "x1": 0, "y1": 34, "x2": w, "y2": 34, "color": "ink", "weight": 3}]
     bottom = 74.0
-    for i, ph in enumerate(phases):
+    warns: list[dict] = []
+    sizes = [max(float(ph.get("title_size") or title_size), theme.size("card_title")) for ph in phases]
+    title_hs = [_box_h(str(ph.get("title", "")), tw, ts, True) for ph, tw, ts in zip(phases, widths, sizes)]
+    y = 50 + max(title_hs or [0.0])  # the texts start on one line, under the tallest title
+    for i, (ph, tw, ts, tth) in enumerate(zip(phases, widths, sizes, title_hs)):
         x = i * step
-        ops.append({"op": "text", "x": x - 4, "y": 0, "w": 140, "h": 14 + INSETS, "text": str(ph.get("date", "")),
+        ops.append({"op": "text", "x": x - 4, "y": 0, "w": min(140.0, w - x + 4), "h": ls * LEADING + INSETS, "text": str(ph.get("date", "")),
                     "style": "label", "bold": True})
         ops.append({"op": "box", "x": x, "y": 26, "w": 16, "h": 16, "shape": "ELLIPSE",
                     "fill": ph.get("color") or "accent", "line": {"color": "ink", "weight": 2}})
-        ops.append({"op": "text", "x": x - 4, "y": 50, "w": step - 8, "h": 16 + INSETS, "text": str(ph.get("title", "")),
-                    "style": "card_title", "size": float(ph.get("title_size", 12))})
+        title = str(ph.get("title", ""))
+        ops.append({"op": "text", "x": x - 4, "y": 50, "w": tw, "h": tth, "text": title, "style": "card_title", "size": ts})
+        if not _word_fits(title, tw, ts, True):
+            warns.append(warning("timeline", "titre", title))
+        bottom = max(bottom, 50 + tth)
         if ph.get("text"):
-            th = _text_height(ph["text"], step - 8, 11)
-            ops.append({"op": "text", "x": x - 4, "y": 74, "w": step - 8, "h": th, "markdown": str(ph["text"]),
-                        "style": "body", "size": 11})
-            bottom = max(bottom, 74 + th)
-    return ops, h or bottom
+            th = _text_height(ph["text"], tw, bs)
+            ops.append({"op": "text", "x": x - 4, "y": y, "w": tw, "h": th, "markdown": str(ph["text"]),
+                        "style": "body", "size": bs})
+            bottom = max(bottom, y + th)
+    return ops + warns, h or bottom
 
 
 register(Component(
@@ -146,22 +256,39 @@ register(Component(
 def _process(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     steps = list(p["steps"])
     n = max(1, len(steps))
-    height = h or 100
     arrow_w = float(p["arrow_w"])
     fixed = sum(float(s["w"]) for s in steps if s.get("w"))
     free = max(1, sum(1 for s in steps if not s.get("w")))
     auto_w = max(20.0, (w - (n - 1) * arrow_w - fixed) / free)
-    ops: list[dict] = []
-    x = 0.0
-    for i, st in enumerate(steps):
+    ls, bs = theme.size("label"), theme.size("body")
+    # the label (bold, wrapped), then the sub-text: the blocks grow to the tallest step
+    measured = []
+    for st in steps:
         sw = float(st.get("w") or auto_w)
+        label, sub = str(st.get("label", "")), str(st.get("sub") or "")
+        lab_h = _box_h(label, sw - 12, ls, True)
+        sub_h = _text_height(sub, sw - 12, bs) if sub else 0.0
+        measured.append((sw, lab_h, sub_h))
+    # the sub-texts start on one line, under the tallest label
+    sy = 10 + max([lab_h for _, lab_h, _ in measured] or [0.0]) + 2.5
+    max_sub = max([sub_h for _, _, sub_h in measured] or [0.0])
+    need = sy + max_sub + 8 if max_sub else sy - 2.5 + 8
+    height = h or max(100.0, _half_up(need))
+    ops: list[dict] = []
+    if h and need > h + 0.01:
+        long = max(zip(steps, measured), key=lambda sm: sm[1][1] + sm[1][2])[0]
+        ops.append(warning("process", "étape", long.get("sub") or long.get("label", "")))
+    ops += [warning("process", "étape", st.get("label", "")) for st, (sw, _, _) in zip(steps, measured)
+            if not _word_fits(str(st.get("label", "")), sw - 12, ls, True)]
+    x = 0.0
+    for i, (st, (sw, lab_h, sub_h)) in enumerate(zip(steps, measured)):
         fg = st.get("color") or ("on_dark" if str(st.get("fill", "")).startswith("surface_dark") else "ink")
         ops.append({"op": "box", "x": x, "y": 0, "w": sw, "h": height, "shape": "ROUND_RECTANGLE", "fill": st.get("fill") or "surface", "role": "step"})
-        ops.append({"op": "text", "x": x + 6, "y": 10, "w": sw - 12, "h": 16 + INSETS, "text": str(st.get("label", "")),
+        ops.append({"op": "text", "x": x + 6, "y": 10, "w": sw - 12, "h": lab_h, "text": str(st.get("label", "")),
                     "style": "label", "bold": True, "color": fg, "align": "CENTER"})
         if st.get("sub"):
-            ops.append({"op": "text", "x": x + 6, "y": 38, "w": sw - 12, "h": max(10.0, height - 46), "markdown": str(st["sub"]),
-                        "style": "body", "size": 11, "color": fg, "align": "CENTER"})
+            ops.append({"op": "text", "x": x + 6, "y": sy, "w": sw - 12, "h": max(sub_h, height - sy - 8), "markdown": str(st["sub"]),
+                        "style": "body", "size": bs, "color": fg, "align": "CENTER"})
         x += sw
         if i < n - 1:
             ops.append({"op": "text", "x": x, "y": height / 2 - 16, "w": arrow_w, "h": 32, "text": "→",
@@ -196,10 +323,21 @@ def _hub_spoke(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[d
     sats = [s if isinstance(s, dict) else {"label": str(s)} for s in p["sats"]]
     n = max(1, len(sats))
     hub_w, hub_h = float(p["hub_w"]), float(p["hub_h"])
+    center = str(p["center"])
+    ts = theme.size("card_title")
+    # the hub grows to hold its name at the body size (bold): wider for a long word, taller for more lines
     if p["hub_shape"] == "disc":
+        hub_h = max(hub_h, disc_need(center, ts))
         hub_w = hub_h
+    else:
+        longest = max((len(word) for word in center.split()), default=0)
+        hub_w = max(hub_w, _half_up(longest * GLYPH_WRAP * BOLD_WRAP * ts + 2 * INSET_X + 4))
+        band = _box_h(center, hub_w, ts, True)
+        # with a picto the name has the band under it (44 % of the hub), otherwise the whole hub
+        hub_h = max(hub_h, _half_up(band / 0.44 if p["hub_logo"] else band + 4))
     d = float(p["sat_d"])
     dark = bool(p["dark"])
+    warns: list[dict] = []
     if len(sats) == 1:
         # one satellite: a dependency in line, the block on the left, the satellite on the right
         height = h or max(hub_h, d) + 8
@@ -241,13 +379,17 @@ def _hub_spoke(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[d
         if logo:
             circles += [disc, {**logo, "role": "logo"}]
         else:
-            circles.append({**disc, "text": str(sat.get("label", "")), "style": "caption", "size": 10, "bold": True, "color": "ink",
-                            "align": "CENTER", "valign": "MIDDLE"})
+            # an ellipse keeps its text in the inscribed rectangle (« Emailin / g »): the label goes in a box over the disc
+            label = str(sat.get("label", ""))
+            op, fits = disc_label(sx, sy, d, label, theme.size("caption"), color="ink", role="sat_label")
+            circles += [disc, op]
+            if not fits:
+                warns.append(warning("hub_spoke", "satellite", label))
     fill = p["hub_fill"] or "accent"
     fg = _on(fill)
     hub_ops: list[dict] = [{"op": "box", "x": hub_x, "y": hub_y, "w": hub_w, "h": hub_h, "fill": fill, "role": "hub",
                             "shape": "ELLIPSE" if p["hub_shape"] == "disc" else "ROUND_RECTANGLE"}]
-    text = {"text": str(p["center"]), "style": "card_title", "size": 12, "bold": True, "color": fg, "align": "CENTER", "valign": "MIDDLE"}
+    text = {"text": center, "style": "card_title", "size": ts, "bold": True, "color": fg, "align": "CENTER", "valign": "MIDDLE"}
     if p["hub_logo"]:
         # picto on top (tinted like the text), the name under it
         ls = hub_h * 0.34
@@ -255,15 +397,14 @@ def _hub_spoke(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[d
         hub_ops.append({"op": "image", "x": hcx - ls / 2, "y": top, "w": ls, "h": ls, "asset": str(p["hub_logo"]),
                         "contain": True, "tint": fg, "role": "hub_logo"})
         hub_ops.append({"op": "text", "x": hub_x, "y": top + ls, "w": hub_w, "h": hub_y + hub_h * 0.94 - top - ls,
-                        **text, "size": 11, "role": "hub_text"})
+                        **text, "role": "hub_text"})
     elif p["hub_shape"] == "disc":
         # an ellipse keeps its text in the inscribed rectangle (« Marq / ue »): the name goes in a box over the disc
-        size = word_fit_size(str(p["center"]), hub_w, 12, floor=9)
-        hub_ops.append({"op": "text", "x": hub_x - INSET_X, "y": hub_y, "w": hub_w + 2 * INSET_X, "h": hub_h,
-                        **text, "size": size, "small_ok": size < 11, "role": "hub_text"})
+        op, _ = disc_label(hcx, hcy, hub_w, center, ts, style="card_title", color=fg, role="hub_text")
+        hub_ops.append(op)
     else:
         hub_ops[0].update(text)
-    return lines + circles + hub_ops, height
+    return lines + circles + hub_ops + warns, height
 
 
 register(Component(
@@ -301,6 +442,7 @@ def _diagram_compare(p: dict, theme: Theme, w: float, h: float | None) -> tuple[
     gap, pad, dh = float(p["gap"]), float(p["pad"]), float(p["diagram_h"])
     pw = (w - (n - 1) * gap) / n
     inner = pw - 2 * pad
+    ts, bs = theme.size("card_title"), theme.size("body")
     drawn: list[tuple[list[dict], float]] = []
     for i, panel in enumerate(panels):
         dark = panel.get("ground", "light") == "dark"
@@ -309,9 +451,11 @@ def _diagram_compare(p: dict, theme: Theme, w: float, h: float | None) -> tuple[
         ops: list[dict] = []
         y = pad
         if panel.get("eyebrow"):
-            ops.append({"op": "text", "x": pad, "y": y, "w": inner, "h": 14 + INSETS, "text": str(panel["eyebrow"]).upper(),
-                        "style": "card_title", "size": 11, "bold": True, "color": "accent" if dark else "ink", "role": "eyebrow"})
-            y += 14 + INSETS + 6
+            title = str(panel["eyebrow"]).upper()
+            th = _wrapped_lines(title, inner, ts * CAPS_BOLD) * ts * LEADING + INSETS
+            ops.append({"op": "text", "x": pad, "y": y, "w": inner, "h": th, "text": title,
+                        "style": "card_title", "size": ts, "bold": True, "color": "accent" if dark else "ink", "role": "eyebrow"})
+            y += th + 6
         if name:
             try:
                 spec = get(name)
@@ -323,9 +467,9 @@ def _diagram_compare(p: dict, theme: Theme, w: float, h: float | None) -> tuple[
             ops.extend(shift(sub, pad, y + max(0.0, (dh - sh) / 2)))
             y += max(dh, sh) + 12
         if panel.get("text"):
-            th = _text_height(str(panel["text"]), inner, 12)
+            th = _text_height(str(panel["text"]), inner, bs)
             ops.append({"op": "text", "x": pad, "y": y, "w": inner, "h": th, "markdown": str(panel["text"]), "style": "body",
-                        "size": 12, "color": "on_dark" if dark else "text", "role": "panel_text"})
+                        "size": bs, "color": "on_dark" if dark else "text", "role": "panel_text"})
             y += th
         drawn.append((ops, y + pad))
     height = h or max(ph for _, ph in drawn)
@@ -354,7 +498,7 @@ register(Component(
                    "sats": [{"label": "Votre site", "hl": True}], "link_dash": True, "link_color": "accent", "link_weight": 3},
          "text": "Tout le trafic dépend d'un seul canal.\nUne mise à jour d'algorithme et l'audience décroche."},
         {"ground": "dark", "eyebrow": "Modèle résilient", "component": "hub_spoke",
-         "props": {"center": "Marque", "hub_shape": "disc", "hub_h": 64, "sat_d": 46,
+         "props": {"center": "Marque", "hub_shape": "disc", "hub_h": 64, "sat_d": 60,
                    "sats": [{"label": "ChatGPT"}, {"label": "Claude"}, {"label": "Google"}, {"label": "Reddit"}, {"label": "Pinterest"}]},
          "text": "Plusieurs points de contact se relaient.\nLa visibilité ne dépend plus d'un seul algorithme."}]},
     tags=["schémas"],
@@ -394,39 +538,51 @@ def _stack(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
     item_h, gap = float(p["item_h"]), float(p["gap"])
     min_w = w * float(p["min_ratio"])
     fills = _STACK_PALETTES[p["palette"]]
+    ls, cs = theme.size("label"), theme.size("caption")
+    numbered = [bool(p["numbered"] or it.get("num")) for it in items]
+    # measure each layer's text: the label (bold) and its sub-line wrap rather than shrink under the floor,
+    # and every layer takes the tallest one's height, so the pile keeps one rhythm
+    laid = []
+    for i, (it, num) in enumerate(zip(items, numbered)):
+        iw = float(it.get("width") or (w - (w - min_w) * i / max(n - 1, 1)))
+        x = w / 2 - iw / 2
+        tx, tw = (x + 34, iw - 68) if num else (x, iw)  # keep the centred text clear of the number, symmetrically
+        label, sub = str(it.get("label", "")), str(it.get("sub") or "")
+        lab = _lines_h(label, tw, ls, True)
+        ss = fit_text_size(sub, tw, 10.5, floor=cs) if sub else cs  # 10.5 pt, down to the caption floor, then it wraps
+        sub_h = _lines_h(sub, tw, ss) if sub else 0.0
+        need = (4 + lab + 2 + sub_h + INSETS + 2) if sub else (lab + INSETS + 4)
+        laid.append((iw, x, tx, tw, label, sub, lab, ss, sub_h, need))
+    layer_h = max([item_h] + [_half_up(row[-1]) for row in laid])
     ops: list[dict] = []
     dark_seen = 0
-    for i, it in enumerate(items):
-        iw = float(it.get("width") or (w - (w - min_w) * i / max(n - 1, 1)))
+    for i, (it, num, (iw, x, tx, tw, label, sub, lab, ss, sub_h, need)) in enumerate(zip(items, numbered, laid)):
         fill = it.get("fill") or fills[i % len(fills)]
         fg = it.get("color") or _STACK_FG.get(fill, "ink")
-        y = i * (item_h + gap)
-        x = w / 2 - iw / 2
-        ops.append({"op": "box", "x": x, "y": y, "w": iw, "h": item_h, "shape": "ROUND_RECTANGLE", "fill": fill, "role": "layer"})
-        tx, tw = x, iw
-        if p["numbered"] or it.get("num"):
+        y = i * (layer_h + gap)
+        ops.append({"op": "box", "x": x, "y": y, "w": iw, "h": layer_h, "shape": "ROUND_RECTANGLE", "fill": fill, "role": "layer"})
+        if num:
             # on dark layers the number takes the accents in turn (mint, then acid), as in the mock-up
             if fill in _DARK_FILLS:
                 num_col = ("accent", "accent_alt")[dark_seen % 2]
                 dark_seen += 1
             else:
                 num_col = "ink"
-            ops.append({"op": "text", "x": x + 10, "y": y, "w": 40, "h": item_h, "text": str(it.get("num") or f"{i + 1:02d}"),
-                        "style": "label", "size": 11, "bold": True, "color": num_col, "valign": "MIDDLE", "role": "num"})
-            tx, tw = x + 34, iw - 68  # keep the centred text clear of the number, symmetrically
-        label = str(it.get("label", ""))
-        if it.get("sub"):
-            # one line each: a narrow layer shrinks its text instead of wrapping over the sub-line
-            ls = fit_text_size(label, tw / BOLD_WRAP, 12, floor=9.5)
-            ss = fit_text_size(str(it["sub"]), tw, 10.5, floor=9)
-            ops.append({"op": "text", "x": tx, "y": y + 4, "w": tw, "h": 18 + INSETS, "text": label,
-                        "style": "label", "size": ls, "small_ok": ls < 11, "bold": True, "color": fg, "align": "CENTER", "role": "label"})
-            ops.append({"op": "text", "x": tx, "y": y + item_h / 2, "w": tw, "h": item_h / 2 - 2, "text": str(it["sub"]),
-                        "style": "caption", "size": ss, "small_ok": ss < 10, "color": fg, "align": "CENTER", "role": "sub"})
+            ops.append({"op": "text", "x": x + 10, "y": y, "w": 40, "h": layer_h, "text": str(it.get("num") or f"{i + 1:02d}"),
+                        "style": "label", "size": ls, "bold": True, "color": num_col, "valign": "MIDDLE", "role": "num"})
+        if not _word_fits(label, tw, ls, True):
+            ops.append(warning("stack", "couche", label))
+        if sub:
+            # the label then its sub-line, the pair centred in the layer
+            ty = y + (layer_h - need) / 2 + 4
+            ops.append({"op": "text", "x": tx, "y": ty, "w": tw, "h": lab + INSETS, "text": label,
+                        "style": "label", "size": ls, "bold": True, "color": fg, "align": "CENTER", "role": "label"})
+            ops.append({"op": "text", "x": tx, "y": ty + lab + 2, "w": tw, "h": sub_h + INSETS, "text": sub,
+                        "style": "caption", "size": ss, "color": fg, "align": "CENTER", "role": "sub"})
         else:
-            ops.append({"op": "text", "x": tx, "y": y, "w": tw, "h": item_h, "text": label,
+            ops.append({"op": "text", "x": tx, "y": y, "w": tw, "h": layer_h, "text": label,
                         "style": "label", "bold": True, "color": fg, "align": "CENTER", "valign": "MIDDLE", "role": "label"})
-    return ops, n * (item_h + gap) - gap
+    return ops, n * (layer_h + gap) - gap
 
 
 register(Component(
@@ -451,15 +607,21 @@ register(Component(
 def _compare_bars(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     ops: list[dict] = []
     y = 0.0
-    gap = float(p["gap"])
+    ls = theme.size("label")
+    off = -label_top(0, ls)  # the bar starts 6.5 pt under the label's baseline
+    bar_h, bottom = 25.0, 0.0
     for bar in p["bars"]:
-        ops.append({"op": "text", "x": 0, "y": y, "w": w, "h": 22, "text": str(bar.get("label", "")), "style": "label", "bold": True})
-        ops.append({"op": "box", "x": 0, "y": y + 22, "w": w, "h": 25, "fill": "surface", "role": "track"})
+        label = str(bar.get("label", ""))
+        lh = _box_h(label, w, ls, True)
+        bar_y = y + off + (lh - ls * LEADING - INSETS)  # a wrapped label pushes its bar down
+        ops.append({"op": "text", "x": 0, "y": y, "w": w, "h": lh, "text": label, "style": "label", "bold": True})
+        ops.append({"op": "box", "x": 0, "y": bar_y, "w": w, "h": bar_h, "fill": "surface", "role": "track"})
         frac = float(bar.get("frac", 0))
         if frac > 0:
-            ops.append({"op": "box", "x": 0, "y": y + 22, "w": max(w * frac, 4), "h": 25, "fill": bar.get("color") or "accent", "role": "bar"})
-        y += gap
-    return ops, h or (y - gap + 47)
+            ops.append({"op": "box", "x": 0, "y": bar_y, "w": max(w * frac, 4), "h": bar_h, "fill": bar.get("color") or "accent", "role": "bar"})
+        bottom = bar_y + bar_h
+        y = max(y + float(p["gap"]), bottom + 10)
+    return ops, h or bottom
 
 
 register(Component(
@@ -475,11 +637,12 @@ register(Component(
 
 def _effort_matrix(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     height = h or 200
+    lh = theme.size("label") * LEADING + INSETS
     ops: list[dict] = [
         {"op": "line", "x1": 0, "y1": 0, "x2": 0, "y2": height, "color": "ink", "weight": 2},
         {"op": "line", "x1": 0, "y1": height, "x2": w, "y2": height, "color": "ink", "weight": 2},
-        {"op": "text", "x": 4, "y": -2, "w": 120, "h": 16 + INSETS, "text": str(p["y_label"]), "style": "label", "bold": True},
-        {"op": "text", "x": w - 120, "y": height + 2, "w": 120, "h": 16 + INSETS, "text": str(p["x_label"]), "style": "label", "bold": True, "align": "END"},
+        {"op": "text", "x": 4, "y": -2, "w": 120, "h": lh, "text": str(p["y_label"]), "style": "label", "bold": True},
+        {"op": "text", "x": w - 120, "y": height + 2, "w": 120, "h": lh, "text": str(p["x_label"]), "style": "label", "bold": True, "align": "END"},
     ]
     for b in p["bubbles"]:
         d = float(b.get("d", 34))
@@ -487,10 +650,11 @@ def _effort_matrix(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
         ops.append({"op": "box", "x": cx - d / 2, "y": cy - d / 2, "w": d, "h": d, "shape": "ELLIPSE", "fill": b.get("fill") or "accent",
                     "role": "bubble", "text": str(b.get("n", "")), "style": "label", "size": 16, "bold": True,
                     "color": b.get("color") or "ink", "align": "CENTER", "valign": "MIDDLE"})
+        cs = theme.size("caption")
         ly = cy - d / 2 - 22 if b.get("above") else cy + d / 2 + 2
-        ops.append({"op": "text", "x": cx - 60, "y": ly, "w": 120, "h": 14 + INSETS, "text": str(b.get("label", "")),
-                    "style": "caption", "size": 10, "bold": True, "align": "CENTER"})
-    return ops, height + 22
+        ops.append({"op": "text", "x": cx - 60, "y": ly, "w": 120, "h": cs * LEADING + INSETS, "text": str(b.get("label", "")),
+                    "style": "caption", "size": cs, "bold": True, "align": "CENTER"})
+    return ops, height + lh - 2
 
 
 register(Component(
@@ -509,7 +673,9 @@ register(Component(
 def _bubbles(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     height = h or 200
     pts = list(p["points"])
-    ml, mb, mt, mr = 40.0, 24.0, 8.0, 8.0
+    a_s, l_s, c_s = theme.size("axis"), theme.size("legend"), theme.size("caption")
+    a_up = caps_centre(0, a_s)  # a value's box starts this far above its gridline: the figures are centred on it
+    ml, mb, mt, mr = 40.0, 24.0, max(8.0, a_up), 8.0
     px, py, pw, ph = ml, mt, w - ml - mr, height - mt - mb
     xmax = float(p["x_max"] or _nice_max([float(q["x"]) for q in pts]))
     ymax = float(p["y_max"] or _nice_max([float(q["y"]) for q in pts]))
@@ -520,18 +686,22 @@ def _bubbles(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
         gx = px + pw * k / 4
         ops.append({"op": "line", "x1": px, "y1": gy, "x2": px + pw, "y2": gy, "color": "ink" if k == 0 else "grid", "weight": 1.5 if k == 0 else 0.75})
         ops.append({"op": "line", "x1": gx, "y1": py, "x2": gx, "y2": py + ph, "color": "ink" if k == 0 else "grid", "weight": 1.5 if k == 0 else 0.75})
-        ops.append({"op": "text", "x": 0, "y": gy - 7, "w": ml - 6, "h": 14, "text": _fmt(ymax * k / 4), "style": "axis", "align": "END"})
-        ops.append({"op": "text", "x": gx - 20, "y": py + ph + 3, "w": 40, "h": 12, "text": _fmt(xmax * k / 4), "style": "axis", "align": "CENTER"})
+        ops.append({"op": "text", "x": 0, "y": gy - a_up, "w": ml - 6, "h": a_s * LEADING + INSETS, "text": _fmt(ymax * k / 4),
+                    "style": "axis", "align": "END"})
+        ops.append({"op": "text", "x": gx - 20, "y": py + ph + 1, "w": 40, "h": a_s * LEADING + INSETS, "text": _fmt(xmax * k / 4),
+                    "style": "axis", "align": "CENTER"})
     for i, q in enumerate(pts):
         d = 12 + 36 * float(q.get("size", 1)) / smax
         cx = px + pw * float(q["x"]) / xmax
         cy = py + ph - ph * float(q["y"]) / ymax
         ops.append({"op": "box", "x": cx - d / 2, "y": cy - d / 2, "w": d, "h": d, "shape": "ELLIPSE",
                     "fill": q.get("color") or f"series_{i % 6 + 1}", "line": {"color": "background", "weight": 1}, "role": "bubble"})
-        ops.append({"op": "text", "x": cx + d / 2 + 2, "y": cy - 8, "w": 90, "h": 16, "text": str(q.get("name", "")), "style": "legend", "valign": "MIDDLE"})
+        ops.append({"op": "text", "x": cx + d / 2 + 2, "y": cy - caps_centre(0, l_s), "w": 90, "h": l_s * LEADING + INSETS,
+                    "text": str(q.get("name", "")), "style": "legend"})
     if p["x_title"]:
-        ops.append({"op": "text", "x": px, "y": height + 2, "w": pw, "h": 14, "text": str(p["x_title"]), "style": "caption", "align": "CENTER"})
-    return ops, height + (16 if p["x_title"] else 0)
+        ops.append({"op": "text", "x": px, "y": height, "w": pw, "h": c_s * LEADING + INSETS, "text": str(p["x_title"]),
+                    "style": "caption", "align": "CENTER"})
+    return ops, height + (c_s * LEADING + 4 if p["x_title"] else 0)
 
 
 register(Component(
@@ -563,15 +733,20 @@ def _heatmap(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
             colors[(i, j)] = "on_dark"
     text_rows = [[("" if v is None or v == "" else (_fmt(float(v)) if _is_num(v) else str(v))) for v in r] for r in rows]
     row_h = float(p["row_h"])
+    n_c = max(len(r) for r in rows)
+    widths = [float(c) for c in p["col_w"]] if p["col_w"] else [w / n_c] * n_c
+    # the table charter: 12 pt, down to 10.5 pt when a figure or a word does not hold in its column
+    floor = float(theme.size_floor("table_cell") or 0)
+    size = max(float(p["size"]), floor) if p["size"] else table_text_size(theme, text_rows, widths, True, [row_h] * len(rows), h)
     op = {
         "op": "table", "x": 0, "y": 0, "w": w, "rows": text_rows, "col_w": p["col_w"], "row_h": row_h,
         "header": {"fill": "ink", "color": "on_dark", "bold": True},
         "banding": ["background"], "first_col_bold": True,
         "borders": {"color": "background", "weight": 1.5},
         "align": [None] + ["CENTER"] * (max(len(r) for r in rows) - 1),
-        "size": p["size"], "cell_fills": fills, "cell_text_colors": colors,
+        "size": size, "cell_fills": fills, "cell_text_colors": colors,
     }
-    return [op], row_h * len(rows)
+    return [op], rendered_row_h(row_h, size) * len(rows)  # Slides gives a row at least one line plus its padding
 
 
 def _is_num(v) -> bool:

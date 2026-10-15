@@ -271,16 +271,27 @@ background (real logos are coloured and need no tint).
 
 ## Text size floors
 
-A theme may carry `text_rules`: `min_size` for running text, `small_min_size`
-for labels, captions, badges, legends and chart values (`small_styles`), and
-`exempt_styles` (tables). Periscope: 11 pt / 10 pt, `table_cell` and
-`table_header` exempt. The floor applies at render time to every text —
-named style, explicit `size`, runs — so `draw` ops and recipes comply too;
-the built-in components also declare compliant sizes so their computed
-box heights are right.
+A theme may carry `text_rules`: `min_size` for body text (paragraphs,
+labels, card titles, lists), `small_min_size` for captions, eyebrows,
+badges, legends, axes, chart values and KPI deltas (`small_styles`), and
+`table_min_size` for the table styles (`exempt_styles`). Periscope: 13 pt
+body, 10 pt small texts; tables start at their style's 12 pt and the
+`table` component steps down by half points to 10.5 pt only when a figure or
+a word does not hold in its column. The floor applies at render time to
+every text — named style, explicit `size`, runs — so `draw` ops and recipes
+comply too. Components size their boxes from `theme.size(style)` (the
+style's size raised to its floor), never from a literal, so a box holds its
+text whatever the charter; a text that does not fit makes the block grow,
+or the component returns a `warning` when it cannot grow.
 
+A run may name its own `style` (« Collecte » in `kpi_label`, then
+« (GA4) » in `caption`): that run takes the style's size and its floor.
 
-A text op may carry `small_ok: true`: the size it asks for is kept even under the floor. Components use it only where the block cannot grow (a KPI value in a narrow column shrinks to 16 pt instead of wrapping; a value over a thin bar drops to 9 or 8.5 pt); it is the charter's escape hatch, not a default.
+A text op may carry `small_ok: true`: the size it asks for is kept even under
+the floor, but only for the styles in `small_ok_styles` (chart labels and
+values, axes, legends, badges, eyebrows) and for sources (role `source`) —
+a value over a thin bar drops to 9 or 8.5 pt. Body text never goes under its
+floor, `small_ok` or not.
 
 ## Themes
 

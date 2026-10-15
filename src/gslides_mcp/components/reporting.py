@@ -9,22 +9,48 @@ generated before every asset is in stays presentable.
 
 Same contract as ``builtin``: ``render(props, theme, w, h) -> (ops, height)``
 at origin, theme roles and named text styles only.
+
+Text sizes come from the theme (``theme.size``): body texts never go under the
+charter floor (13 pt), a block grows instead; a block the caller pins with
+``h`` that its text does not fit emits a ``warning`` op (insert_component
+returns it) rather than shrinking or overlapping.
 """
 
 from __future__ import annotations
 
 from ..themes import Theme
 from . import Component, Prop, get, register, shift, validate
-from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height, rendered_row_h, image_row_ops, title_dot
+from .builtin import (BOLD_WRAP, CELL_INSET_Y, INSET_X, INSETS, LEADING, PAD, _wrapped_lines, caps_centre, image_row_ops,
+                      rendered_row_h, table_text_size, title_dot)
 
 DASH = {"color": "divider", "weight": 1, "dash": "DASH"}
 
 
-def _chevrons(items: list, w: float, size: float = 11.0, spacing: float = 6.0) -> tuple[dict, float]:
-    """The ``chevrons`` component's single text op, for reuse inside other blocks."""
+def box_h(text: str, width: float, size: float, bold: bool = False) -> float:
+    """Height of a top-anchored text box holding ``text`` at ``size`` in ``width`` (bold glyphs run wider)."""
+    return _wrapped_lines(str(text), width, size * (BOLD_WRAP if bold else 1.0)) * size * LEADING + INSETS
+
+
+def too_long(component: str, field: str, text: str = "") -> dict:
+    """The ``warning`` op of a text that does not fit its block at the charter floor."""
+    t = " ".join(str(text).split())
+    t = t if len(t) <= 40 else t[:39].rstrip() + "…"
+    return {"op": "warning", "text": f"{component} : {field} « {t} » trop long, raccourcir"}
+
+
+def _chevrons(items: list, w: float, size: float = 13.0, spacing: float = 6.0, theme: Theme | None = None) -> tuple[dict, float]:
+    """The ``chevrons`` component's single text op, for reuse inside other blocks.
+
+    The box holds every wrapped line at ``size`` (the list's own estimate runs a
+    little short at 13 pt), with ``spacing`` after each item but the last.
+    """
+    texts = [str(i) for i in items]
     spec = get("chevrons")
-    ops, height = spec.render(validate(spec, {"items": [str(i) for i in items], "size": size, "spacing": spacing}), None, w, None)
-    return ops[0], height
+    ops, height = spec.render(validate(spec, {"items": texts, "size": size, "spacing": spacing}), theme, w, None)
+    need = sum(_wrapped_lines(f"›  {t}", w, size) for t in texts) * size * LEADING + (len(texts) - 1) * spacing + INSETS
+    op = dict(ops[0])
+    op["h"] = max(float(height), need)
+    return op, op["h"]
 
 
 # --- analysis_block ------------------------------------------------------------------------
@@ -32,23 +58,27 @@ def _chevrons(items: list, w: float, size: float = 11.0, spacing: float = 6.0) -
 def _analysis_block(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     pad = float(PAD) if p["box"] else 0.0
     inner = w - 2 * pad
-    size = float(p["size"])
     y = pad
     ops: list[dict] = []
     if p["title"]:
-        ops.append({"op": "text", "x": pad, "y": y, "w": inner, "h": 14 + INSETS, "text": str(p["title"]), "style": "callout_title",
+        th = box_h(p["title"], inner, theme.size("callout_title"), bold=True)
+        ops.append({"op": "text", "x": pad, "y": y, "w": inner, "h": th, "text": str(p["title"]), "style": "callout_title",
                     "role": "title"})
-        y += 16 + INSETS
+        y += th + 2
     if p["items"]:
-        body, bh = _chevrons(p["items"], inner, size)
+        body, bh = _chevrons(p["items"], inner, max(float(p["size"]), theme.size("list")), theme=theme)
         body.update({"x": pad, "y": y, "role": "body"})
         ops.append(body)
         y += bh
     elif p["text"]:
-        bh = (h - y - pad) if h else _text_height(p["text"], inner, size)
+        size = max(float(p["size"]), theme.size("body"))
+        need = box_h(p["text"], inner, size)
+        bh = max(need, h - y - pad) if h else need
         ops.append({"op": "text", "x": pad, "y": y, "w": inner, "h": bh, "markdown": str(p["text"]), "style": "body", "size": size,
                     "role": "body"})
         y += bh
+    if h and y + pad > h + 1:  # pinned height: the text stays at the floor, the caller shortens it
+        ops.append(too_long("analysis_block", "items" if p["items"] else "text", " ".join(map(str, p["items"] or [])) or p["text"]))
     height = h or (y + pad)
     if p["box"]:
         ops.insert(0, {"op": "box", "x": 0, "y": 0, "w": w, "h": height, "fill": None, "line": {"color": "accent", "weight": 1.5},
@@ -64,7 +94,7 @@ register(Component(
         Prop("items", "list", "Points de l'analyse, un par ligne (chevrons ›)."),
         Prop("text", "markdown", "Paragraphe à la place des points (markdown)."),
         Prop("box", "bool", "Contour accent autour du bloc.", default=False),
-        Prop("size", "number", "Taille du texte.", default=11),
+        Prop("size", "number", "Taille du texte (13 pt au moins, le plancher de la charte : un texte long fait grandir le bloc).", default=13),
     ],
     render=_analysis_block,
     example={"items": ["Google porte 77 % de la collecte déclarée par les régies et affiche le meilleur ROAS (3,90).",
@@ -119,22 +149,33 @@ register(Component(
 def _stat_box(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     boxes = list(p["boxes"])
     n = max(1, len(boxes))
-    bw, bh = float(p["box_w"]), float(p["box_h"])
+    bw = float(p["box_w"])
     op_w = 40.0
     total = n * bw + (n - 1) * op_w
     x = max(0.0, (w - total) / 2)
+    # the figure sits on the middle line of a box_h box, its label under it; a label that wraps
+    # makes every box of the row taller downwards (one geometry for the row), the figures stay put
+    mid = float(p["box_h"]) / 2
+    vs, os_ = 22.0, 20.0
+    vy = max(0.0, mid - (vs * LEADING + INSETS))
+    labels = [str(b.get("label", "")) for b in boxes]
+    label_h = max([mid - 10] + [box_h(lb, bw - 8, theme.size("label")) for lb in labels if lb])
+    bh = mid + label_h + 10  # 10 pt of air under the label
+    oh = os_ * LEADING + INSETS
     ops: list[dict] = []
     for i, b in enumerate(boxes):
         ops.append({"op": "box", "x": x, "y": 0, "w": bw, "h": bh, "fill": None, "line": {"color": "accent", "weight": 1.5}, "role": "stat_box"})
-        ops.append({"op": "text", "x": x, "y": bh / 2 - 30, "w": bw, "h": 30, "text": str(b.get("value", "")), "style": "kpi_value",
-                    "size": 22, "align": "CENTER", "valign": "BOTTOM", "role": "value"})
-        ops.append({"op": "text", "x": x + 4, "y": bh / 2, "w": bw - 8, "h": bh / 2 - 10, "text": str(b.get("label", "")),
-                    "style": "label", "align": "CENTER", "role": "label"})  # 10 pt of air under the label
+        ops.append({"op": "text", "x": x, "y": vy, "w": bw, "h": mid - vy, "text": str(b.get("value", "")), "style": "kpi_value",
+                    "size": vs, "align": "CENTER", "valign": "BOTTOM", "role": "value"})
+        ops.append({"op": "text", "x": x + 4, "y": mid, "w": bw - 8, "h": label_h, "text": labels[i],
+                    "style": "label", "align": "CENTER", "role": "label"})
         x += bw
         if i < n - 1:
-            ops.append({"op": "text", "x": x, "y": bh / 2 - 16, "w": op_w, "h": 32, "text": str(p["operator"]), "style": "label",
-                        "size": 20, "bold": True, "align": "CENTER", "valign": "MIDDLE", "role": "operator"})
+            ops.append({"op": "text", "x": x, "y": bh / 2 - oh / 2, "w": op_w, "h": oh, "text": str(p["operator"]), "style": "label",
+                        "size": os_, "bold": True, "align": "CENTER", "valign": "MIDDLE", "role": "operator"})
             x += op_w
+    if h and bh > max(h, float(p["box_h"])) + 1:  # the labels grew the boxes past the pinned height
+        ops.append(too_long("stat_box", "label", max(labels, key=len)))
     return ops, h or bh
 
 
@@ -145,7 +186,7 @@ register(Component(
         Prop("boxes", "list", "Boîtes : {value, label}.", required=True),
         Prop("operator", "str", "Signe entre les boîtes (=, →, ×, +).", default="="),
         Prop("box_w", "number", "Largeur d'une boîte.", default=130),
-        Prop("box_h", "number", "Hauteur d'une boîte.", default=84),
+        Prop("box_h", "number", "Hauteur d'une boîte (un libellé sur plusieurs lignes l'agrandit vers le bas, toutes les boîtes ensemble).", default=84),
     ],
     render=_stat_box,
     example={"boxes": [{"value": "63 %", "label": "Acceptation des cookies"}, {"value": "63 %", "label": "Des données sont remontées"}]},
@@ -157,13 +198,15 @@ register(Component(
 
 def _takeaways(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     gap = float(p["gap"])
+    ts = max(theme.size("card_title"), theme.size("body") + 2)  # the title stays visibly above its paragraph
+    bs = theme.size("body")
     ops: list[dict] = []
     y = 0.0
     for it in p["items"]:
         title, text = (it.get("title"), it.get("text", "")) if isinstance(it, dict) else (None, str(it))
         if title:
-            th = _text_height(title, w, 11.5)
-            op: dict = {"op": "text", "x": 0, "y": y, "w": w, "h": th, "style": "card_title", "size": 11.5, "bold": True, "role": "title"}
+            th = box_h(title, w, ts, bold=True)
+            op: dict = {"op": "text", "x": 0, "y": y, "w": w, "h": th, "style": "card_title", "size": ts, "bold": True, "role": "title"}
             if p["highlight"]:
                 op["markdown"] = f"=={title}=="
             else:
@@ -171,11 +214,15 @@ def _takeaways(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[d
             ops.append(op)
             y += th - 4
         if text:
-            bh = _text_height(text, w, 11)
+            bh = box_h(text, w, bs)
             ops.append({"op": "text", "x": 0, "y": y, "w": w, "h": bh, "markdown": str(text), "style": "body", "role": "body"})
             y += bh
         y += gap
-    return ops, h or max(0.0, y - gap)
+    natural = max(0.0, y - gap)
+    if h and natural > h + 1:
+        ops.append(too_long("takeaways", "items", max((str(it.get("text", "")) if isinstance(it, dict) else str(it) for it in p["items"]),
+                                                       key=len, default="")))
+    return ops, h or natural
 
 
 register(Component(
@@ -229,19 +276,28 @@ def _ad_scoreboard(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
             [str(p["image_label"])] + [""] * len(ads)]
     for m in metrics:
         rows.append([m] + [str((a.get("values") or {}).get(m, "")) for a in ads])
-    size = float(p["size"])
-    heights = [rendered_row_h(row_h, 10.5), img_h + 8] + [rendered_row_h(row_h, size)] * len(metrics)
+    widths = [first_w] + [cw] * len(ads)
+    # 12 pt (table_cell), down to the table floor only when a figure or a word does not hold in its column
+    floor = float(theme.size_floor("table_cell") or 0.0)
+    size = max(float(p["size"]), floor) if p["size"] else table_text_size(theme, rows, widths, True)
+
+    def row_height(cells: list, all_bold: bool) -> float:
+        # a name or a label that wraps makes its row taller: the image slots are placed from these heights
+        lines = max(_wrapped_lines(c, widths[j], size * (BOLD_WRAP if all_bold or j == 0 else 1.0)) for j, c in enumerate(cells))
+        return max(rendered_row_h(row_h, size), lines * size * 1.2 + 2 * CELL_INSET_Y)
+
+    heights = [row_height(rows[0], True), img_h + 8] + [row_height(r, False) for r in rows[2:]]
     table: dict = {
-        "op": "table", "x": 0, "y": 0, "w": w, "rows": rows, "col_w": [first_w] + [cw] * len(ads), "row_h": row_h, "row_heights": heights,
+        "op": "table", "x": 0, "y": 0, "w": w, "rows": rows, "col_w": widths, "row_h": row_h, "row_heights": heights,
         "header": {"fill": "ink", "color": "on_dark", "bold": True}, "banding": ["background", "surface"], "first_col_bold": True,
-        "borders": {"color": "rule", "weight": 1}, "align": [None] + ["CENTER"] * len(ads), "size": p["size"],
+        "borders": {"color": "rule", "weight": 1}, "align": [None] + ["CENTER"] * len(ads), "size": size,
         "cell_fills": {(i, 0): "surface" for i in range(1, len(rows))},
     }
     ops: list[dict] = [table]
     y = heights[0] + 4
     # every visual cell is an image slot (the table component's image row): an empty one shows the dashed
     # placeholder, and replace_images puts next month's visual in without moving anything
-    ops += image_row_ops([first_w] + [cw] * len(ads), heights, 1,
+    ops += image_row_ops(widths, heights, 1,
                          [None] + [str(a.get("image") or a.get("image_url") or "") for a in ads], img_h, "inside")
     height = sum(heights)
     if p["top_note"]:
@@ -263,7 +319,7 @@ register(Component(
         Prop("name_label", "str", "Libellé de l'en-tête.", default="Nom visuel"),
         Prop("image_label", "str", "Libellé de la ligne des vignettes.", default="Visuel"),
         Prop("top_note", "str", "Note en italique sous le tableau (Top annonce : …)."),
-        Prop("size", "number", "Taille de police des cellules.", default=9.5),
+        Prop("size", "number", "Taille de police des cellules (défaut : 12 pt, le style table_cell, réduite jusqu'à 10,5 pt quand un chiffre ou un mot ne tient pas dans sa colonne ; 10,5 pt au moins)."),
     ],
     render=_ad_scoreboard,
     example={"ads": [{"name": "Post vidéo", "values": {"Dépenses": "7 237,84 €", "CTR (clics)": "0,13 %", "Dons (régie)": "238", "CPA": "30,41 €"}},
@@ -282,7 +338,9 @@ def _gallery(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
     gap = float(p["gap"])
     cw = (w - (cols - 1) * gap) / cols
     ch = cw / float(p["ratio"])
-    cap_h = 14.0 + INSETS if p["captions"] else 0.0
+    # one caption height for every cell: the longest caption decides, the rows stay aligned
+    caps = [str(it["caption"]) for it in items if it and it.get("caption")]
+    cap_h = max([14.0 + INSETS] + [box_h(c, cw, theme.size("caption")) for c in caps]) if p["captions"] else 0.0
     ops: list[dict] = []
     for i, it in enumerate(items):
         x = (i % cols) * (cw + gap)
@@ -324,49 +382,66 @@ def _media_plan(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[
     obj = p["objective"]
     split = float(p["split"])
     left_w = (w * (1 - split) - 16) if obj else w
+    ts = theme.size("card_title")  # heading and lever names, bold
+    bs = theme.size("body")
+    nw = left_w - 16
     ops: list[dict] = []
-    y = 0.0
-    ops.append({"op": "text", "x": 0, "y": y, "w": left_w, "h": 14 + INSETS, "text": str(p["heading"]), "style": "card_title",
-                "size": 11, "role": "heading"})
-    y += 26
+    heading = str(p["heading"])
+    hh = box_h(heading, left_w, ts, bold=True)
+    ops.append({"op": "text", "x": 0, "y": 0, "w": left_w, "h": hh, "text": heading, "style": "card_title", "size": ts, "role": "heading"})
+    y = hh + 4
     for lv in levers:
         name = str(lv.get("name", "")).upper()
-        ops.append(title_dot(0, y - 3, 11, d=10)[0])  # centred on the capitals of the name
-        ops.append({"op": "text", "x": 16, "y": y - 3, "w": left_w - 16, "h": 14 + INSETS, "text": name, "style": "card_title",
-                    "size": 11, "bold": True, "role": "lever"})
-        lx = 16 + INSET_X + len(name) * 11 * 0.62 + 8
-        for logo in lv.get("logos") or []:
-            ops.append({"op": "image", "x": lx, "y": y, "w": 18, "h": 18, "asset": str(logo), "contain": True, "role": "logo",
+        nh = box_h(name, nw, ts, bold=True)
+        ops.append(title_dot(0, y, ts, d=10)[0])  # centred on the capitals of the name
+        ops.append({"op": "text", "x": 16, "y": y, "w": nw, "h": nh, "text": name, "style": "card_title",
+                    "size": ts, "bold": True, "role": "lever"})
+        logos = [str(lg) for lg in lv.get("logos") or []]
+        lx = 16 + INSET_X + len(name) * ts * 0.62 + 8
+        if logos and nh <= ts * LEADING + INSETS and lx + 22 * len(logos) - 4 <= left_w:
+            ly = caps_centre(y, ts) - 9  # after the name, centred on its capitals
+            y += nh + 2
+        else:  # a long name: the logos go on their own line under it
+            lx, ly = 16 + INSET_X, y + nh
+            y += nh + 2 + (22 if logos else 0)
+        for logo in logos:
+            ops.append({"op": "image", "x": lx, "y": ly, "w": 18, "h": 18, "asset": logo, "contain": True, "role": "logo",
                         **({"tint": p["tint"]} if p["tint"] else {})})
             lx += 22
-        y += 22
         for label, key in ((p["budget_label"], "budget"), (p["dates_label"], "dates")):
             if lv.get(key):
-                ops.append({"op": "text", "x": 16, "y": y, "w": left_w - 16, "h": 12 + INSETS,
+                dh = box_h(str(label) + str(lv[key]), nw, bs)
+                ops.append({"op": "text", "x": 16, "y": y, "w": nw, "h": dh,
                             "runs": [[{"text": str(label)}, {"text": str(lv[key]), "bold": True}]], "style": "body",
                             "role": "detail"})
-                y += 16
+                y += dh - 4  # the boxes' insets overlap: one line pitch apart
         y += 12
     left_h = y
     if not obj:
+        if h and left_h > h + 1:
+            ops.append(too_long("media_plan", "levers", max((str(lv.get("name", "")) for lv in levers), key=len, default="")))
         return ops, h or left_h
     px = w * (1 - split)
     pw = w * split
     items = list(obj.get("items") or [])
-    oy = 24.0
     pad = 16.0
+    title = str(obj.get("title", ""))
     obj_ops: list[dict] = [{"op": "text", "x": px + pad, "y": pad, "w": pw - 2 * pad, "h": 12 + INSETS, "text": "\u2009".join(str(p["objective_eyebrow"]).upper()),
                             "style": "card_label", "size": 9.5, "small_ok": True, "bold": True, "color": "ink", "role": "objective_eyebrow"},
-                           {"op": "text", "x": px + pad, "y": pad + 18, "w": pw - 2 * pad, "h": _text_height(str(obj.get("title", "")), pw - 2 * pad, 15),
-                            "style": "card_title", "size": 15, "bold": True, "color": "ink", "text": str(obj.get("title", "")), "role": "objective_title"}]
+                           {"op": "text", "x": px + pad, "y": pad + 18, "w": pw - 2 * pad, "h": box_h(title, pw - 2 * pad, 15, bold=True),
+                            "style": "card_title", "size": 15, "bold": True, "color": "ink", "text": title, "role": "objective_title"}]
     oy = pad + 18 + obj_ops[1]["h"] + 2
     if items:
-        chev, ch = _chevrons(items, pw - 2 * pad, 11)
+        chev, ch = _chevrons(items, pw - 2 * pad, theme.size("list"), theme=theme)
         chev.update({"x": px + pad, "y": oy, "color": "ink", "role": "objective_items"})
         chev["runs"] = [[{**r[0], "color": "ink"}, r[1]] for r in chev["runs"]]
         obj_ops.append(chev)
         oy += ch
-    height = h or max(left_h, oy + pad, 120.0)
+    natural = max(left_h, oy + pad, 120.0)
+    if h and natural > h + 1:
+        ops.append(too_long("media_plan", "objective" if oy + pad > h + 1 else "levers",
+                            " ".join(map(str, items)) if oy + pad > h + 1 else max((str(lv.get("name", "")) for lv in levers), key=len, default="")))
+    height = h or natural
     ops.append({"op": "box", "x": px, "y": 0, "w": pw, "h": height, "shape": "ROUND_RECTANGLE", "fill": "accent", "role": "objective"})
     ops.extend(obj_ops)
     return ops, height
@@ -406,7 +481,11 @@ _EVENT_STYLE = {
 def _timeline_arrow(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     events = list(p["events"])
     n = max(1, len(events))
-    bw, bh = float(p["box_w"]), float(p["box_h"])
+    bw = float(p["box_w"])
+    cs = theme.size("caption")
+    # one box height for every event: the longest date + text decides, so the boxes and the arrow stay aligned
+    bh = max([float(p["box_h"])] + [(_wrapped_lines(str(ev.get("date", "")), bw, cs * BOLD_WRAP) + _wrapped_lines(str(ev.get("text", "")), bw, cs))
+                                    * cs * LEADING + INSETS for ev in events])
     conn = float(p["connector"])
     arrow_y = bh + conn
     span = w - 24  # room for the arrowhead
@@ -422,7 +501,9 @@ def _timeline_arrow(p: dict, theme: Theme, w: float, h: float | None) -> tuple[l
                     "weight": 1, "role": "connector"})
         ops.append({"op": "box", "x": x, "y": y, "w": bw, "h": bh, "fill": style["fill"], "line": style["line"],
                     "runs": [[{"text": str(ev.get("date", "")), "bold": True}], [{"text": str(ev.get("text", ""))}]],
-                    "style": "caption", "size": 10, "color": "ink", "align": "CENTER", "valign": "MIDDLE", "role": "event"})
+                    "style": "caption", "size": cs, "color": "ink", "align": "CENTER", "valign": "MIDDLE", "role": "event"})
+    if h and bh > float(p["box_h"]) and 2 * (bh + conn) > h + 1:  # the texts grew the boxes past the pinned height
+        ops.append(too_long("timeline_arrow", "events", max((str(ev.get("text", "")) for ev in events), key=len, default="")))
     return ops, h or (2 * (bh + conn))
 
 
@@ -432,7 +513,7 @@ register(Component(
     props=[
         Prop("events", "list", "Événements : {date, text, style?: filled | outline | dashed, above?}.", required=True),
         Prop("box_w", "number", "Largeur d'une boîte.", default=120),
-        Prop("box_h", "number", "Hauteur d'une boîte.", default=46),
+        Prop("box_h", "number", "Hauteur minimale d'une boîte (le texte le plus long l'agrandit, toutes les boîtes ensemble).", default=46),
         Prop("connector", "number", "Longueur du trait entre boîte et flèche.", default=28),
         Prop("alternate", "bool", "Alterner dessous / dessus (le premier en dessous).", default=True),
     ],

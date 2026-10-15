@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from ..themes import Theme
 from . import Component, Prop, register
-from .builtin import INSETS, _text_height
+from .builtin import INSETS, LEADING, _text_height, caps_centre
 
 # Google SERP mimicry — intentionally not theme roles.
 GOOGLE = {
@@ -21,25 +21,43 @@ GOOGLE = {
 _SERP_FONT = "Arial"
 
 
+def _too_long(component: str, field: str, text: str) -> dict:
+    """Note to the caller (insert_component's ``warnings``): the text cannot fit at the charter size."""
+    t = " ".join(str(text).split())
+    return {"op": "warning", "text": f"{component} : {field} « {t[:40] + '…' if len(t) > 40 else t} » trop long, raccourcir"}
+
+
 # --- serp -------------------------------------------------------------------------
 
 def _serp(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
+    # The snippet is read (it is what the slide talks about): site, title and description at
+    # the body size, the title 2 pt over it (regular weight and blue, as on Google); the URL,
+    # the rating and the favicon's initial are captions.
     ix, iy = 16.0, 13.0
+    bs, cs = theme.size("body"), theme.size("caption")
+    ts = bs + 2
     body: list[dict] = []
     initial = (str(p["site"] or p["url"] or "?").strip()[:1] or "?").upper()
     body.append({"op": "box", "x": ix, "y": iy, "w": 24.5, "h": 24.5, "shape": "ELLIPSE", "fill": GOOGLE["chip"],
                  "line": {"color": GOOGLE["empty"], "weight": 1}, "role": "favicon", "text": initial,
-                 "style": "caption", "size": 10, "bold": True, "color": GOOGLE["grey"], "font": _SERP_FONT, "align": "CENTER", "valign": "MIDDLE"})
+                 "style": "caption", "bold": True, "color": GOOGLE["grey"], "font": _SERP_FONT, "align": "CENTER", "valign": "MIDDLE"})
+    # site over URL: the site's capitals to the URL's baseline centred on the favicon
+    step = 1.18 * bs
+    site_caps = caps_centre(0, bs) - 0.35 * bs  # cap top under the box top
+    span = step + caps_centre(0, cs) + 0.35 * cs - site_caps  # down to the URL's baseline
+    sy = iy + 12.25 - site_caps - span / 2
     if p["site"]:
-        body.append({"op": "text", "x": ix + 32, "y": iy - 4, "w": w - 65, "h": 14 + INSETS, "text": str(p["site"]),
-                     "size": 11, "color": GOOGLE["dark"], "font": _SERP_FONT})
+        body.append({"op": "text", "x": ix + 32, "y": sy, "w": w - 65, "h": bs * LEADING + INSETS, "text": str(p["site"]),
+                     "style": "body", "color": GOOGLE["dark"], "font": _SERP_FONT, "role": "site"})
     if p["url"]:
-        body.append({"op": "text", "x": ix + 32, "y": iy + 9, "w": w - 65, "h": 14 + INSETS, "text": str(p["url"]),
-                     "style": "caption", "size": 10, "color": GOOGLE["grey"], "font": _SERP_FONT})
+        body.append({"op": "text", "x": ix + 32, "y": sy + step if p["site"] else iy + 12.25 - caps_centre(0, cs), "w": w - 65,
+                     "h": cs * LEADING + INSETS, "text": str(p["url"]), "style": "caption", "color": GOOGLE["grey"], "font": _SERP_FONT,
+                     "role": "url"})
     ty = iy + 31.7
-    body.append({"op": "text", "x": ix, "y": ty, "w": w - 32, "h": 16 + INSETS, "text": str(p["title"]),
-                 "size": 13, "color": GOOGLE["blue"], "font": _SERP_FONT, "role": "title"})
-    ty += 23
+    th = _text_height(str(p["title"]), w - 32, ts)
+    body.append({"op": "text", "x": ix, "y": ty, "w": w - 32, "h": th, "text": str(p["title"]),
+                 "style": "body", "size": ts, "color": GOOGLE["blue"], "font": _SERP_FONT, "role": "title"})
+    ty += th - 1
     if p["rating"] is not None:
         d, gap = 10.8, 1.44
         rating = max(0.0, min(5.0, float(p["rating"])))
@@ -57,19 +75,27 @@ def _serp(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict],
                 body.append({"op": "box", "x": sx + d * frac, "y": ty + 0.4, "w": d * (1 - frac), "h": d + 2,
                              "fill": GOOGLE["white"], "role": "star_mask"})
         rtxt = f"{rating:g}".replace(".", ",") + "/5" + (f" · {p['reviews']}" if p["reviews"] else "")
-        body.append({"op": "text", "x": ix + 5 * (d + gap) + 6, "y": ty - 4, "w": w - 110, "h": 14 + INSETS, "text": rtxt,
-                     "style": "caption", "size": 10, "color": GOOGLE["light"], "font": _SERP_FONT})
+        # the stars are centred on the rating's digits (cap height), not on its box
+        body.append({"op": "text", "x": ix + 5 * (d + gap) + 6, "y": ty + 1.4 + d / 2 - caps_centre(0, cs), "w": w - 110,
+                     "h": cs * LEADING + INSETS, "text": rtxt, "style": "caption", "color": GOOGLE["light"], "font": _SERP_FONT,
+                     "role": "rating"})
         ty += 20
     if p["desc"]:
-        dh = _text_height(str(p["desc"]), w - 32, 11)
+        dh = _text_height(str(p["desc"]), w - 32, bs)
         body.append({"op": "text", "x": ix, "y": ty, "w": w - 32, "h": dh, "text": str(p["desc"]),
-                     "size": 11, "color": GOOGLE["grey"], "font": _SERP_FONT})
+                     "style": "body", "color": GOOGLE["grey"], "font": _SERP_FONT, "role": "desc"})
         ty += dh
-    height = h or (ty + 10)
+    natural = ty + 10
+    height = h or natural
+    warn = h is not None and h < natural - 0.5
+    if warn:
+        height = natural  # the snippet keeps the charter size: the card keeps its natural height rather than overlap
     ops: list[dict] = []
     if p["frame"]:
         ops.append({"op": "box", "x": 0, "y": 0, "w": w, "h": height, "shape": "ROUND_RECTANGLE", "fill": GOOGLE["white"],
                     "line": {"color": GOOGLE["empty"], "weight": 1.25}, "role": "frame"})
+    if warn:
+        body.append(_too_long("serp", "desc" if p["desc"] else "title", p["desc"] or p["title"]))
     return ops + body, height
 
 
@@ -108,7 +134,7 @@ def _browser(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
         content.append({"op": "box", "x": pad, "y": cy, "w": inner, "h": ch, "fill": p["screen"] or "background", "role": "screen"})
         if p["screen_text"]:
             content.append({"op": "text", "x": pad, "y": cy, "w": inner, "h": ch, "text": str(p["screen_text"]),
-                            "style": "label", "size": 12, "bold": True, "color": "accent", "align": "CENTER", "valign": "MIDDLE"})
+                            "style": "label", "bold": True, "color": "accent", "align": "CENTER", "valign": "MIDDLE", "role": "screen_text"})
     ops: list[dict] = [
         # square frame, no outline: the grey bar and the content draw the browser, nothing rounded around it
         {"op": "box", "x": 0, "y": 0, "w": w, "h": height, "fill": "background", "role": "frame"},
@@ -147,7 +173,7 @@ def _laptop(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict
         ops.append({"op": "box", "x": inset, "y": inset, "w": sw, "h": sh, "fill": p["screen"] or "device_frame", "role": "screen"})
         if p["screen_text"]:
             ops.append({"op": "text", "x": inset, "y": inset, "w": sw, "h": sh, "text": str(p["screen_text"]),
-                        "style": "label", "size": 12, "bold": True, "color": "accent", "align": "CENTER", "valign": "MIDDLE"})
+                        "style": "label", "bold": True, "color": "accent", "align": "CENTER", "valign": "MIDDLE", "role": "screen_text"})
     ops.append({"op": "box", "x": -18, "y": fh, "w": w + 36, "h": 12.2, "shape": "ROUND_RECTANGLE", "fill": "device_base", "role": "base"})
     return ops, fh + 12.2
 
@@ -164,7 +190,7 @@ def _phone(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
         ops.append({"op": "box", "x": inset, "y": inset, "w": sw, "h": sh, "fill": p["screen"] or "background", "role": "screen"})
         if p["screen_text"]:
             ops.append({"op": "text", "x": inset, "y": inset, "w": sw, "h": sh, "text": str(p["screen_text"]),
-                        "style": "label", "size": 11, "bold": True, "color": "accent", "align": "CENTER", "valign": "MIDDLE"})
+                        "style": "label", "bold": True, "color": "accent", "align": "CENTER", "valign": "MIDDLE", "role": "screen_text"})
     if p["notch"]:
         nw = w * 0.32
         ops.append({"op": "box", "x": (w - nw) / 2, "y": inset + 3, "w": nw, "h": max(4.0, w * 0.05), "shape": "ROUND_RECTANGLE",

@@ -31,7 +31,8 @@ def test_cocon_arc_puts_pages_left_actions_right_and_scales_into_the_box():
     assert len(pages) == 3 and len(actions) == 1 and len(_of(ops, "line", "link")) == 4
     cx = center["x"] + center["w"] / 2
     assert all(pg["x"] + pg["w"] / 2 < cx for pg in pages) and actions[0]["x"] + actions[0]["w"] / 2 > cx
-    assert center["fill"] == "cyan" and pages[0]["fill"] == "accent" and actions[0]["fill"] == "ink" and actions[0]["color"] == "on_dark"
+    assert center["fill"] == "cyan" and pages[0]["fill"] == "accent" and actions[0]["fill"] == "ink"
+    assert _of(ops, "text", "action_label")[0]["color"] == "on_dark"  # labels in boxes over their discs
     assert min(o["x"] for o in pages + actions + [center]) >= -0.5 and max(o["x"] + o["w"] for o in pages + actions + [center]) <= 500.5
     assert min(o["y"] for o in pages + actions + [center]) >= -0.5 and max(o["y"] + o["h"] for o in pages + actions + [center]) <= h + 0.5
     ring, _ = _render("cocon", {"center": "X", "pages": ["A", "B", "C", "D"], "actions": ["E"], "layout": "ring"}, w=600)
@@ -120,16 +121,32 @@ def test_cocon_explicit_angles_white_text_and_half_page_default():
     cx, cy = center["x"] + center["w"] / 2, center["y"] + center["h"] / 2
     assert pages[0]["y"] + pages[0]["h"] / 2 < cy and pages[0]["x"] + pages[0]["w"] / 2 < cx        # 112°: up and left
     assert pages[2]["y"] + pages[2]["h"] / 2 > cy                                                 # 214°: below
-    assert all(pg["color"] == "background" for pg in pages) and center["color"] == "background"
+    assert all(lb["color"] == "background" for lb in _of(ops, "text", "page_label"))
+    assert _of(ops, "text", "center_label")[0]["color"] == "background"
     # the default example fits on half a slide
     entry = next(e for e in components.catalogue() if e["name"] == "cocon")
     ops, h = _render("cocon", entry["example"]["props"], w=420)
     assert h <= 360 and max(o["x"] + o["w"] for o in _of(ops, "box")) <= 420.5
 
 
-def test_cocon_disc_text_shrinks_so_no_word_breaks():
-    from gslides_mcp.components.training import _disc_size
-    assert _disc_size("Pourquoi donner", 70) < 9            # « Pourquoi » must fit 35 pt of usable width
-    assert _disc_size("Don", 70) == 10
-    ops, _ = _render("cocon", {"center": "Cataracte", "pages": ["Réglementation"], "page_d": 84, "center_d": 76}, w=400)
-    assert all(o["size"] <= 10 and o.get("small_ok") == (o["size"] < 10) for o in _of(ops, "box") if o.get("text"))
+def test_cocon_disc_labels_keep_the_caption_floor_in_boxes_over_their_discs():
+    from gslides_mcp.components.diagrams import disc_fit
+    # an ellipse writes in its inscribed rectangle (35 pt of a 70 pt disc): the label's box takes the chord instead
+    assert disc_fit("Pourquoi donner", 70, 10) is not None and disc_fit("Don", 70, 10) is not None
+    ops, _ = _render("cocon", {"center": "Cataracte", "pages": ["Réglementation"], "page_d": 90, "center_d": 76}, w=400)
+    labels = _of(ops, "text")
+    assert len(labels) == 2 and all(o["size"] == 10 and not o.get("small_ok") for o in labels)
+    assert not [o for o in _of(ops, "box") if o.get("text")] and not [o for o in ops if o["op"] == "warning"]
+    for lb in labels:  # centred on its disc, every word held on one line (bold glyph: 0.58 em)
+        (disc,) = _of(ops, "box", lb["role"][: -len("_label")])
+        assert lb["x"] + lb["w"] / 2 == pytest.approx(disc["x"] + disc["w"] / 2)
+        assert lb["y"] + lb["h"] / 2 == pytest.approx(disc["y"] + disc["h"] / 2)
+        assert max(len(wd) for wd in lb["text"].split()) * 0.58 * 10 <= lb["w"] - 2 * 7.2
+    # a disc too small for its label grows, up to the diagram's biggest diameter ...
+    ops, _ = _render("cocon", {"center": "C", "pages": ["P"], "actions": ["Prendre rendez-vous"], "page_d": 90, "center_d": 60, "action_d": 60}, w=400)
+    (action,) = _of(ops, "box", "action")
+    assert 60 < action["w"] <= 90 and not [o for o in ops if o["op"] == "warning"]
+    # ... and a label too long for that keeps 10 pt and is reported
+    ops, _ = _render("cocon", {"center": "X", "pages": ["Anticonstitutionnellement"], "page_d": 60, "center_d": 60, "action_d": 60}, w=400)
+    assert _of(ops, "text", "page_label")[0]["size"] == 10
+    assert [o for o in ops if o["op"] == "warning" and "Anticonstitutionnellement" in o["text"]]

@@ -111,64 +111,140 @@ def _nice_max(values: list[float]) -> float:
 
 KPI_VALUE_SIZE = 22.0
 KPI_VALUE_MIN = 16.0
+KPI_VALUE_GLYPH = 0.58  # bold figures, per point of size
 
 
-def _kpi_value_size(value: str, w: float) -> float:
+def too_long(component: str, field: str, text: str) -> dict:
+    """The note a component leaves its caller when a text cannot hold at the charter size.
+
+    Not drawn: ``insert_component`` returns it in ``warnings`` (the block grew,
+    or the word runs out of its box, rather than the text going under 13 pt).
+    """
+    t = " ".join(str(text).split())
+    if len(t) > 40:
+        t = t[:39].rstrip() + "…"
+    return {"op": "warning", "text": f"{component} : {field} « {t} » trop long, raccourcir"}
+
+
+def _word_w(text: str, size: float, bold: bool = False) -> float:
+    """Width of the longest word of ``text`` at ``size`` (the wrap estimate; bold glyphs run wider)."""
+    longest = max((len(word) for word in str(text).split()), default=0)
+    return longest * size * GLYPH_WRAP * (BOLD_WRAP if bold else 1.0)
+
+
+def _kpi_text_w(w: float, tile: bool) -> float:
+    """Width of a KPI's text boxes: after the accent bar, or inside the tile."""
+    return w - 2 * TILE_X if tile else w - PAD
+
+
+def _kpi_value_size(value: str, text_w: float) -> float:
     """The value never wraps: it shrinks (down to 16 pt) when its column is too narrow."""
-    avail = w - PAD - 2 * INSET_X
-    return min(KPI_VALUE_SIZE, max(KPI_VALUE_MIN, avail / max(1, len(str(value)) * 0.58)))
+    avail = text_w - 2 * INSET_X
+    return min(KPI_VALUE_SIZE, max(KPI_VALUE_MIN, avail / max(1, len(str(value)) * KPI_VALUE_GLYPH)))
 
 
-def _kpi_label_h(p: dict, w: float, size: float = 11.0) -> float:
+def _kpi_holds(p: dict, text_w: float, theme: Theme) -> list[tuple[str, str]]:
+    """(field, text) of what does not hold in a KPI column of ``text_w``: a value wider than
+    the column at 16 pt, a label (or note) word wider than the column at its charter size."""
+    bad: list[tuple[str, str]] = []
+    avail = text_w - 2 * INSET_X
+    if len(str(p["value"])) * KPI_VALUE_GLYPH * KPI_VALUE_MIN > avail + 0.01:
+        bad.append(("chiffre", str(p["value"])))
+    if _word_w(p["label"], theme.size("kpi_label")) > avail + 0.01 or (
+            p.get("note") and _word_w(p["note"], theme.size("caption")) > avail + 0.01):
+        bad.append(("libellé", str(p["label"])))
+    return bad
+
+
+def _kpi_label_text(p: dict, theme: Theme) -> str:
+    """The label as the wrap estimate sees it at the label size: the note's words are
+    shortened to the width they take in the smaller caption size."""
+    text = str(p["label"])
+    if p.get("note"):
+        r = theme.size("caption") / theme.size("kpi_label")
+        text += " " + " ".join("x" * max(1, math.ceil(len(word) * r)) for word in str(p["note"]).split())
+    return text
+
+
+def _kpi_label_h(p: dict, text_w: float, theme: Theme) -> float:
     """Height of the label box once wrapped in the column (note included)."""
-    lines = _wrapped_lines(str(p["label"]) + (" " + str(p["note"]) if p.get("note") else ""), w - PAD, size)
+    size = theme.size("kpi_label")
+    lines = _wrapped_lines(_kpi_label_text(p, theme), text_w, size)
+    return size * 1.2 + INSETS + (lines - 1) * size * LEADING
+
+
+def _kpi_delta_text(p: dict) -> str:
+    """The delta as shown: on a tile its sign becomes ▲ / ▼ (« ▲ +3,2 % vs 2024 »)."""
+    if not p.get("tile"):
+        return str(p["delta"] or "")
+    text = str(p["delta"] or "").strip()
+    if text.startswith(("▲", "▼")):
+        return text
+    arrow = "▲ " if text.startswith("+") else "▼ " if text.startswith(("-", "−")) else ""
+    return arrow + text
+
+
+def _kpi_delta_h(p: dict, text_w: float, theme: Theme) -> float:
+    """Height of the delta box: one line, more when a long comparison (« -2,3 % vs 2024 ») wraps."""
+    size = theme.size("kpi_delta")
+    lines = _wrapped_lines(_kpi_delta_text(p), text_w, size * (BOLD_WRAP if p.get("tile") else 1.0)) if p["delta"] else 1
     return size * 1.2 + INSETS + (lines - 1) * size * LEADING
 
 
 def _kpi(p: dict, theme: Theme, w: float, h: float | None, value_size: float | None = None,
-         label_h: float | None = None, delta_row: bool | None = None, text_size: float = 11.0) -> tuple[list[dict], float]:
-    """One KPI. ``value_size``, ``label_h`` and ``delta_row`` are set by ``kpi_grid`` so
-    every KPI of a grid shares the same geometry: values on one baseline, labels on one
-    line, bars of one height, deltas on one line."""
+         label_h: float | None = None, delta_row: bool | None = None, delta_h: float | None = None,
+         warn: bool = True) -> tuple[list[dict], float]:
+    """One KPI. ``value_size``, ``label_h``, ``delta_row`` and ``delta_h`` are set by
+    ``kpi_grid`` so every KPI of a grid shares the same geometry: values on one baseline,
+    labels on one line, bars of one height, deltas on one line.
+
+    Label (13 pt) and delta (11 pt) take the theme's sizes and never shrink: a long
+    label wraps and the KPI grows; a word wider than the column is a warning.
+    """
     fg = {"color": "on_dark"} if p["dark"] else {}
     value = str(p["value"])
-    size = value_size or _kpi_value_size(value, w)
+    tw = _kpi_text_w(w, bool(p.get("tile")))
+    size = value_size or _kpi_value_size(value, tw)
     # value, label and delta are stacked tight (the PPTX bilan look), the accent bar spans all three
     # geometry of the PPTX bilan KPI: value text top at 0, label text top ~8 pt under the value
     # baseline, delta text right under the label, accent bar over the whole stack
     value_h = round(size * 1.2 + INSETS, 1)
     value_op: dict = {"op": "text", "x": PAD, "y": -4, "w": w - PAD, "h": value_h, "text": value, "style": "kpi_value", "role": "value",
                       "size": round(size, 1), **fg}
-    if size < 16:
-        value_op["small_ok"] = True
-    label_h = label_h or _kpi_label_h(p, w, text_size)
+    label_h = label_h or _kpi_label_h(p, tw, theme)
     label_y = round(size * 1.15, 1)  # ≈ 25 for 22 pt
-    small = text_size < 11  # kpi_grid with row labels: label and delta may go under the floor, the value stays big
-    label: dict = {"op": "text", "x": PAD, "y": label_y, "w": w - PAD, "h": label_h, "style": "kpi_label", "size": text_size,
-                   "role": "label", **fg}
+    label: dict = {"op": "text", "x": PAD, "y": label_y, "w": w - PAD, "h": label_h, "style": "kpi_label", "role": "label", **fg}
     if p.get("note"):
-        # « Collecte GA4 » : the precision in small muted type after the label, same line
-        label["runs"] = [[{"text": str(p["label"])}, {"text": " " + str(p["note"]), "size": round(text_size - 2, 1), "color": "muted"}]]
-        small = True  # the note is two points under the label
-    if small:
-        label["small_ok"] = True
-    if not p.get("note"):
+        # « Collecte (GA4) » : the precision in small muted caption type after the 13 pt label, same line
+        label["runs"] = [[{"text": str(p["label"])}, {"text": " " + str(p["note"]), "style": "caption", "color": "muted"}]]
+    else:
         label["text"] = str(p["label"])
     height = label_y + label_h - 1
     ops: list[dict] = [value_op, label]
+    delta_h = delta_h or _kpi_delta_h(p, tw, theme)
     if p["delta"]:
         sign = "positive" if str(p["delta"]).strip().startswith("+") else "negative"
-        delta: dict = {"op": "text", "x": PAD, "y": height, "w": w - PAD, "h": text_size * 1.2 + INSETS, "text": str(p["delta"]),
-                       "style": "kpi_delta", "size": text_size, "bold": False, "color": sign, "role": "delta"}
-        if small:
-            delta["small_ok"] = True
-        ops.append(delta)
+        ops.append({"op": "text", "x": PAD, "y": height, "w": w - PAD, "h": delta_h, "text": str(p["delta"]),
+                    "style": "kpi_delta", "bold": False, "color": sign, "role": "delta"})
     if p["delta"] or delta_row:
-        height += text_size * 1.2 + INSETS - 2
+        height += delta_h - 2
+    if warn:
+        ops += [too_long("kpi", field, text) for field, text in _kpi_holds(p, tw, theme)]
     if p.get("tile"):
         return _kpi_tile(ops, p, w, h, height)
     ops.insert(0, {"op": "box", "x": 0, "y": 0, "w": 5, "h": height, "fill": "accent", "role": "bar"})
-    return ops, h or height
+    return ops, _forced_h(ops, h, height, "kpi", "libellé", p["label"])
+
+
+def _forced_h(ops: list[dict], h: float | None, natural: float, component: str, field: str, text) -> float:
+    """The height a component reports: the caller's ``h``, or its natural height when ``h``
+    is too short for its texts at the charter size (a warning then names ``field``)."""
+    if h is None:
+        return natural
+    if h < natural - 0.5:
+        ops.append(too_long(component, field, text))
+        return natural
+    return h
 
 
 TILE_X = 8.0       # kpi tile: text boxes this far in, the glyphs 15 pt from the edge, clear of the rounded corner
@@ -187,13 +263,14 @@ def _kpi_tile(ops: list[dict], p: dict, w: float, h: float | None, height: float
     dark = p["dark"]
     moved = []
     for op in ops:
+        if op["op"] == "warning":
+            moved.append(op)
+            continue
         o = {**op, "x": TILE_X, "w": w - 2 * TILE_X, "y": op["y"] + TILE_TOP}
         if o.get("role") == "delta":
-            text = str(p["delta"]).strip()
-            arrow = "▲ " if text.startswith("+") else "▼ " if text.startswith(("-", "−")) else ""
-            o.update({"text": text if text.startswith(("▲", "▼")) else arrow + text, "bold": True, "color": "on_dark" if dark else "ink"})
+            o.update({"text": _kpi_delta_text(p), "bold": True, "color": "on_dark" if dark else "ink"})
         moved.append(o)
-    tile_h = h or (height + TILE_TOP + TILE_BOTTOM)
+    tile_h = _forced_h(moved, h, height + TILE_TOP + TILE_BOTTOM, "kpi", "libellé", p["label"])
     tile = {"op": "box", "x": 0, "y": 0, "w": w, "h": tile_h, "shape": "ROUND_RECTANGLE",
             "fill": "surface_dark_2" if dark else "surface", "role": "tile"}
     return [tile] + moved, tile_h
@@ -218,33 +295,68 @@ ROW_LABEL_W = 90.0  # kpi_grid: width of the row-label column
 KPI_MAX_COLS = 4     # more KPIs wrap onto the next row (two rows fill a slide)
 
 
+def _kpi_grid_cols(specs: list[dict], want: int, kpi_w_of, tile: bool, theme: Theme) -> int:
+    """Columns per row: ``want``, fewer when a value or a label word does not hold in its column
+    at the charter size (labels never shrink under 13 pt) — the grid grows a row instead, and
+    the KPIs are spread evenly over the rows (4 → 2 × 2, not 3 + 1)."""
+    n = len(specs)
+    for c in range(want, 0, -1):
+        tw = _kpi_text_w(kpi_w_of(c), tile)
+        if c == 1 or not any(_kpi_holds(sp, tw, theme) for sp in specs):
+            if c == want:
+                return c
+            rows_n = -(-n // c)
+            return max(1, -(-n // rows_n))
+    return 1
+
+
 def _kpi_grid(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     items = p["items"]
     rows = [str(r) for r in (p["rows"] or [])]
-    cols = min(KPI_MAX_COLS, int(p["cols"] or (-(-len(items) // len(rows)) if rows else len(items)) or 1))
-    x0 = ROW_LABEL_W if rows else 0.0
+    want = min(KPI_MAX_COLS, int(p["cols"] or (-(-len(items) // len(rows)) if rows else len(items)) or 1))
     tile = bool(p["tile"])
-    # tiles fill the width with one gap between them; bare KPIs keep 12 pt after each column
-    col_w = (w - x0 + TILE_GAP) / cols if tile else (w - x0) / cols
-    kpi_w = col_w - (TILE_GAP if tile else 12)
+    lsize = theme.size("label")
+    warnings: list[dict] = []
+    x0 = 0.0
+    if rows:
+        # the row-label column widens (up to a third of the grid) for a word that would not hold in it
+        need = max(_word_w(r, lsize, bold=True) for r in rows) + 2 * INSET_X + 8
+        x0 = max(ROW_LABEL_W, min(need, w / 3))
+        warnings += [too_long("kpi_grid", "libellé de ligne", r) for r in rows
+                     if _word_w(r, lsize, bold=True) > x0 - 8 - 2 * INSET_X + 0.01]
+
+    def kpi_w_of(c: int) -> float:
+        # tiles fill the width with one gap between them; bare KPIs keep 12 pt after each column
+        return ((w - x0 + TILE_GAP) / c - TILE_GAP) if tile else ((w - x0) / c - 12)
+
     specs = [{"value": item.get("value", ""), "label": item.get("label", ""), "note": item.get("note"),
               "delta": item.get("delta"), "dark": p["dark"], "tile": tile} for item in items]
+    # what does not hold in the columns asked for is named, whether the grid reflows or not
+    seen: set = set()
+    for sp in specs:
+        for field, text in _kpi_holds(sp, _kpi_text_w(kpi_w_of(want), tile), theme):
+            if (field, text) not in seen:
+                seen.add((field, text))
+                warnings.append(too_long("kpi_grid", field, text))
+    # with row labels each row is one set of indicators: the columns stay, a word too wide stays a warning
+    cols = want if rows else _kpi_grid_cols(specs, want, kpi_w_of, tile, theme)
+    kpi_w = kpi_w_of(cols)
+    col_w = kpi_w + (TILE_GAP if tile else 12)
+    tw = _kpi_text_w(kpi_w, tile)
     # one geometry for the whole grid: the narrowest value sets the size, the longest label
-    # the label height, any delta reserves the delta line — so every row aligns KPI to KPI
-    size = min((_kpi_value_size(str(sp["value"]), kpi_w) for sp in specs), default=KPI_VALUE_SIZE)
-    text_size = 9.0 if rows else 11.0  # with row labels the columns are narrower: smaller label and delta, same big value
-    # a label that would take three lines shrinks (down to 9 pt) before it wraps that far
-    text_size = min((fit_text_size(str(sp["label"]) + (" " + str(sp["note"]) if sp.get("note") else ""), kpi_w - PAD, text_size,
-                                   max_lines=2, floor=9.0) for sp in specs), default=text_size)
+    # the label height, the longest delta the delta line, any delta reserves the delta line —
+    # so every row aligns KPI to KPI
+    size = min((_kpi_value_size(str(sp["value"]), tw) for sp in specs), default=KPI_VALUE_SIZE)
     delta_row = any(sp["delta"] for sp in specs)
-    own_h = [_kpi_label_h(sp, kpi_w, text_size) for sp in specs]
+    delta_h = max((_kpi_delta_h(sp, tw, theme) for sp in specs), default=None)
+    own_h = [_kpi_label_h(sp, tw, theme) for sp in specs]
     # the labels of the KPIs with a delta set the label line; a KPI without one runs its label
     # into the free delta line (« > 1/3 / du financement vient de la générosité ») rather than
     # pushing every delta of the grid one line down
     label_h = max((lh for sp, lh in zip(specs, own_h) if sp["delta"] or not delta_row), default=18.0)
     if delta_row:
-        label_h = max(label_h, max(own_h) - (text_size * 1.2 + INSETS - 2))
-    rendered = [_kpi(sp, theme, kpi_w, None, value_size=size, label_h=label_h, delta_row=delta_row, text_size=text_size)
+        label_h = max(label_h, max(own_h) - (delta_h - 2))
+    rendered = [_kpi(sp, theme, kpi_w, None, value_size=size, label_h=label_h, delta_row=delta_row, delta_h=delta_h, warn=False)
                 for sp in specs]
     for (sub, _), lh in zip(rendered, own_h):
         for op in sub:
@@ -260,17 +372,27 @@ def _kpi_grid(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[di
         ops.extend(shift(sub, x0 + (i % cols) * col_w, y))
         height = max(height, y + sub_h)
     for r, label in enumerate(rows):
-        y, lh = (r * row_gap, tallest) if tile else (r * row_gap + 12, 40)
-        ops.append({"op": "text", "x": 0, "y": y, "w": ROW_LABEL_W - 8, "h": lh, "text": label, "style": "label",
+        # centred on its row of KPIs: two lines for « Hors marque » at 13 pt bold
+        need = _wrapped_lines(label, x0 - 8, lsize * BOLD_WRAP) * lsize * LEADING + INSETS
+        if tile:
+            y, lh = r * row_gap, max(tallest, need)
+        else:
+            lh = max(40.0, need)
+            y = r * row_gap + max(0.0, (tallest - lh) / 2)
+        ops.append({"op": "text", "x": 0, "y": y, "w": x0 - 8, "h": lh, "text": label, "style": "label",
                     "bold": True, "color": "on_dark" if p["dark"] else "ink", "valign": "MIDDLE", "role": "row_label"})
-    return ops, h or height
+        height = max(height, y + lh)
+    ops += warnings
+    return ops, _forced_h(ops, h, height, "kpi_grid", "libellé", max((str(sp["label"]) for sp in specs), key=len, default=""))
 
 
 register(Component(
     name="kpi_grid", description="Grille de KPI (composant kpi répété en colonnes), avec en option un libellé de ligne à gauche (Marque / Hors marque).",
     props=[
         Prop("items", "list", "Liste de {value, label, delta?, note?}.", required=True),
-        Prop("cols", "number", "Nombre de colonnes, 4 au plus (défaut : un par item, ou items / rows) ; au-delà, les KPI passent à la ligne, deux lignes par slide."),
+        Prop("cols", "number", "Nombre de colonnes, 4 au plus (défaut : un par item, ou items / rows) ; au-delà, les KPI passent à la ligne, deux lignes par slide. "
+                               "Moins de colonnes (sans rows) quand un chiffre ou un mot de libellé ne tient pas dans la sienne : le libellé reste à 13 pt, "
+                               "les KPI se répartissent sur plus de rangées (4 → 2 × 2) et un avertissement nomme le texte à raccourcir."),
         Prop("rows", "list", "Libellés de ligne en gras à gauche, un par rangée ; cols = indicateurs par rangée."),
         Prop("row_gap", "number", "Hauteur d'une rangée en pt (ignorée avec tile : les tuiles sont espacées de 10 pt).", default=90),
         Prop("dark", "bool", "Texte clair pour fond sombre.", default=False),
@@ -361,10 +483,11 @@ def title_dot(x: float, top: float, size: float, d: float | None = None, fill: s
     return {"op": "box", "x": x, "y": cy - d / 2, "w": d, "h": d, "shape": "ELLIPSE", "fill": fill, "role": "dot"}, 1.9 * d
 
 
-def _card(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
+def _card(p: dict, theme: Theme, w: float, h: float | None, component: str = "card") -> tuple[list[dict], float]:
     fill, line, head_col, big_col, body_col, num_col = _CARD[p["variant"]]
     inner = w - 2 * PAD
     texts: list[dict] = []
+    warnings: list[dict] = []
     icon_ops: list[dict] = []
     y = float(PAD)
     if p["icon"]:
@@ -387,27 +510,37 @@ def _card(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict],
     dot: list[dict] = []
     if p["title"]:
         title = str(p["title"])
-        # a narrow card shrinks the title until its longest word fits, rather than cut it
-        size = word_fit_size(title, inner - (1.9 * 0.7 * CARD_TITLE_SIZE if p["dot"] else 0), CARD_TITLE_SIZE)
+        # 15 pt, two points over the 13 pt body, whatever the card's width: the title no longer
+        # shrinks to fit its longest word — a word wider than the card is a warning
+        size = max(CARD_TITLE_SIZE, theme.size("card_body") + 2)
         tx = PAD
         if p["dot"]:
             # in the text column (after Google's left inset), the cap height, centred on the caps
             op, advance = title_dot(PAD + INSET_X, y, size)
             dot.append(op)
             tx = PAD + advance
-        title_h = _wrapped_lines(title, w - tx - PAD, size * BOLD_WRAP) * size * LEADING + INSETS
-        texts.append({"op": "text", "x": tx, "y": y, "w": w - tx - PAD, "h": title_h, "text": title,
+        title_w = w - tx - PAD
+        if _word_w(title, size, bold=True) > title_w - 2 * INSET_X + 0.01:
+            warnings.append(too_long(component, "titre", title))
+        title_h = _wrapped_lines(title, title_w, size * BOLD_WRAP) * size * LEADING + INSETS
+        texts.append({"op": "text", "x": tx, "y": y, "w": title_w, "h": title_h, "text": title,
                       "style": "card_title", "size": size, "color": head_col})
         y += title_h + 4
+    body_need = _text_height(p["body"], inner, theme.size("card_body")) if p["body"] else 0.0
+    natural = y + body_need + PAD
+    if h is not None and h < natural - 0.5:
+        # too short for its texts at 13 pt: the card keeps its natural height rather than overlap
+        warnings.append(too_long(component, "corps" if p["body"] else "titre", p["body"] or p["title"] or p["big"] or ""))
+        h = natural
     if p["body"]:
-        body_h = (h - y - PAD) if h else _text_height(p["body"], inner, 11)
+        body_h = (h - y - PAD) if h else body_need
         texts.append({"op": "text", "x": PAD, "y": y, "w": inner, "h": body_h, "markdown": str(p["body"]),
                       "style": "card_body", "color": body_col})
         y += body_h
     height = h or (y + PAD)
     ops: list[dict] = [{"op": "box", "x": 0, "y": 0, "w": w, "h": height, "shape": "ROUND_RECTANGLE" if p["variant"] != "plain" else "RECTANGLE",
                         "fill": fill, "line": line, "role": "card"}]
-    return ops + icon_ops + dot + texts, height
+    return ops + icon_ops + dot + texts + warnings, height
 
 
 register(Component(
@@ -439,22 +572,34 @@ def _card_grid(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[d
     validated = [validate(spec, c) for c in cards]
     rows: list[list[dict]] = [validated[i:i + cols] for i in range(0, len(validated), cols)]
     ops: list[dict] = []
+    warnings: list[dict] = []
     y = 0.0
     for row in rows:
         natural = [_card(c, theme, card_w, None)[1] for c in row]
-        row_h = h or max(natural)
+        row_h = max(natural)
+        if h is not None and h >= row_h - 0.5:
+            row_h = h
+        elif h is not None:
+            # a forced height too short for the 13 pt texts: the row keeps its natural height rather than overlap
+            tallest = row[natural.index(row_h)]
+            warnings.append(too_long("card_grid", "corps" if tallest["body"] else "titre", tallest["body"] or tallest["title"] or ""))
         for j, c in enumerate(row):
-            sub, _ = _card(c, theme, card_w, row_h)
-            ops.extend(shift(sub, j * (card_w + gap), y))
+            sub, _ = _card(c, theme, card_w, row_h, component="card_grid")
+            for op in shift(sub, j * (card_w + gap), y):
+                if op["op"] != "warning":
+                    ops.append(op)
+                elif op not in warnings:
+                    warnings.append(op)
         y += row_h + gap
-    return ops, y - gap if rows else 0.0
+    return ops + warnings, y - gap if rows else 0.0
 
 
 register(Component(
     name="card_grid", description="Rangée(s) de cartes de même hauteur (composant card répété), avec picto, libellé, titre et corps.",
     props=[
         Prop("cards", "list", "Props de chaque carte (voir card).", required=True),
-        Prop("cols", "number", "Cartes par rangée (défaut : toutes)."),
+        Prop("cols", "number", "Cartes par rangée (défaut : toutes). Titre à 15 pt, corps à 13 pt : un mot de titre plus large que sa carte "
+                               "est un avertissement (moins de colonnes, ou un titre plus court)."),
         Prop("gap", "number", "Espace entre cartes.", default=12),
     ],
     render=_card_grid,
@@ -472,20 +617,32 @@ def _callout(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
     kind = p["type"]
     body_col = "on_dark" if kind == "dark" else "text"
     y = 10.0
+    tw = w - 24
     texts: list[dict] = []
+    warnings: list[dict] = []
     if p["title"]:
-        texts.append({"op": "text", "x": 16, "y": y, "w": w - 24, "h": 14 + INSETS, "text": str(p["title"]),
+        # the title wraps at its charter size (13 pt bold) and pushes the body down
+        ts = theme.size("callout_title")
+        bold = theme.text_styles.get("callout_title", {}).get("bold", True)
+        title_h = _wrapped_lines(str(p["title"]), tw, ts * (BOLD_WRAP if bold else 1.0)) * ts * LEADING + INSETS
+        texts.append({"op": "text", "x": 16, "y": y, "w": tw, "h": title_h, "text": str(p["title"]),
                       "style": "callout_title", "color": f"callout_{kind}_title"})
-        y += 20
-    body_h = (h - y - 12) if h else _text_height(p["body"], w - 24, 11)
-    texts.append({"op": "text", "x": 16, "y": y, "w": w - 24, "h": body_h, "markdown": str(p["body"]),
+        y += title_h - 2
+    need = _text_height(p["body"], tw, theme.size("callout_body"))
+    natural = y + need + 12
+    if h is not None and h < natural - 0.5:
+        # too short for the 13 pt body: the callout keeps its natural height rather than overlap
+        warnings.append(too_long("callout", "corps", p["body"]))
+        h = natural
+    body_h = (h - y - 12) if h else need
+    texts.append({"op": "text", "x": 16, "y": y, "w": tw, "h": body_h, "markdown": str(p["body"]),
                   "style": "callout_body", "color": body_col})
     height = h or (y + body_h + 12)
     ops = [
         {"op": "box", "x": 0, "y": 0, "w": w, "h": height, "fill": f"callout_{kind}_bg"},
         {"op": "box", "x": 0, "y": 0, "w": 4, "h": height, "fill": f"callout_{kind}_bar"},
     ]
-    return ops + texts, height
+    return ops + texts + warnings, height
 
 
 register(Component(
@@ -504,13 +661,14 @@ register(Component(
 
 def _badge(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     text = str(p["text"]).upper()
-    bw = min(w, len(text) * 5.4 + 14)
+    size = theme.size("badge", 10.0)  # bold capitals ≈ 0.54 × size wide, mono glyphs 0.64 × size
+    bw = min(w, len(text) * 0.54 * size + 14)
     bh = h or 16
     ops = [{"op": "box", "x": 0, "y": 0, "w": bw, "h": bh, "fill": p["fill"], "text": text,
             "style": "badge", "color": p["color"], "align": "CENTER", "valign": "MIDDLE"}]
     if p["mono"]:  # « signal doux » : code-like tag, lowercase, rounded, grey
         ops[0].update({"text": str(p["text"]), "font": "Roboto Mono", "bold": False, "shape": "ROUND_RECTANGLE",
-                       "w": min(w, len(str(p["text"])) * 6.4 + 16)})
+                       "w": min(w, len(str(p["text"])) * 0.64 * size + 16)})
     return ops, bh
 
 
@@ -530,7 +688,7 @@ register(Component(
 
 def _steps(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     dark = p["dark"]
-    size = float(theme.text_style("step_text").get("size") or 11)
+    size = theme.size("step_text")
     d = 23.0
     # the disc is centred on the capitals of the item's first line (it sat 4 pt above them)
     disc_dy = caps_centre(0, size) - d / 2
@@ -548,7 +706,7 @@ def _steps(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
                     "style": "step_text", "color": "on_dark" if dark else None})
         bottom = max(ty + disc_dy + d, ty + text_h)
         y = bottom + 8
-    return ops, h or bottom
+    return ops, _forced_h(ops, h, bottom, "steps", "texte", max((str(i) for i in p["items"]), key=len, default=""))
 
 
 register(Component(
@@ -565,21 +723,28 @@ register(Component(
 
 def _quote(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     dark = p["dark"]
-    quote_h = _text_height(p["text"], w - 2 * PAD - 8, 12)
+    tw = w - 2 * PAD - 8
+    size = theme.size("quote")
+    bold = theme.text_styles.get("quote", {}).get("bold", False)
+    # bold italic 13 pt: the wider bold glyphs wrap sooner
+    quote_h = _wrapped_lines(str(p["text"]), tw, size * (BOLD_WRAP if bold else 1.0)) * size * LEADING + INSETS
     y = float(PAD)
-    texts: list[dict] = [{"op": "text", "x": PAD + 4, "y": y, "w": w - 2 * PAD - 8, "h": quote_h,
+    texts: list[dict] = [{"op": "text", "x": PAD + 4, "y": y, "w": tw, "h": quote_h,
                           "markdown": str(p["text"]), "style": "quote", "color": "on_dark" if dark else None}]
     y += quote_h
     if p["author"]:
         runs = [{"text": str(p["author"]), "bold": True}]
         if p["role"]:
             runs.append({"text": f" — {p['role']}"})
-        texts.append({"op": "text", "x": PAD + 4, "y": y + 2, "w": w - 2 * PAD - 8, "h": 14 + INSETS, "runs": [runs],
+        asize = theme.size("quote_author")
+        author_h = _wrapped_lines(" ".join(r["text"] for r in runs), tw, asize * BOLD_WRAP) * asize * LEADING + INSETS
+        texts.append({"op": "text", "x": PAD + 4, "y": y + 2, "w": tw, "h": max(14 + INSETS, author_h), "runs": [runs],
                       "style": "quote_author", "color": "on_dark" if dark else None})
-        y += 24
-    height = h or (y + PAD)
-    ops = [{"op": "box", "x": 0, "y": 0, "w": w, "h": height, "fill": None, "line": {"color": "accent", "weight": 2}}]
-    return ops + texts, height
+        y += max(24.0, author_h + 2)
+    ops: list[dict] = []
+    height = _forced_h(ops, h, y + PAD, "quote", "texte", p["text"])
+    ops.insert(0, {"op": "box", "x": 0, "y": 0, "w": w, "h": height, "fill": None, "line": {"color": "accent", "weight": 2}})
+    return ops[:1] + texts + ops[1:], height
 
 
 register(Component(
@@ -656,13 +821,63 @@ def _is_delta_col(rows: list, jj: int, first: int, stop: int, header: list[str])
     return len(cells) >= 2 and sum(1 for c in cells if _SIGNED.match(c)) >= 0.6 * len(cells)
 
 
+_NUMBER_CELL = re.compile(r"^[+\-−]?\s*[\d][\d\s  .,]*\s*(%|€|k€|M€|pts?|x)?$")
+
+
+def _table_widths(rows: list, w: float, col_w: list, lead: int) -> list[float]:
+    """Column widths as ``_table`` lays them out (the picto column in front when ``lead``)."""
+    n_c = max(len(r) for r in rows) + lead
+    if col_w:
+        return [float(c) for c in col_w]
+    if lead:
+        unit = (w - ICON_COL_W) / n_c
+        return [ICON_COL_W, 2 * unit] + [unit] * (n_c - 2)
+    return [w / n_c] * n_c
+
+
+def table_text_size(theme: Theme, rows: list, widths: list[float], header: bool, heights: list[float] | None = None,
+                    h: float | None = None, lead: int = 0) -> float:
+    """Largest table size, from the ``table_cell`` style (12 pt) down to the table floor (10.5 pt), at which the table fits.
+
+    Fits means: every figure holds on one line of its column, no word is wider
+    than its column (a header may wrap between words), and with a forced
+    height ``h`` the rows hold in it. A table that fits nowhere gets the floor.
+    """
+    top = theme.size("table_cell", 12.0)
+    floor = float(theme.size_floor("table_cell") or top)
+    avail = [max(cw - 2 * INSET_X, 1.0) for cw in widths]
+    cells = [(i, str(c).strip()) for r in rows for i, c in enumerate(([""] * lead) + [*r]) if str(c).strip()]
+
+    def fits(s: float) -> bool:
+        for i, (j, text) in enumerate(cells):
+            if j >= len(avail):
+                continue
+            per_char = s * GLYPH_WRAP * BOLD_WRAP  # first column and headers are bold: budget the wider glyphs
+            if _NUMBER_CELL.match(text):
+                if len(text) * per_char > avail[j]:
+                    return False
+            elif max(len(word) for word in text.split()) * per_char > avail[j]:
+                return False
+        if h is not None and heights is not None and sum(rendered_row_h(rh, s) for rh in heights) > h:
+            return False
+        return True
+
+    s = top
+    while s > floor and not fits(s):
+        s = round(s - 0.5, 1)
+    return max(s, floor)
+
+
 def _table(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     from .workshop import _num, threshold_color
 
     rows = [list(r) for r in p["rows"]]
     row_h = float(p["row_h"])
     heights = [float(v) if v else row_h for v in (p["row_heights"] or [])] + [row_h] * (len(rows) - len(p["row_heights"] or []))
-    size = float(p["size"] or theme.text_styles.get("table_cell", {}).get("size", 10.5))
+    lead = 1 if (p["icons"] or p["dots"]) else 0
+    # 12 pt by default, down to 10.5 pt only when a figure or a word does not hold in its column
+    size = float(p["size"]) if p["size"] else table_text_size(
+        theme, rows, _table_widths(rows, w, list(p["col_w"] or []), lead), bool(p["header"]), heights, h, lead)
     heights = [rendered_row_h(rh, size) for rh in heights]  # where the pictos land, and the height reported
     first = 1 if p["header"] else 0
     last = len(rows) - 1
@@ -678,7 +893,6 @@ def _table(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
     col_w = list(p["col_w"] or [])
     align = list(p["align"] or [])
     ops: list[dict] = []
-    lead = 1 if (icons or dots) else 0
     if lead:
         # a narrow empty column in front, the pictos / dots drawn over its cells
         rows = [[""] + r for r in rows]
@@ -741,7 +955,7 @@ def _table(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
         r = i + first
         if r < len(rows) and sub:
             name = str(rows[r][lead])
-            cell_runs[(r, lead)] = [[{"text": name, "bold": True}], [{"text": str(sub), "size": 9, "color": "muted"}]]
+            cell_runs[(r, lead)] = [[{"text": name, "bold": True}], [{"text": str(sub), "size": max(10.5, size - 1.5), "color": "muted"}]]
     # pills: the value of some columns sits in a rounded tag coloured by threshold
     pill_ops: list[dict] = []
     for j, thresholds in (p["pill_cols"] or {}).items():
@@ -789,7 +1003,7 @@ def _table(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
         "first_col_bold": True,
         "borders": {"color": "rule", "weight": 1, "position": "INNER_HORIZONTAL"},
         "align": align or None,
-        "size": p["size"],
+        "size": size,
         "row_fills": {last: total_fill} if total else {},
         "bold_rows": [last] if total else [],
         "cell_text_colors": cell_text_colors,
@@ -808,7 +1022,7 @@ register(Component(
         Prop("header", "bool", "La première ligne est un en-tête.", default=True),
         Prop("total_row", "bool", "La dernière ligne est un total (fond accent, gras).", default=False),
         Prop("align", "list", "Alignement par colonne : START, CENTER, END ou null."),
-        Prop("size", "number", "Taille de police (défaut : style table_cell du thème)."),
+        Prop("size", "number", "Taille de police (défaut : 12 pt, le style table_cell du thème, réduite par demi-point jusqu'à 10,5 pt quand un chiffre ou un mot ne tient pas dans sa colonne)."),
         Prop("icons", "list", "Un picto (asset) ou null par ligne de données : ajoute une colonne étroite en tête (logos de canaux)."),
         Prop("icon_w", "number", "Taille des pictos.", default=16),
         Prop("icon_tint", "color", "Teinte des pictos du dossier d'assets (pictos blancs) ; vide = couleurs d'origine."),

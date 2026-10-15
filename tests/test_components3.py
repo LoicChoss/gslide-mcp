@@ -59,6 +59,20 @@ def test_serp_without_frame_rating_or_site():
     assert _of(ops, "box", "favicon")[0]["text"] == "?"
 
 
+def test_serp_snippet_is_read_at_the_body_size_stars_on_the_rating_capitals():
+    from gslides_mcp.components.builtin import caps_centre
+    ops, _ = _render("serp", {"site": "La Belle Adresse", "url": "labelleadresse.com", "title": "Comment détacher un vêtement blanc ?",
+                              "rating": 4, "desc": "Nos astuces de grand-mère."})
+    site, desc, title = _of(ops, "text", "site")[0], _of(ops, "text", "desc")[0], _of(ops, "text", "title")[0]
+    assert site["style"] == desc["style"] == "body" and site.get("size") is None and desc.get("size") is None
+    assert title["size"] == PERISCOPE.size("body") + 2 and title["h"] >= title["size"] * 1.35 + 8
+    star, rating = next(o for o in ops if o.get("shape") == "STAR_5"), _of(ops, "text", "rating")[0]
+    assert star["y"] + star["h"] / 2 == pytest.approx(caps_centre(rating["y"], PERISCOPE.size("caption")))
+    # a forced height too small: the snippet keeps its size and its natural height, and the caller is told
+    short, h = _render("serp", {"title": "Titre", "desc": "Une description."}, h=30)
+    assert h > 30 and _of(short, "box", "frame")[0]["h"] == h and [o for o in short if o["op"] == "warning"]
+
+
 # --- browser / laptop -------------------------------------------------------------------
 
 def test_browser_frame_with_screenshot_asset():

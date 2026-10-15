@@ -10,7 +10,9 @@ import math
 
 from ..themes import Theme
 from . import Component, Prop, register
-from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height, _wrapped_lines, fit_text_size, corner_box_offset, label_top, round_corner_inset
+from .builtin import (BOLD_WRAP, INSET_X, INSETS, LEADING, PAD, _text_height, _wrapped_lines, corner_box_offset, fit_text_size, label_top,
+                      round_corner_inset)
+from .diagrams import _box_h, _half_up, _word_fits, disc_label, disc_need, warning
 
 # --- cocon ------------------------------------------------------------------------------
 
@@ -19,19 +21,12 @@ def _as_nodes(items) -> list[dict]:
     return [it if isinstance(it, dict) else {"label": str(it)} for it in (items or [])]
 
 
-def _disc(cx: float, cy: float, d: float, fill: str, color: str, label: str, size: float, role: str) -> dict:
-    return {"op": "box", "x": cx - d / 2, "y": cy - d / 2, "w": d, "h": d, "shape": "ELLIPSE", "fill": fill, "role": role,
-            "text": label, "style": "caption", "size": size, "bold": True, "color": color, "align": "CENTER", "valign": "MIDDLE",
-            "small_ok": size < 10}
-
-
-def _disc_size(label: str, d: float, base: float = 10.0) -> float:
-    """Text size for a label inside an ellipse of diameter d: Google writes in the inscribed
-    rectangle (0.707 d) minus its 7.2 pt side insets, and breaks a word wider than that."""
-    usable = 0.707 * d - 14.4
-    size = fit_text_size(label, usable, base, max_lines=5, floor=7)
-    longest = max((len(word) for word in label.split()), default=1)
-    return max(7.0, min(size, usable / (longest * 0.58)))  # bold Barlow runs wider than the 0.485 wrap estimate
+def _disc(cx: float, cy: float, d: float, fill: str, color: str, label: str, size: float, role: str) -> tuple[list[dict], bool]:
+    """A disc and its label: (ops, fits). Slides writes an ellipse's text in its inscribed rectangle and breaks
+    a word wider than that: the label goes in a box over the disc, as wide as the disc allows (``disc_label``)."""
+    disc = {"op": "box", "x": cx - d / 2, "y": cy - d / 2, "w": d, "h": d, "shape": "ELLIPSE", "fill": fill, "role": role}
+    label_op, fits = disc_label(cx, cy, d, label, size, color=color, role=f"{role}_label")
+    return [disc, label_op], fits
 
 
 def _cocon(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
@@ -39,6 +34,17 @@ def _cocon(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
     actions = _as_nodes(p["actions"])
     pd, cd, ad = float(p["page_d"]), float(p["center_d"]), float(p["action_d"])
     big = max(pd, cd, ad)
+    # the labels stay at the caption size: a kind of disc too small for its longest label grows,
+    # up to the diagram's biggest diameter (the half page holds); a label needing more is reported
+    size = theme.size("caption")
+
+    def grown(d: float, labels: list[str]) -> float:
+        need = max((disc_need(label, size) for label in labels if label), default=0.0)
+        return max(d, min(big, need))
+
+    pd = grown(pd, [str(nd.get("label", "")) for nd in pages])
+    ad = grown(ad, [str(nd.get("label", "")) for nd in actions])
+    cd = grown(cd, [str(p["center"])])
     radius = float(p["radius"]) if p["radius"] else max(80.0, ((h - big) / 2) if h else min(120.0, (w - pd) / 2.4))
     n, m = len(pages), len(actions)
     if p["layout"] == "ring":
@@ -73,21 +79,28 @@ def _cocon(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
     cx, cy = ox, oy
     lines: list[dict] = []
     discs: list[dict] = []
+    warns: list[dict] = []
+
+    def add(node_ops: tuple[list[dict], bool], into: list[dict], field: str, label: str) -> None:
+        ops, fits = node_ops
+        into += ops
+        if not fits:
+            warns.append(warning("cocon", field, label))
+
     for node, a in zip(pages, page_angles):
         x, y = pos(a, radius)
         lines.append({"op": "line", "x1": cx, "y1": cy, "x2": x + ox, "y2": y + oy, "color": link, "weight": 1, "role": "link"})
         label = str(node.get("label", ""))
-        size = _disc_size(label, pd)
-        discs.append(_disc(x + ox, y + oy, pd, node.get("fill") or "accent", node.get("color") or text_color, label, size, "page"))
+        add(_disc(x + ox, y + oy, pd, node.get("fill") or "accent", node.get("color") or text_color, label, size, "page"), discs, "page", label)
     for node, a in zip(actions, action_angles):
         x, y = pos(a, radius)
         lines.append({"op": "line", "x1": cx, "y1": cy, "x2": x + ox, "y2": y + oy, "color": link, "weight": 1, "role": "link"})
         label = str(node.get("label", ""))
-        size = _disc_size(label, ad)
-        discs.append(_disc(x + ox, y + oy, ad, node.get("fill") or "ink", "on_dark", label, size, "action"))
+        add(_disc(x + ox, y + oy, ad, node.get("fill") or "ink", "on_dark", label, size, "action"), discs, "action", label)
     center = str(p["center"])
-    hub = _disc(cx, cy, cd, p["center_fill"], text_color, center, _disc_size(center, cd), "center")
-    return lines + discs + [hub], h or (y1 - y0)
+    hub: list[dict] = []
+    add(_disc(cx, cy, cd, p["center_fill"], text_color, center, size, "center"), hub, "centre", center)
+    return lines + discs + hub + warns, h or (y1 - y0)
 
 
 register(Component(
@@ -105,7 +118,7 @@ register(Component(
         Prop("link_color", "color", "Couleur des filets.", default="muted"),
         Prop("page_d", "number", "Diamètre des pages.", default=104),
         Prop("center_d", "number", "Diamètre du centre.", default=84),
-        Prop("action_d", "number", "Diamètre des nœuds d'action (un mot de 9 lettres et plus demande 70 pt et plus, le texte ne descend pas sous 7 pt).", default=80),
+        Prop("action_d", "number", "Diamètre des nœuds d'action (texte à 10 pt : un mot de 9 lettres demande 58 pt, de 12 lettres 75 pt ; un disque trop petit grandit jusqu'au plus grand diamètre du schéma, au-delà le libellé est signalé).", default=80),
         Prop("center_fill", "color", "Couleur du centre.", default="cyan"),
     ],
     render=_cocon,
@@ -132,15 +145,21 @@ def _cycle(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
     n = max(2, len(steps))
     gap = float(p["gap"])
     bw = min(float(p["box_w"]), (w - gap) / 2)
+    ts, cs = theme.size("card_title"), theme.size("caption")
     texts = []
     bh = 0.0
+    warns: list[dict] = []
     for s in steps:
         title = str(s.get("title", ""))
         text = str(s.get("text") or "")
-        th = _text_height(title, bw - 2 * PAD, 11)
-        xh = _text_height(text, bw - 2 * PAD, 10) if text else 0
+        th = _box_h(title, bw - 2 * PAD, ts, True)
+        xh = _text_height(text, bw - 2 * PAD, cs) if text else 0
         texts.append((title, text, th, xh))
-        bh = max(bh, th + xh + 2 * PAD - 4)
+        if not _word_fits(title, bw - 2 * PAD, ts, True):
+            warns.append(warning("cycle", "titre", title))
+    # the texts start on one line, under the tallest title
+    th_max = max([th for _, _, th, _ in texts] or [0.0])
+    bh = max([th_max + xh + 2 * PAD - 4 for _, _, _, xh in texts] or [0.0])
     if n == 4:  # 2 × 2, read clockwise from the top left
         cols = [0, 1, 1, 0]
         rows = [0, 0, 1, 1]
@@ -159,16 +178,16 @@ def _cycle(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict]
         ops.append({"op": "box", "x": x, "y": y, "w": bw, "h": bh, "shape": "ROUND_RECTANGLE", "fill": "surface", "role": "step"})
         ops.append({"op": "box", "x": x, "y": y + 10, "w": 4, "h": bh - 20, "fill": "accent", "role": "step_bar"})
         ops.append({"op": "text", "x": x + PAD - 4, "y": y + PAD - 6, "w": bw - 2 * PAD + 4, "h": th, "text": title, "style": "card_title",
-                    "size": 11, "bold": True, "color": "ink", "role": "step_title"})
+                    "size": ts, "bold": True, "color": "ink", "role": "step_title"})
         if text:
-            ops.append({"op": "text", "x": x + PAD - 4, "y": y + PAD - 8 + th, "w": bw - 2 * PAD + 4, "h": xh, "markdown": text, "style": "caption",
-                        "size": 10, "color": "text", "role": "step_text"})
+            ops.append({"op": "text", "x": x + PAD - 4, "y": y + PAD - 8 + th_max, "w": bw - 2 * PAD + 4, "h": xh, "markdown": text, "style": "caption",
+                        "size": cs, "color": "text", "role": "step_text"})
     arrows: list[dict] = []
     for i in range(n):
         (x1, y1), (x2, y2) = centers[i], centers[(i + 1) % n]
         ax1, ay1, ax2, ay2 = _clip(x1, y1, x2, y2, bw + 6, bh + 6)
         arrows.append({"op": "line", "x1": ax1, "y1": ay1, "x2": ax2, "y2": ay2, "color": "accent", "weight": 2.5, "end_arrow": "arrow", "role": "arrow"})
-    return ops + arrows, h or height
+    return ops + arrows + warns, h or height
 
 
 register(Component(
@@ -196,47 +215,64 @@ def _formula(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
     n = max(2, len(items))
     op_w = 30.0
     bw = (w - (n - 1) * op_w) / n
-    head_h = 34.0
+    num_w = 34.0
+    ts, cs = theme.size("card_title"), theme.size("caption")
     ops: list[dict] = []
+    titles = [str(it.get("title", "")) for it in items]
+    # the title beside the number, at the body size, on as many lines as it needs; when a word is too wide
+    # for that, every head puts its number on top and its title under it, across the whole box
+    beside_w = bw - num_w - 4
+    stacked = any(not _word_fits(t, beside_w, ts, True) for t in titles)
+    title_w = bw - 8 if stacked else beside_w
+    title_h = max([_box_h(t, title_w, ts, True) for t in titles if t] or [0.0])
+    head_h = _half_up(num_w + title_h - 2) if stacked else max(num_w, _half_up(title_h))
+    ops += [warning("formula", "titre", t) for t in titles if not _word_fits(t, title_w, ts, True)]
     texts = []
     body_h = 0.0
     for it in items:
         text = str(it.get("text") or "")
-        th = _text_height(text, bw - 2 * PAD + 4, 10) if text else 0
+        th = _text_height(text, bw - 2 * PAD + 4, cs) if text else 0
         texts.append((it, text, th))
         body_h = max(body_h, th + 10 if text else 0)
-    for i, (it, text, th) in enumerate(texts):
+    for i, ((it, text, th), title) in enumerate(zip(texts, titles)):
         x = i * (bw + op_w)
         num = str(it.get("num") or i + 1)
         ops.append({"op": "box", "x": x, "y": 0, "w": bw, "h": head_h, "shape": "ROUND_RECTANGLE", "fill": "surface", "role": "head"})
-        ops.append({"op": "box", "x": x, "y": 0, "w": head_h, "h": head_h, "shape": "ROUND_RECTANGLE", "fill": "accent", "role": "num",
-                    "text": num, "style": "badge", "size": 12, "bold": True, "color": "ink", "align": "CENTER", "valign": "MIDDLE"})
-        title = str(it.get("title", ""))
-        ops.append({"op": "text", "x": x + head_h + 2, "y": 0, "w": bw - head_h - 4, "h": head_h, "text": title, "style": "card_title",
-                    "size": fit_text_size(title, bw - head_h - 20, 11, max_lines=2, floor=8.5), "bold": True, "color": "ink", "valign": "MIDDLE",
-                    "small_ok": True, "role": "title"})
+        ops.append({"op": "box", "x": x, "y": 0, "w": num_w, "h": num_w if stacked else head_h, "shape": "ROUND_RECTANGLE", "fill": "accent",
+                    "role": "num", "text": num, "style": "badge", "size": 12, "bold": True, "color": "ink", "align": "CENTER", "valign": "MIDDLE"})
+        if stacked:
+            ops.append({"op": "text", "x": x + 4, "y": num_w - 2, "w": title_w, "h": head_h - num_w + 2, "text": title, "style": "card_title",
+                        "size": ts, "bold": True, "color": "ink", "valign": "MIDDLE", "role": "title"})
+        else:
+            ops.append({"op": "text", "x": x + num_w + 2, "y": 0, "w": title_w, "h": head_h, "text": title, "style": "card_title",
+                        "size": ts, "bold": True, "color": "ink", "valign": "MIDDLE", "role": "title"})
         if text:
             ops.append({"op": "box", "x": x, "y": head_h + 4, "w": bw, "h": body_h, "shape": "ROUND_RECTANGLE", "fill": "surface", "role": "body"})
-            ops.append({"op": "text", "x": x + 6, "y": head_h + 8, "w": bw - 12, "h": th, "markdown": text, "style": "caption", "size": 10,
+            ops.append({"op": "text", "x": x + 6, "y": head_h + 8, "w": bw - 12, "h": th, "markdown": text, "style": "caption", "size": cs,
                         "color": "text", "align": "CENTER", "role": "text"})
         if i < n - 1:
             ops.append({"op": "text", "x": x + bw, "y": 0, "w": op_w, "h": head_h, "text": str(p["operator"]), "style": "kpi_value", "size": 20,
                         "bold": True, "color": "accent_dark", "align": "CENTER", "valign": "MIDDLE", "role": "operator"})
     y = head_h + (body_h + 4 if body_h else 0) + 6
-    ops.append({"op": "text", "x": 0, "y": y, "w": w, "h": 26, "text": "=", "style": "kpi_value", "size": 22, "bold": True, "color": "accent_dark",
-                "align": "CENTER", "valign": "MIDDLE", "role": "equals"})
+    eq_h = 22 * LEADING + INSETS  # the box holds the 22 pt line, centred where the sign sits
+    ops.append({"op": "text", "x": 0, "y": y + 13 - eq_h / 2, "w": w, "h": eq_h, "text": "=", "style": "kpi_value", "size": 22, "bold": True,
+                "color": "accent_dark", "align": "CENTER", "valign": "MIDDLE", "role": "equals"})
     y += 30
     res = p["result"] if isinstance(p["result"], dict) else {"title": str(p["result"])}
     rw = min(float(p["result_w"]), w)
     rx = (w - rw) / 2
-    ops.append({"op": "box", "x": rx, "y": y, "w": rw, "h": head_h, "shape": "ROUND_RECTANGLE", "fill": "ink", "role": "result_head",
-                "text": str(res.get("title", "")), "style": "card_title", "size": 11, "bold": True, "color": "on_dark", "align": "CENTER", "valign": "MIDDLE"})
-    y += head_h
+    rtitle = str(res.get("title", ""))
+    res_h = max(num_w, _half_up(_box_h(rtitle, rw, ts, True)))
+    if not _word_fits(rtitle, rw, ts, True):
+        ops.append(warning("formula", "résultat", rtitle))
+    ops.append({"op": "box", "x": rx, "y": y, "w": rw, "h": res_h, "shape": "ROUND_RECTANGLE", "fill": "ink", "role": "result_head",
+                "text": rtitle, "style": "card_title", "size": ts, "bold": True, "color": "on_dark", "align": "CENTER", "valign": "MIDDLE"})
+    y += res_h
     rtext = str(res.get("text") or "")
     if rtext:
-        rh = _text_height(rtext, rw - 12, 10) + 10
+        rh = _text_height(rtext, rw - 12, cs) + 10
         ops.append({"op": "box", "x": rx, "y": y + 4, "w": rw, "h": rh, "shape": "ROUND_RECTANGLE", "fill": "surface", "role": "result_body"})
-        ops.append({"op": "text", "x": rx + 6, "y": y + 8, "w": rw - 12, "h": rh - 8, "markdown": rtext, "style": "caption", "size": 10,
+        ops.append({"op": "text", "x": rx + 6, "y": y + 8, "w": rw - 12, "h": rh - 8, "markdown": rtext, "style": "caption", "size": cs,
                     "color": "text", "align": "CENTER", "role": "result_text"})
         y += rh + 4
     return ops, h or y
@@ -279,12 +315,20 @@ def _persona_card(p: dict, theme: Theme, w: float, h: float | None) -> tuple[lis
                     "color": "ink", "align": "CENTER", "valign": "MIDDLE"})
     tx = pad + photo_d + 12
     name = str(p["name"]) + (f" – {p['age']}" if p["age"] else "")
-    ops.append({"op": "text", "x": tx, "y": y, "w": left_w - photo_d - 12, "h": 22 + INSETS, "text": name, "style": "card_title", "size": 15,
+    nw = left_w - photo_d - 12
+    name_h = max(22 + INSETS, _box_h(name, nw, 15, True))  # a long name wraps and pushes the place down
+    ops.append({"op": "text", "x": tx, "y": y, "w": nw, "h": name_h, "text": name, "style": "card_title", "size": 15,
                 "bold": True, "color": "ink", "role": "name"})
+    ident = photo_d
     if p["location"]:
-        ops.append({"op": "text", "x": tx, "y": y + 26, "w": left_w - photo_d - 12, "h": 14 + INSETS, "text": "◎ " + str(p["location"]),
+        loc = "◎ " + str(p["location"])
+        loc_h = _text_height(loc, nw, 10)
+        ops.append({"op": "text", "x": tx, "y": y + name_h - 4, "w": nw, "h": loc_h, "text": loc,
                     "style": "caption", "size": 10, "color": "muted", "italic": True, "role": "location"})
-    y += photo_d + 12
+        ident = max(ident, name_h - 4 + loc_h - 4)
+    else:
+        ident = max(ident, name_h - 4)
+    y += ident + 12
     # context
     if p["context"]:
         ops.append({"op": "text", "x": pad, "y": y, "w": left_w, "h": 12 + INSETS, "text": str(p["context_label"]), "style": "card_label", "size": 10,
@@ -310,27 +354,32 @@ def _persona_card(p: dict, theme: Theme, w: float, h: float | None) -> tuple[lis
     for g in p["gauges"] or []:
         g = g if isinstance(g, dict) else {"label": str(g), "value": 0.5}
         v = max(0.0, min(1.0, float(g.get("value", 0.5))))
-        # the label's box starts above the row so that its baseline sits 6.5 pt over the bar
-        ops.append({"op": "text", "x": rx - INSET_X, "y": label_top(ry + 18, 10), "w": right_w + INSET_X, "h": 12 + INSETS, "text": str(g.get("label", "")), "style": "card_label", "size": 10,
-                    "bold": True, "color": "ink", "role": "gauge_label"})
-        ops.append({"op": "box", "x": rx, "y": ry + 18, "w": right_w, "h": 7, "fill": "surface", "role": "gauge_track"})
-        ops.append({"op": "box", "x": rx, "y": ry + 18, "w": max(4.0, right_w * v), "h": 7, "fill": "accent", "role": "gauge"})
-        ry += 32
+        # the label's box starts above the row so that its (last) baseline sits 6.5 pt over the bar
+        label = str(g.get("label", ""))
+        extra = (_wrapped_lines(label, right_w + INSET_X, 10 * BOLD_WRAP) - 1) * 10 * LEADING
+        bar_y = ry + 18 + extra
+        ops.append({"op": "text", "x": rx - INSET_X, "y": label_top(bar_y, 10) - extra, "w": right_w + INSET_X, "h": 10 * LEADING + INSETS + extra,
+                    "text": label, "style": "card_label", "size": 10, "bold": True, "color": "ink", "role": "gauge_label"})
+        ops.append({"op": "box", "x": rx, "y": bar_y, "w": right_w, "h": 7, "fill": "surface", "role": "gauge_track"})
+        ops.append({"op": "box", "x": rx, "y": bar_y, "w": max(4.0, right_w * v), "h": 7, "fill": "accent", "role": "gauge"})
+        ry += 32 + extra
     devices = p["devices"] or []
     if devices:
         ops.append({"op": "text", "x": rx - INSET_X, "y": label_top(ry + 18, 10), "w": right_w + INSET_X, "h": 12 + INSETS, "text": str(p["devices_label"]), "style": "card_label", "size": 10,
                     "bold": True, "color": "ink", "role": "devices_label"})
-        dx = rx
+        dx, dy = rx, ry + 18
         for d in devices:
             d = d if isinstance(d, dict) else {"label": str(d), "on": True}
             on = bool(d.get("on", True))
             label = str(d.get("label", ""))
             dw = max(52.0, 18 + len(label) * 5.8)  # Google's 14.4 pt of side insets plus the label
-            ops.append({"op": "box", "x": dx, "y": ry + 18, "w": dw, "h": 22, "shape": "ROUND_RECTANGLE", "fill": "cyan" if on else "surface",
+            if dx > rx and dx + dw > rx + right_w + 0.01:  # the chips wrap rather than leave the card
+                dx, dy = rx, dy + 28
+            ops.append({"op": "box", "x": dx, "y": dy, "w": dw, "h": 22, "shape": "ROUND_RECTANGLE", "fill": "cyan" if on else "surface",
                         "role": "device", "text": label, "style": "badge", "size": 8.5, "small_ok": True, "bold": True,
                         "color": "ink" if on else "muted", "align": "CENTER", "valign": "MIDDLE"})
             dx += dw + 6
-        ry += 18 + 24 + 8
+        ry = dy + 24 + 8
     y = max(left_bottom, ry)
     # expectations / brakes
     exp, brk = list(p["expectations"] or []), list(p["brakes"] or [])
@@ -350,14 +399,18 @@ def _persona_card(p: dict, theme: Theme, w: float, h: float | None) -> tuple[lis
             ops.append({"op": "text", "x": x, "y": y + 16, "w": col_w, "h": th, "markdown": md, "style": "caption", "size": 10, "color": "text", "role": "list"})
             bottom = max(bottom, y + 16 + th)
         y = bottom
+    ts = theme.size("card_title")
+    tw = min(150.0, w * 0.3)
+    tag_h = max(32.0, _half_up(_box_h(str(p["tag"]), tw, ts, True))) if p["tag"] else 0.0
     if p["tag"]:
-        y += 40  # its own band under the lists, so it never covers them
+        y += tag_h + 8  # its own band under the lists, so it never covers them
+        if not _word_fits(str(p["tag"]), tw, ts, True):
+            ops.append(warning("persona_card", "étiquette", p["tag"]))
     height = h or (y + pad)
     if p["tag"]:  # inside the card's rounded corner, rounded itself, clear of its curve
-        tw = min(150.0, w * 0.3)
-        e = corner_box_offset(w, height, tw, 32)
-        ops.append({"op": "box", "x": w - tw - e, "y": height - 32 - e, "w": tw, "h": 32, "shape": "ROUND_RECTANGLE", "fill": "cyan", "role": "tag",
-                    "text": str(p["tag"]), "style": "card_title", "size": 11, "bold": True, "color": "ink", "align": "CENTER", "valign": "MIDDLE"})
+        e = corner_box_offset(w, height, tw, tag_h)
+        ops.append({"op": "box", "x": w - tw - e, "y": height - tag_h - e, "w": tw, "h": tag_h, "shape": "ROUND_RECTANGLE", "fill": "cyan", "role": "tag",
+                    "text": str(p["tag"]), "style": "card_title", "size": ts, "bold": True, "color": "ink", "align": "CENTER", "valign": "MIDDLE"})
     frame = {"op": "box", "x": 0, "y": 0, "w": w, "h": height, "shape": "ROUND_RECTANGLE", "fill": "background", "line": {"color": "rule", "weight": 1},
              "role": "card"}
     return [frame] + ops, height
@@ -399,8 +452,8 @@ _SHEET_HEAD = 50.0     # avatar, name, subtitle, badge
 _SHEET_UNDER = 10.0    # between the header and the cards
 _SHEET_GAP = 12.0      # between the columns
 _SHEET_VGAP = 8.0      # between stacked blocks
-_SHEET_CTX = 92.0      # design heights: a card grows when its text needs more, with a warning
-_SHEET_LISTS = 108.0
+_SHEET_CTX = 102.0     # design heights for 13 pt text: a card grows when its text needs more, with a warning
+_SHEET_LISTS = 122.0
 _SHEET_TAG = 28.0
 _SHEET_IN = 3.0        # text box inside its card (Google adds its own insets)
 _SHEET_SPACING = 2.0   # between the paragraphs of a card
@@ -431,8 +484,8 @@ def _sheet_text(x: float, y: float, w: float, label: str, paras: list[list[dict]
              "spacing": _SHEET_SPACING, "role": role}, th + 2 * inset)
 
 
-def _sheet_bullets(items: list, marker: str) -> list[list[dict]]:
-    return [[{"text": "›  ", "bold": True, "size": 11, "color": marker}, {"text": str(it), "size": 11, "color": "ink"}] for it in items]
+def _sheet_bullets(items: list, marker: str, size: float) -> list[list[dict]]:
+    return [[{"text": "›  ", "bold": True, "size": size, "color": marker}, {"text": str(it), "size": size, "color": "ink"}] for it in items]
 
 
 def _sheet_header(p: dict, w: float, warnings: list[str]) -> list[dict]:
@@ -466,11 +519,12 @@ def _sheet_header(p: dict, w: float, warnings: list[str]) -> list[dict]:
     if sub.strip():
         sub = sub.strip().upper()
         sw = w - tx  # under the name and the badge, which sits on the name line
+        # a line of capitals under the name, like a caption: 12 pt, down to the 10 pt floor to hold on one line
         ssize = fit_text_size(sub, sw / _CAPS, 12, max_lines=1, floor=10)
         if _wrapped_lines(sub, sw / _CAPS, ssize) > 1:
             warnings.append(f"segment, role and origin do not fit on one line at {ssize:g} pt: shorten them")
-        ops.append({"op": "text", "x": tx, "y": 30, "w": sw, "h": ssize * LEADING + INSETS, "text": sub, "style": "body", "size": ssize,
-                    "color": "ink", "role": "subtitle", "small_ok": ssize < 11})
+        ops.append({"op": "text", "x": tx, "y": 30, "w": sw, "h": ssize * LEADING + INSETS, "text": sub, "style": "caption", "size": ssize,
+                    "color": "ink", "role": "subtitle"})
     return ops
 
 
@@ -488,8 +542,9 @@ def _persona_sheet(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
     y0 = _SHEET_HEAD + _SHEET_UNDER if p["header"] else 0.0
 
     # measure every block, then settle the heights
-    ctx_paras = ([[{"text": str(p["context"]), "size": 11, "color": "text"}]] if p["context"] else []) + \
-                ([[{"text": "Objectif : " + str(p["goal"]), "bold": True, "size": 11, "color": "ink"}]] if p["goal"] else [])
+    bs = theme.size("body")
+    ctx_paras = ([[{"text": str(p["context"]), "size": bs, "color": "text"}]] if p["context"] else []) + \
+                ([[{"text": "Objectif : " + str(p["goal"]), "bold": True, "size": bs, "color": "ink"}]] if p["goal"] else [])
     ctx_need = _sheet_text(0, y0, lw, p["context_label"], ctx_paras, "context")[1]
     ctx_h = max(_SHEET_CTX, ctx_need)
     if ctx_need > _SHEET_CTX:
@@ -500,14 +555,14 @@ def _persona_sheet(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
     cw = (lw - _SHEET_VGAP) / 2
     lists = [(key, label, items, k * (cw + _SHEET_VGAP)) for k, (key, label, items)
              in enumerate((("expectations", p["expectations_label"], exp), ("brakes", p["brakes_label"], brk)))] if has_lists else []
-    needs = {key: _sheet_text(x, 0, cw, label, _sheet_bullets(items, "accent"), key)[1] for key, label, items, x in lists}
+    needs = {key: _sheet_text(x, 0, cw, label, _sheet_bullets(items, "accent", bs), key)[1] for key, label, items, x in lists}
     lists_h = max([_SHEET_LISTS, *needs.values()]) if has_lists else 0.0
     for key, need in needs.items():
         if need > _SHEET_LISTS:
             warnings.append(f"{key}: {need:.0f} pt of text, the list cards grow from {_SHEET_LISTS:g} pt; shorten the items")
     column = ctx_h + (_SHEET_VGAP + lists_h if has_lists else 0.0)
     if side:
-        side_need = _sheet_text(rx, y0, rw, p["side_label"], _sheet_bullets(side, "ink"), "side", round_corner_inset(rw, column))[1]
+        side_need = _sheet_text(rx, y0, rw, p["side_label"], _sheet_bullets(side, "ink", bs), "side", round_corner_inset(rw, column))[1]
         if side_need > column:
             warnings.append(f"side_items: {side_need:.0f} pt of text, more than the {column:.0f} pt of the left column; shorten them")
             if has_lists:
@@ -520,7 +575,7 @@ def _persona_sheet(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
     nw = rw if side else w
     note_h = _text_height(str(p["note"]), nw, 10) if p["note"] else 0.0
     tag_h = _SHEET_TAG if p["tag"] else 0.0
-    if p["tag"] and _wrapped_lines(str(p["tag"]), lw / _CAPS_BOLD, 11) > 1:
+    if p["tag"] and _wrapped_lines(str(p["tag"]), lw / _CAPS_BOLD, theme.size("card_title")) > 1:
         warnings.append("tag does not fit on one line: shorten it")
     row = max(tag_h, note_h) if side else tag_h + note_h + (_SHEET_VGAP if tag_h and note_h else 0.0)
     natural = y0 + column + (_SHEET_VGAP + row if row else 0.0)
@@ -544,15 +599,15 @@ def _persona_sheet(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
     ly = y0 + ctx_h + _SHEET_VGAP
     for key, label, items, x in lists:
         ops.append(_sheet_card(x, ly, cw, lists_h, "background", f"{key}_card"))
-        ops.append(_sheet_text(x, ly, cw, label, _sheet_bullets(items, "accent"), key, round_corner_inset(cw, lists_h))[0])
+        ops.append(_sheet_text(x, ly, cw, label, _sheet_bullets(items, "accent", bs), key, round_corner_inset(cw, lists_h))[0])
     if side:
         ops.append(_sheet_card(rx, y0, rw, column, "accent", "side_card"))
-        ops.append(_sheet_text(rx, y0, rw, p["side_label"], _sheet_bullets(side, "ink"), "side", round_corner_inset(rw, column))[0])
+        ops.append(_sheet_text(rx, y0, rw, p["side_label"], _sheet_bullets(side, "ink", bs), "side", round_corner_inset(rw, column))[0])
     by = y0 + column + _SHEET_VGAP
     if p["tag"]:
         ops.append({"op": "box", "x": 0, "y": by, "w": lw, "h": _SHEET_TAG, "shape": "ROUND_RECTANGLE", "fill": "cyan", "role": "tag",
-                    "text": str(p["tag"]), "style": "card_title", "size": 11, "bold": True, "color": "ink", "align": "CENTER",
-                    "valign": "MIDDLE"})
+                    "text": str(p["tag"]), "style": "card_title", "size": theme.size("card_title"), "bold": True, "color": "ink",
+                    "align": "CENTER", "valign": "MIDDLE"})
     if p["note"]:
         nx, ny = (rx, by) if side else (0.0, by + (tag_h + _SHEET_VGAP if tag_h else 0.0))
         ops.append({"op": "text", "x": nx, "y": ny, "w": nw, "h": note_h, "text": str(p["note"]), "style": "caption", "size": 10,

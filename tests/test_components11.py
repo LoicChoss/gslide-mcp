@@ -336,3 +336,40 @@ def test_persona_card_tag_sits_inside_the_rounded_corner_of_the_card():
         assert gap >= 6, (w, gap)
         lists = _of(ops, "text", "list")
         assert all(tag["y"] >= t["y"] + t["h"] for t in lists)
+
+
+# --- charter: body texts hold 13 pt, the blocks grow, what cannot fit is reported ----------------
+
+def _warnings_of(ops):
+    return [o["text"] for o in ops if o["op"] == "warning"]
+
+
+def test_diagram_texts_grow_their_blocks_instead_of_shrinking_under_the_floor():
+    body = PERISCOPE.size("body")
+    # hub_spoke: a satellite's label in a box over its disc at 10 pt; too long for its disc, it is reported
+    ops, _ = _render("hub_spoke", {"center": "Marque", "hub_shape": "disc", "sats": ["SEO", "Anticonstitutionnellement"], "sat_d": 60}, w=400, h=220)
+    assert [lb["size"] for lb in _of(ops, "text", "sat_label")] == [10, 10] and not any(s.get("text") for s in _of(ops, "box", "sat"))
+    assert _warnings_of(ops) == ["hub_spoke : satellite « Anticonstitutionnellement » trop long, raccourcir"]
+    (hub_text,) = _of(ops, "text", "hub_text")
+    assert hub_text["size"] == body and not hub_text.get("small_ok")
+    # stack: a long label wraps and every layer takes the tallest one's height
+    items = [{"label": "Couverture & visibilité · SEO + GEO", "sub": "Positions, part de voix LLM"}, {"label": "B"}]
+    ops, h = _render("stack", {"items": items, "numbered": True}, w=300)
+    layers = _of(ops, "box", "layer")
+    assert all((t.get("size") or PERISCOPE.size(t["style"])) == body for t in _of(ops, "text", "label") + _of(ops, "text", "num"))
+    assert not [o for o in ops if o.get("small_ok")]
+    assert layers[0]["h"] == layers[1]["h"] > 48 and h == layers[1]["y"] + layers[1]["h"]
+    (label,), (sub,) = [t for t in _of(ops, "text", "label") if t["text"].startswith("Couverture")], _of(ops, "text", "sub")
+    assert label["y"] + label["h"] <= sub["y"] + 8 and sub["y"] + sub["h"] <= layers[0]["y"] + layers[0]["h"]
+    # formula: titles at the body size; words too wide beside the numbers put every number above its title
+    ops, _ = _render("formula", {"items": [{"title": "Trafic"}, {"title": "Taux de conversion"}, {"title": "Panier moyen"}, {"title": "Récurrence"},
+                                           {"title": "Marge"}], "result": "Chiffre d'affaires", "operator": "×"}, w=660)
+    titles, nums = _of(ops, "text", "title"), _of(ops, "box", "num")
+    assert all(t["size"] == body and not t.get("small_ok") for t in titles) and _warnings_of(ops) == []
+    assert all(t["y"] >= n["y"] + n["h"] - 2 for t, n in zip(titles, nums))
+    # flowchart: the rows grow to the tallest node; a word too wide for the grid is reported
+    nodes = [{"id": "a", "label": "Brief", "sub": "sujet, intention et angle éditorial", "col": 0}, {"id": "b", "label": "Anticonstitutionnellement", "col": 1}]
+    ops, h = _render("flowchart", {"nodes": nodes, "edges": [["a", "b"]], "node_h": 30}, w=300)
+    boxes = _of(ops, "box", "node")
+    assert boxes[0]["h"] == boxes[1]["h"] > 30 and h == boxes[0]["h"] and boxes[0]["size"] == body
+    assert _warnings_of(ops) == ["flowchart : nœud « Anticonstitutionnellement » trop long, raccourcir"]

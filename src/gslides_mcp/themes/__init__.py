@@ -34,16 +34,45 @@ class Theme:
     font: str = "Arial"
     text_styles: dict[str, dict] = field(default_factory=dict)  # name -> {size, bold, italic, color, font}
     description: str = ""
-    text_rules: dict = field(default_factory=dict)  # {min_size, small_min_size, small_styles, exempt_styles}
+    text_rules: dict = field(default_factory=dict)  # {min_size, small_min_size, table_min_size, small_styles, exempt_styles}
 
     def size_floor(self, style: str | None) -> float | None:
-        """Smallest font size allowed for a text in ``style`` (None = no rule)."""
+        """Smallest font size allowed for a text in ``style`` (None = no rule).
+
+        Body ≥ ``min_size``, small styles (captions, legends, badges…) ≥
+        ``small_min_size``, table styles (``exempt_styles``) ≥ ``table_min_size``
+        — a table starts at its style's size and shrinks to that floor when it
+        does not fit.
+        """
         rules = self.text_rules
-        if not rules or style in rules.get("exempt_styles", ()):
+        if not rules:
             return None
+        if style in rules.get("exempt_styles", ()):
+            return rules.get("table_min_size")
         if style in rules.get("small_styles", ()):
             return rules.get("small_min_size", rules.get("min_size"))
         return rules.get("min_size")
+
+    def small_ok(self, style: str | None, role: str | None = None) -> bool:
+        """Whether a ``small_ok`` op in ``style`` may go under its floor.
+
+        Only chart internals, eyebrows and badges (``small_ok_styles``) and
+        sources (role ``source``): a text read as a sentence keeps its floor.
+        Without the rule, any small style may.
+        """
+        rules = self.text_rules
+        allowed = rules.get("small_ok_styles", rules.get("small_styles", ()))
+        return style in allowed or role == "source"
+
+    def size(self, style: str, default: float = 11.0) -> float:
+        """Size a text in ``style`` is drawn at (the style's size, raised to its floor).
+
+        Components size their boxes from this, never from a literal, so a box
+        holds its text whatever the charter's sizes.
+        """
+        s = float(self.text_styles.get(style, {}).get("size") or default)
+        floor = self.size_floor(style)
+        return max(s, float(floor)) if floor is not None else s
 
     def color(self, value) -> dict:
         """Resolve a hex string, a palette token, a role, or an rgb dict."""

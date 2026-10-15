@@ -41,7 +41,7 @@ def _warnings(ops):
 
 def test_the_sheet_fills_the_content_area_without_overflow_or_warning():
     ops, h = _render(MANON)
-    assert 290 <= h <= 320 and _warnings(ops) == []
+    assert 325 <= h <= 345 and _warnings(ops) == []  # 13 pt card texts (charter): about 335 pt from y 40 on a 405 pt slide
     drawn = [o for o in ops if o["op"] != "warning"]
     assert min(o["x"] for o in drawn) >= 0 and max(o["x"] + o["w"] for o in drawn) <= W + 0.01
     assert max(_bottom(o) for o in drawn) <= h + 0.01
@@ -76,9 +76,9 @@ def test_two_columns_aligned():
     (side,) = _of(ops, "side_card")
     (tag,) = _of(ops, "tag")
     (note,) = _of(ops, "note")
-    assert ctx["x"] == 0 and abs(ctx["w"] - 330) < 1 and ctx["h"] == 92 and ctx["shape"] == "ROUND_RECTANGLE"
+    assert ctx["x"] == 0 and abs(ctx["w"] - 330) < 1 and ctx["h"] == 102 and ctx["shape"] == "ROUND_RECTANGLE"
     assert ctx["fill"] == "background" and ctx["line"]["color"] == "rule"
-    assert exp["y"] == brk["y"] == _bottom(ctx) + 8 and exp["h"] == brk["h"] == 108
+    assert exp["y"] == brk["y"] == _bottom(ctx) + 8 and exp["h"] == brk["h"] == 122
     assert exp["x"] == 0 and abs(_bottom(exp) - _bottom(brk)) < 0.01 and abs(brk["x"] + brk["w"] - ctx["w"]) < 0.01
     assert side["x"] == ctx["w"] + 12 and abs(side["x"] + side["w"] - W) < 0.01 and side["fill"] == "accent"
     assert side["y"] == ctx["y"] and abs(_bottom(side) - _bottom(exp)) < 0.01

@@ -22,6 +22,8 @@ Variants drawn from the Pasteur « KPI à retenir » memo deck and its paid-medi
 
 ### Changed
 
+- **Text sizes, new charter**: body text never goes under 13 pt (was 11): paragraphs, labels, KPI labels, card titles and bodies, callouts, steps, lists, quotes. Small texts (captions, eyebrows, badges, legends, axes, chart values, KPI deltas, sources) keep their 10 pt floor. Tables start at 12 pt (was 10.5) and step down to 10.5 pt only when a figure or a word does not hold in its column. Every component sizes its boxes from the theme (`Theme.size`) and grows, or warns, rather than shrinking body text.
+- `small_ok` only takes chart internals, eyebrows, badges and sources under their floor (`text_rules.small_ok_styles`); on a body text it is ignored. A run may carry its own `style` (a « (GA4) » note in caption size after a 13 pt label).
 - The default template and folder also work on the hosted server: `GSLIDES_MCP_DEFAULT_TEMPLATE` and `GSLIDES_MCP_DEFAULT_FOLDER` in its environment give the whole team one template and one folder (a connector takes nothing but its URL in Claude, so there is no per-person setting there). `get_defaults`, the docs and the skill no longer say local only.
 
 ## [0.9.0] — 2026-10-06

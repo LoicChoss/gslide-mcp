@@ -213,7 +213,11 @@ def test_kpi_note_is_a_small_muted_run_after_the_label():
     label = next(o for o in ops if o["op"] == "text" and o.get("role") == "label")
     (runs,) = label["runs"]
     assert runs[0]["text"] == "Collecte" and runs[1]["text"].strip() == "(GA4)"
-    assert runs[1]["color"] == "muted" and runs[1]["size"] < 11
+    assert runs[1]["color"] == "muted" and runs[1]["style"] == "caption"
+    # the note keeps its caption size (10 pt) under the 13 pt label: its run carries its own style and floor
+    reqs, _ = draw.ops_to_requests("s", [label], PERISCOPE, prefix="t")
+    sizes = {r["updateTextStyle"]["style"]["fontSize"]["magnitude"] for r in reqs if "fontSize" in r.get("updateTextStyle", {}).get("style", {})}
+    assert sizes == {PERISCOPE.size("kpi_label"), PERISCOPE.size("caption")} and PERISCOPE.size("caption") < PERISCOPE.size("kpi_label")
     plain, _ = _render("kpi", {"value": "1", "label": "Clics"}, w=150)
     assert next(o for o in plain if o.get("role") == "label")["text"] == "Clics"
 

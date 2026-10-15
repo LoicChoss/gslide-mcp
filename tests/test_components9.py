@@ -274,6 +274,47 @@ def test_bar_list_value_in_bar_without_sub_right_emits_no_empty_text():
     assert all(o.get("text") or o.get("runs") or o.get("markdown") for o in ops if o["op"] == "text")
 
 
+def test_workshop_labels_hold_the_charter_floor_and_their_rows_grow():
+    long = "Un libellé de priorité vraiment très long qui revient à la ligne"
+    ops, _ = _render("ranked_bars", {"items": [{"label": long, "value": 3}, {"label": "Court", "value": 1}], "top": 1}, w=420)
+    labels = _of(ops, "text", "label")
+    assert all(lb["size"] == PERISCOPE.size("label") and not lb.get("small_ok") for lb in labels)
+    assert labels[0]["h"] > labels[1]["h"] and labels[1]["y"] >= labels[0]["y"] + labels[0]["h"]
+    assert {c["style"] for c in _of(ops, "text", "count")} == {"chart_value"}  # counts are chart internals
+    n = round((labels[0]["h"] - 8) / (13 * 1.35))
+    track = _of(ops, "box", "track")[0]  # the bar on the middle of the label's lines
+    assert track["y"] + track["h"] / 2 == pytest.approx(labels[0]["y"] + 7 + 0.6 * 13 + (n - 1) * 13 * 1.35 / 2)
+    slots = components.get("session_plan").example["slots"]
+    ops, _ = _render("session_plan", {"slots": slots}, w=420)
+    names = _of(ops, "text", "slot_label")
+    assert all(t["size"] >= PERISCOPE.size_floor(t["style"]) and not t.get("small_ok") for t in names + _of(ops, "text", "time"))
+    assert len({t["y"] for t in names}) == 1  # one geometry for the band
+    for t in names:  # every slot holds the longest word of its name at 13 pt bold
+        assert t["w"] >= max(len(wd) for wd in t["text"].split()) * 13 * 0.485 * 1.15 + 2 * 7.2 - 0.01
+    assert all(o["y"] + o["h"] <= _of(ops, "box", "slot")[0]["y"] + _of(ops, "box", "slot")[0]["h"] + 0.01 for o in names)
+
+
+def test_bar_list_legend_and_note_stay_inside_a_narrow_block():
+    ops, h = _render("bar_list", components.get("bar_list").example, w=420)
+    note = _of(ops, "text", "note")[0]
+    assert note["w"] > 100 and note["x"] + note["w"] <= 420.01
+    legend = [o for o in ops if o["op"] == "text" and o.get("style") == "legend"]
+    assert all(t["x"] + t["w"] <= 420.01 for t in legend) and h >= note["y"] + note["h"] - 0.01
+    assert {v["style"] for v in _of(ops, "text", "value")} == {"chart_value"}
+
+
+def test_workshop_blocks_pinned_too_short_warn_instead_of_shrinking():
+    ops, _ = _render("next_steps", {"steps": [{"title": "Étape", "text": "Un texte bien trop long pour tenir dans la hauteur imposée par l'appelant."}]}, w=200, h=40)
+    (warn,) = [o for o in ops if o["op"] == "warning"]
+    assert warn["text"].startswith("next_steps : ") and "raccourcir" in warn["text"]
+    assert _of(ops, "text", "body")[0]["h"] > 40  # the text keeps its size and its box
+    items = ["Un point qui ne tient pas", "Un deuxième", "Un troisième", "Un quatrième", "Un cinquième"]
+    ops, h = _render("quadrant_matrix", {"quadrants": [{"title": "A", "items": items}, {"title": "B"}, {"title": "C"}, {"title": "D"}]}, w=400, h=220)
+    assert h == 220 and any(o["op"] == "warning" and o["text"].startswith("quadrant_matrix : items") for o in ops)
+    ok, _ = _render("next_steps", {"steps": [{"title": "Étape", "text": "Court."}]}, w=400)
+    assert not [o for o in ok if o["op"] == "warning"]
+
+
 def test_table_recognises_previous_period_and_variation_columns_from_the_header():
     rows = [["Famille", "Clics", "Clics N-1", "vs N-1", "Coût", "Évol. coût"],
             ["Search", "4 530", "3 900", "+16,2 %", "18 024 €", "-3,1 %"],

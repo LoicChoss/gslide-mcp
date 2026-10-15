@@ -163,6 +163,28 @@ def test_marker_lists_are_one_text_with_styled_prefixes(name, marker):
     assert text["spacing"] == 9 and height > 30
     if name == "chevrons":
         assert prefix["color"] == "positive"
+    # body text: a smaller size asked by a caller (another block) goes up to the 13 pt floor, and the box with it
+    (small,), small_h = _render(name, {"items": ["Un", "Deux"], "size": 11})
+    assert small["size"] == 13 and small_h == pytest.approx(height)
+
+
+def test_checklist_and_stats_list_keep_body_text_at_13_pt():
+    groups = [{"title": "Avant", "items": ["Une ligne assez longue pour passer sur deux lignes dans sa colonne étroite", "b"]},
+              {"title": "Après", "items": ["c"]}, {"title": "Pendant", "items": ["d"]}, {"title": "Fin", "items": ["e"]}]
+    ops, _ = _render("checklist", {"groups": groups, "cols": 2})
+    texts = _of(ops, "text")
+    titles = [t for t in texts if t.get("role") == "group_title"]
+    items = [t for t in texts if t.get("style") == "list"]
+    assert all(t["size"] == 13 and not t.get("small_ok") for t in items) and all(t["size"] == 15 for t in titles)
+    # the sections of a row start at one height in both columns
+    assert titles[0]["y"] == titles[2]["y"] and titles[1]["y"] == titles[3]["y"]
+    # each box centred on the capitals of its text's first line
+    checks = _of(ops, "box", "check")
+    assert all(c["y"] + c["h"] / 2 == pytest.approx(t["y"] + 7 + 0.6 * 13) for c, t in zip(checks, items))
+    # stats list: the grey line is body text (13 pt), the title over it 2 pt larger
+    ops, _ = _render("stats", {"items": [{"value": "2 %", "label": "des leads", "sub": "une précision"}], "layout": "list"})
+    (text,) = [t for t in _of(ops, "text") if t.get("role") == "text"]
+    assert text["runs"][0][0]["size"] == 15 and text["runs"][0][0]["bold"] and text["runs"][1][0]["size"] == 13
 
 
 # --- compare_bars / effort_matrix / bubbles / heatmap ---------------------------------------

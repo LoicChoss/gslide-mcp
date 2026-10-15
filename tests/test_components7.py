@@ -180,6 +180,39 @@ def test_timeline_arrow_alternating_boxes_styles_and_connectors():
     assert boxes[0]["x"] < boxes[1]["x"] < boxes[2]["x"] < boxes[3]["x"] and height >= boxes[0]["y"] + boxes[0]["h"]
     forced, _ = _render("timeline_arrow", {"events": [{"date": "a", "text": "x", "above": True}, {"date": "b", "text": "y", "above": True}]}, w=400)
     assert all(b["y"] < _of(forced, "line", "arrow")[0]["y1"] for b in _of(forced, "box", "event"))
+    long, _ = _render("timeline_arrow", {"events": [{"date": "11/04", "text": "Un temps fort décrit sur plusieurs lignes dans sa boîte"},
+                                                    {"date": "12/04", "text": "Court"}]}, w=400)
+    tall = _of(long, "box", "event")
+    assert tall[0]["h"] == tall[1]["h"] > 46  # the longest text grows every box alike
+
+
+# --- charter sizes (13 pt body floor) ------------------------------------------------------
+
+def test_reporting_body_texts_hold_the_floor_and_blocks_grow():
+    ops, _ = _render("analysis_block", {"items": ["a", "b"], "size": 10}, w=400)
+    assert _of(ops, "text", "body")[0]["size"] == PERISCOPE.size("list")  # an explicit size never goes under the floor
+    items = [{"title": "Titre", "text": "Un paragraphe."}]
+    ops, _ = _render("takeaways", {"items": items}, w=400)
+    title, body = _of(ops, "text", "title")[0], _of(ops, "text", "body")[0]
+    assert title["size"] >= PERISCOPE.size("body") + 2 and body["style"] == "body"  # the title stays visibly larger
+    short, h1 = _render("stat_box", {"boxes": [{"value": "1", "label": "Court"}, {"value": "2", "label": "Court"}]}, w=500)
+    wrapped, h2 = _render("stat_box", {"boxes": [{"value": "1", "label": "Un libellé qui passe sur trois lignes au moins"},
+                                                 {"value": "2", "label": "Court"}]}, w=500)
+    assert h1 == 84 and h2 > 84 and len({b["h"] for b in _of(wrapped, "box", "stat_box")}) == 1
+    assert _of(wrapped, "text", "value")[0]["y"] == _of(short, "text", "value")[0]["y"]  # the figures stay put
+    pinned, _ = _render("takeaways", {"items": items * 4}, w=400, h=40)
+    assert [o for o in pinned if o["op"] == "warning"][0]["text"].startswith("takeaways : ")
+
+
+def test_ad_scoreboard_cells_at_the_table_size_and_rows_from_their_text():
+    ads = [{"name": "Post", "values": {"CPA": "1 €"}}, {"name": "Carrousel", "values": {"CPA": "2 €"}}]
+    ops, _ = _render("ad_scoreboard", {"ads": ads, "metrics": ["CPA"]}, w=600)
+    (t,) = _of(ops, "table")
+    assert t["size"] == PERISCOPE.size("table_cell")
+    small = _of(_render("ad_scoreboard", {"ads": ads, "metrics": ["CPA"], "size": 9.5}, w=600)[0], "table")[0]
+    assert small["size"] == PERISCOPE.size_floor("table_cell")
+    tall, _ = _render("ad_scoreboard", {"ads": ads, "metrics": ["Dons déclarés par la régie"]}, w=600)
+    assert _of(tall, "table")[0]["row_heights"][2] > t["row_heights"][2]  # a label that wraps makes its row taller
 
 
 def test_every_component_has_a_use_and_its_example_renders_in_both_themes():

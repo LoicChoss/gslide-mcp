@@ -10,7 +10,9 @@ Ops:
     text      x y w h  text | markdown | runs=[[{text,bold,italic,color,size,font,highlight}],…]
               [style] [size] [color] [bold] [italic] [font] [align] [valign] [spacing] [small_ok]
               (markdown: ==texte== surligne avec le rôle ``highlight`` ; small_ok: la taille
-              demandée passe sous le plancher du thème quand le bloc ne peut pas grandir)
+              demandée passe sous le plancher du thème quand le bloc ne peut pas grandir —
+              graphes, sur-titres, badges et sources seulement, jamais un texte de corps ;
+              un run peut porter son propre ``style``, dont le plancher s'applique)
     line      x1 y1 x2 y2 [color] [weight] [dash] [end_arrow] [start_arrow]
     polyline  points=[[x,y],…] [color] [weight] [dash] [end_arrow]   (arrow on the last segment)
     arc       cx cy r a0 a1 weight [color]        (degrees, 0 = east, clockwise)
@@ -303,9 +305,9 @@ class _Canvas:
         if base.get("color") is None and "text" in self.theme.roles:
             base["color"] = "text"
         floor = self.theme.size_floor(op.get("style"))
-        if op.get("small_ok"):
-            # the charter floor is a recommendation: a value that cannot get a wider box
-            # (KPI in a narrow column, value over a thin bar) may go under it
+        if op.get("small_ok") and self.theme.small_ok(op.get("style"), op.get("role")):
+            # under the floor only for chart internals, eyebrows, badges and sources that
+            # cannot get a wider box (a value over a thin bar); body text never goes under it
             floor = None
             if op.get("size") is not None:
                 base["size"] = op["size"]
@@ -343,8 +345,12 @@ class _Canvas:
                     t = str(run.get("text", ""))
                     n = _utf16_len(t)
                     extra = {k: run[k] for k in ("bold", "italic", "color", "size", "font", "highlight") if k in run}
-                    if floor is not None and extra.get("size") is not None and extra["size"] < floor:
-                        extra["size"] = floor
+                    # a run may name its own style (« (GA4) » in caption after a 13 pt label): its floor applies
+                    run_floor = self.theme.size_floor(run["style"]) if run.get("style") else floor
+                    if run.get("style") and extra.get("size") is None:
+                        extra["size"] = self.theme.size(run["style"])
+                    if run_floor is not None and extra.get("size") is not None and extra["size"] < run_floor:
+                        extra["size"] = run_floor
                     if extra and n:
                         runs_ranges.append((pos, pos + n, extra))
                     chunks.append(t)

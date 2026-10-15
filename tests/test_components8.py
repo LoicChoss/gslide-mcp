@@ -121,6 +121,29 @@ def test_do_dont_pairs_side_by_side_with_equal_heights():
     assert len(_of(ops, "text", "do_note")) == 1 and _of(ops, "text", "do_text")[0]["style"] == "quote"
 
 
+def test_brand_texts_keep_the_charter_size_and_warn_rather_than_overlap():
+    body = PERISCOPE.size("body")
+    props = {"title": "Mirova", "text": "Un site carbone-light, accessible AA, qui double le temps passé."}
+    ops, h = _render("content_card", props, w=220)
+    (title,), (text,) = _of(ops, "text", "title"), _of(ops, "text", "body")
+    assert title["size"] > body and text.get("size") is None  # the body at the theme's 13 pt, the title over it
+    short, h2 = _render("content_card", props, w=220, h=60)
+    assert h2 == pytest.approx(h) and _of(short, "box", "card")[0]["h"] == pytest.approx(h)
+    assert [o["text"] for o in short if o["op"] == "warning"][0].startswith("content_card : text « Un site")
+    # a narrow card gives up side padding before a word is cut
+    narrow, _ = _render("content_card", {"title": "Mirova", "text": "carbone-light, accessible"}, w=120)
+    assert _of(narrow, "text", "body")[0]["x"] < 16 and not [o for o in narrow if o["op"] == "warning"]
+    # the client ticker wraps (the band grows) rather than shrink under 13 pt; 11 is drawn, and sized, at 13
+    names = ["Médecins Sans Frontières", "UCPA", "Miléade"]
+    _, wide = _render("client_ticker", {"names": names}, w=660)
+    tall, high = _render("client_ticker", {"names": names}, w=200)
+    assert _of(tall, "text", "names")[0]["size"] >= body and high > wide
+    assert _render("client_ticker", {"names": names, "size": 11}, w=660)[1] == pytest.approx(wide)
+    # verbatims at the theme's quote size
+    ops, _ = _render("do_dont", {"pairs": [{"do": "« Nous. »", "dont": "« Je. »"}]})
+    assert all(o.get("size") is None for o in _of(ops, "text") if o["role"].endswith("_text"))
+
+
 def test_brand_components_have_use_and_render_in_both_themes():
     names = {"button", "button_row", "hashtags", "eyebrow", "content_card", "content_cards", "section_header", "client_ticker", "do_dont"}
     for entry in components.catalogue():

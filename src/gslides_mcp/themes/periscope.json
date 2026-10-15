@@ -122,11 +122,11 @@
       "color": "text"
     },
     "body": {
-      "size": 11,
+      "size": 13,
       "color": "text"
     },
     "label": {
-      "size": 11,
+      "size": 13,
       "color": "text"
     },
     "caption": {
@@ -139,7 +139,7 @@
       "color": "ink"
     },
     "kpi_label": {
-      "size": 11,
+      "size": 13,
       "color": "text"
     },
     "kpi_delta": {
@@ -163,21 +163,21 @@
       "color": "ink"
     },
     "card_title": {
-      "size": 11,
+      "size": 13,
       "bold": true,
       "color": "ink"
     },
     "card_body": {
-      "size": 11,
+      "size": 13,
       "color": "text"
     },
     "callout_title": {
-      "size": 11,
+      "size": 13,
       "bold": true,
       "color": "ink"
     },
     "callout_body": {
-      "size": 11,
+      "size": 13,
       "color": "text"
     },
     "badge": {
@@ -191,11 +191,11 @@
       "color": "ink"
     },
     "step_text": {
-      "size": 11,
+      "size": 13,
       "color": "text"
     },
     "quote": {
-      "size": 12,
+      "size": 13,
       "bold": true,
       "italic": true,
       "color": "ink"
@@ -205,12 +205,12 @@
       "color": "text"
     },
     "table_header": {
-      "size": 10.5,
+      "size": 12,
       "bold": true,
       "color": "ink"
     },
     "table_cell": {
-      "size": 10.5,
+      "size": 12,
       "color": "text"
     },
     "chart_label": {
@@ -246,13 +246,14 @@
       "color": "on_accent"
     },
     "list": {
-      "size": 12.5,
+      "size": 13,
       "color": "text"
     }
   },
   "text_rules": {
-    "min_size": 11,
+    "min_size": 13,
     "small_min_size": 10,
+    "table_min_size": 10.5,
     "small_styles": [
       "caption",
       "card_label",
@@ -266,6 +267,14 @@
       "step_number",
       "quote_author",
       "stat_label"
+    ],
+    "small_ok_styles": [
+      "chart_label",
+      "chart_value",
+      "axis",
+      "legend",
+      "badge",
+      "card_label"
     ],
     "exempt_styles": [
       "table_cell",

@@ -17,10 +17,27 @@ from __future__ import annotations
 
 from ..themes import Theme
 from . import Component, Prop, register, shift
-from .builtin import INSET_X, INSETS, LEADING, PAD, _text_height
+from .builtin import BOLD_WRAP, GLYPH_WRAP, INSET_X, INSETS, LEADING, PAD, _text_height, _wrapped_lines
 
 GROUNDS = ("white", "dark", "cyan", "yellow")
 THIN = " "  # thin space: the tracking of the eyebrows (Slides has no letter spacing)
+
+
+def _bold_h(text: str, w: float, size: float) -> float:
+    """Box height of a bold text wrapped in ``w`` (bold glyphs run wider)."""
+    return _wrapped_lines(text, w, size * BOLD_WRAP) * size * LEADING + INSETS
+
+
+def _too_long(component: str, field: str, text: str) -> dict:
+    """Note to the caller (insert_component's ``warnings``): the text cannot fit at the charter size."""
+    t = " ".join(str(text).split())
+    return {"op": "warning", "text": f"{component} : {field} « {t[:40] + '…' if len(t) > 40 else t} » trop long, raccourcir"}
+
+
+def _word_w(text: str, size: float, bold: bool = False) -> float:
+    """Width of the longest word of ``text``: the renderer cuts a word wider than its box."""
+    longest = max((len(word) for word in str(text).split()), default=0)
+    return longest * GLYPH_WRAP * size * (BOLD_WRAP if bold else 1.0)
 
 
 def _ground(ground: str) -> dict:
@@ -62,8 +79,13 @@ def _button_op(text: str, ground: str, variant: str | None, size: float, x: floa
     return op, bw, bh
 
 
+def _pill_size(theme: Theme, size) -> float:
+    """A button's text size, raised to the pill style's floor: the pill is sized from what is drawn."""
+    return max(float(size), float(theme.size_floor("pill") or 0))
+
+
 def _button(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
-    op, bw, bh = _button_op(p["text"], p["ground"], p["variant"], float(p["size"]), color=p["color"])
+    op, bw, bh = _button_op(p["text"], p["ground"], p["variant"], _pill_size(theme, p["size"]), color=p["color"])
     op["w"] = min(w, bw)
     return [op], h or bh
 
@@ -90,7 +112,7 @@ def _button_row(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[
     for it in p["items"]:
         spec = it if isinstance(it, dict) else {"text": str(it)}
         op, bw, bh = _button_op(spec.get("text", ""), spec.get("ground") or p["ground"], spec.get("variant") or p["variant"],
-                                float(p["size"]), x=x, color=spec.get("color"))
+                                _pill_size(theme, p["size"]), x=x, color=spec.get("color"))
         ops.append(op)
         x += bw + gap
     if p["align"] == "CENTER" and ops:
@@ -118,7 +140,8 @@ register(Component(
 # --- hashtags ----------------------------------------------------------------------------------
 
 def _hashtags(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
-    size = float(p["size"])
+    # tags, not a sentence: the small caption style (10 pt floor), like a content card's tags
+    size = max(float(p["size"]), float(theme.size_floor("caption") or 0))
     color = p["color"] or ("accent" if p["dark"] else "ink")
     runs = []
     for i, tag in enumerate(p["items"]):
@@ -129,9 +152,13 @@ def _hashtags(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[di
             runs.append({"text": "    "})
         runs.append({"text": t.upper(), "bold": False, "color": color})
     text = "    ".join(r["text"] for r in runs if r["text"].strip())
-    height = h or _text_height(text, w, size * 1.05)
-    return [{"op": "text", "x": 0, "y": 0, "w": w, "h": height, "runs": [runs], "style": "label", "size": size, "align": p["align"],
-             "role": "hashtags"}], height
+    natural = _text_height(text, w, size * 1.05)  # capitals run wider than the average glyph
+    ops = [{"op": "text", "x": 0, "y": 0, "w": w, "h": max(h or 0.0, natural), "runs": [runs], "style": "caption", "size": size,
+            "align": p["align"], "role": "hashtags"}]
+    if h is not None and h < natural - 0.5:
+        ops.append(_too_long("hashtags", "items", text))
+        return ops, natural
+    return ops, h or natural
 
 
 register(Component(
@@ -154,7 +181,7 @@ def _eyebrow(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
     size = float(p["size"])
     text = _tracked(p["text"]) if p["tracking"] else str(p["text"]).upper()
     color = p["color"] or ("accent" if p["dark"] else "ink")
-    height = h or (size * LEADING + INSETS)
+    height = h or (max(size, float(theme.size_floor("card_label") or 0)) * LEADING + INSETS)  # the size drawn, floor included
     return [{"op": "text", "x": 0, "y": 0, "w": w, "h": height, "text": text, "style": "card_label", "size": size, "bold": True,
              "color": color, "align": p["align"], "role": "eyebrow"}], height
 
@@ -176,41 +203,73 @@ register(Component(
 
 # --- content_card / content_cards -----------------------------------------------------------
 
-def _content_card(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
+CARD_PAD = float(PAD) + 2   # content card: padding inside the frame
+CARD_PAD_MIN = 8.0          # the side padding a narrow card gives up before a word is cut
+CONTENT_TITLE_SIZE = 15.0   # over the 13 pt card body
+EYEBROW_SIZE = 9.5          # the design system's tracked eyebrow (small_ok: a sur-titre)
+
+
+def _tag_line(tags: list) -> str:
+    return "    ".join(("#" + str(t).lstrip("#")).upper() for t in tags)
+
+
+def _card_side_pad(p: dict, theme: Theme, w: float) -> float:
+    """Side padding of a content card: the design's 16 pt, less in a narrow card so that the
+    longest word of the title, text and tags fits (the text keeps its size, the box widens)."""
+    need = max(_word_w(p["title"] or "", CONTENT_TITLE_SIZE, bold=True), _word_w(p["text"] or "", theme.size("card_body")),
+               _word_w(_tag_line(p["tags"] or []), theme.size("caption"))) + 2 * INSET_X
+    return max(CARD_PAD_MIN, min(CARD_PAD, (w - need) / 2))
+
+
+def _content_card(p: dict, theme: Theme, w: float, h: float | None, px: float | None = None) -> tuple[list[dict], float]:
+    """One card; ``px`` (side padding shared by a content_cards row) keeps the row's texts aligned."""
     g = _ground(p["ground"])
-    pad = float(PAD) + 2
-    inner = w - 2 * pad
+    pad = CARD_PAD
+    px = _card_side_pad(p, theme, w) if px is None else px
+    inner = w - 2 * px
     y = pad
     texts: list[dict] = []
+    warnings: list[dict] = []
     if p["eyebrow"]:
-        texts.append({"op": "text", "x": pad, "y": y, "w": inner, "h": 12 + INSETS, "text": _tracked(p["eyebrow"]), "style": "card_label",
-                      "size": 9.5, "bold": True, "color": g["eyebrow"], "small_ok": True, "role": "eyebrow"})
+        texts.append({"op": "text", "x": px, "y": y, "w": inner, "h": 12 + INSETS, "text": _tracked(p["eyebrow"]), "style": "card_label",
+                      "size": EYEBROW_SIZE, "bold": True, "color": g["eyebrow"], "small_ok": True, "role": "eyebrow"})
         y += 18
     if p["title"]:
-        th = _text_height(p["title"], inner, 15 * 1.05)
-        texts.append({"op": "text", "x": pad, "y": y, "w": inner, "h": th, "markdown": str(p["title"]), "style": "card_title", "size": 15,
-                      "color": g["text"], "highlight": "highlight_alt", "role": "title"})
+        th = _bold_h(p["title"], inner, CONTENT_TITLE_SIZE)
+        texts.append({"op": "text", "x": px, "y": y, "w": inner, "h": th, "markdown": str(p["title"]), "style": "card_title",
+                      "size": CONTENT_TITLE_SIZE, "color": g["text"], "highlight": "highlight_alt", "role": "title"})
         y += th + 2
     if p["text"]:
-        bh = _text_height(p["text"], inner, 11)
-        texts.append({"op": "text", "x": pad, "y": y, "w": inner, "h": bh, "markdown": str(p["text"]), "style": "card_body", "color": g["text"],
+        bh = _text_height(p["text"], inner, theme.size("card_body"))
+        texts.append({"op": "text", "x": px, "y": y, "w": inner, "h": bh, "markdown": str(p["text"]), "style": "card_body", "color": g["text"],
                       "role": "body"})
         y += bh + 4
     if p["tags"]:
-        tags = "    ".join(("#" + str(t).lstrip("#")).upper() for t in p["tags"])
-        texts.append({"op": "text", "x": pad, "y": y, "w": inner, "h": 12 + INSETS, "text": tags, "style": "caption", "size": 10,
+        tags = _tag_line(p["tags"])
+        tg = _text_height(tags, inner, theme.size("caption"))
+        texts.append({"op": "text", "x": px, "y": y, "w": inner, "h": tg, "text": tags, "style": "caption",
                       "color": g["tags"], "role": "tags"})
-        y += 22
+        y += tg + 0.5
+    for field, text, size, bold in (("title", p["title"], CONTENT_TITLE_SIZE, True), ("text", p["text"], theme.size("card_body"), False)):
+        if text and _word_w(text, size, bold) > inner - 2 * INSET_X + 2:
+            word = max(str(text).split(), key=len)
+            warnings.append(_too_long("content_card", f"{field}, mot", word))
     if p["cta"]:
         y += 4
-        op, bw, bh = _button_op(p["cta"], p["ground"], p["cta_variant"], 11, x=pad, y=y)
+        op, bw, bh = _button_op(p["cta"], p["ground"], p["cta_variant"], theme.size("pill"), x=px, y=y)
+        op["w"] = min(bw, w - px - 4)  # in a narrow card the pill may take the right padding, never cross the card's edge
         texts.append(op)
         y += bh
-    height = h or (y + pad)
-    if h and p["cta"]:  # equalised rows: the CTA sits on the bottom edge
+    natural = y + pad
+    height = h or natural
+    if h is not None and h < natural - 0.5:
+        # the texts keep the charter size: the card keeps its natural height rather than overlap
+        warnings.append(_too_long("content_card", "text" if p["text"] else "title", p["text"] or p["title"]))
+        height = natural
+    elif h and p["cta"]:  # equalised rows: the CTA sits on the bottom edge
         texts[-1]["y"] = h - pad - texts[-1]["h"]
     frame = {"op": "box", "x": 0, "y": 0, "w": w, "h": height, "shape": "ROUND_RECTANGLE", "fill": g["fill"], "line": g["line"], "role": "card"}
-    return [frame] + texts, height
+    return [frame] + texts + warnings, height
 
 
 _CARD_PROPS = [
@@ -246,13 +305,19 @@ def _content_cards(p: dict, theme: Theme, w: float, h: float | None) -> tuple[li
     ops: list[dict] = []
     y = 0.0
     rows = [cards[i:i + cols] for i in range(0, len(cards), cols)]
-    for row in rows:
-        natural = [_content_card(c, theme, cw, None)[1] for c in row]
-        rh = h or max(natural)
+    # one geometry per row: the same side padding, the heights equalised
+    pxs = [min(_card_side_pad(c, theme, cw) for c in row) for row in rows]
+    naturals = [max(_content_card(c, theme, cw, None, px)[1] for c in row) for row, px in zip(rows, pxs)]
+    share = (h - (len(rows) - 1) * gap) / len(rows) if h is not None and rows else None
+    for row, px, natural in zip(rows, pxs, naturals):
+        rh = max(natural, share) if share is not None else natural  # never under what the texts need
         for j, c in enumerate(row):
-            sub, _ = _content_card(c, theme, cw, rh)
+            sub, _ = _content_card(c, theme, cw, rh, px)
             ops.extend(shift(sub, j * (cw + gap), y))
         y += rh + gap
+    if share is not None and any(n > share + 0.5 for n in naturals):
+        longest = max(cards, key=lambda c: len(str(c["text"] or "")) + len(str(c["title"] or "")))
+        ops.append(_too_long("content_cards", "text", longest["text"] or longest["title"]))
     return ops, (y - gap) if rows else 0.0
 
 
@@ -283,7 +348,7 @@ HEADER_STAT_SIZE = 36.0  # the figures along the foot of a lot opener
 HEADER_STAT_GAP = 16.0
 
 
-def _header_stats(items: list, w: float, color: str, align: str) -> tuple[list[dict], float]:
+def _header_stats(items: list, theme: Theme, w: float, color: str, align: str) -> tuple[list[dict], float]:
     """Big figures side by side with a short label under each, the foot of a lot opener."""
     rows = [(str(it.get("value", "")), str(it.get("label", ""))) if isinstance(it, dict) else (str(it[0]), str(it[1])) for it in items]
     n = max(1, len(rows))
@@ -292,13 +357,13 @@ def _header_stats(items: list, w: float, color: str, align: str) -> tuple[list[d
     # one size for the row, the longest figure on one line (Barlow bold digits ≈ 0.58 × size)
     size = max(20.0, min(HEADER_STAT_SIZE, (cw - 2 * INSET_X) / (longest * 0.58)))
     vh = size * 1.2 + INSETS
-    lh = max((_text_height(label, cw, 12) for _, label in rows), default=0.0)
+    lh = max((_text_height(label, cw, theme.size("body")) for _, label in rows), default=0.0)  # the label is read: body size
     ops: list[dict] = []
     for i, (value, label) in enumerate(rows):
         x = i * (cw + HEADER_STAT_GAP)
         ops.append({"op": "text", "x": x, "y": 0, "w": cw, "h": vh, "text": value, "style": "title", "size": round(size, 1), "color": color,
                     "align": align, "role": "stat_value"})
-        ops.append({"op": "text", "x": x, "y": vh - 6, "w": cw, "h": lh, "text": label, "style": "body", "size": 12, "color": color,
+        ops.append({"op": "text", "x": x, "y": vh - 6, "w": cw, "h": lh, "text": label, "style": "body", "color": color,
                     "align": align, "role": "stat_label"})
     return ops, vh - 6 + lh
 
@@ -329,8 +394,8 @@ def _section_header(p: dict, theme: Theme, w: float, h: float | None) -> tuple[l
                 "highlight": p["highlight"], "align": p["align"], "role": "title"})
     y += th + 4
     if p["text"]:
-        bh = _text_height(p["text"], hw, 12)
-        ops.append({"op": "text", "x": 0, "y": y, "w": hw, "h": bh, "markdown": str(p["text"]), "style": "body", "size": 12, "color": color,
+        bh = _text_height(p["text"], hw, theme.size("body"))
+        ops.append({"op": "text", "x": 0, "y": y, "w": hw, "h": bh, "markdown": str(p["text"]), "style": "body", "color": color,
                     "align": p["align"], "role": "body"})
         y += bh + 6
     if p["tags"]:
@@ -340,11 +405,19 @@ def _section_header(p: dict, theme: Theme, w: float, h: float | None) -> tuple[l
     if p["icon"]:
         y = max(y, float(p["icon_size"]))
     if p["stats"]:
-        sub, sh = _header_stats(list(p["stats"]), w, color, p["align"])
+        sub, sh = _header_stats(list(p["stats"]), theme, w, color, p["align"])
         # at the foot of the box when it is given (a lot opener fills the slide), else under the title
         sy = max(y + 28, (h - sh) if h else 0.0)
         ops.extend(shift(sub, 0, sy))
         y = sy + sh
+    if h is not None and h < y - 0.5:
+        # the texts keep the charter size: the header keeps its natural height rather than overlap
+        if p["stats"]:
+            field, text = "stats", " ".join(str(o["text"]) for o in ops if o.get("role") == "stat_label")
+        else:
+            field, text = ("text", p["text"]) if p["text"] else ("title", p["title"])
+        ops.append(_too_long("section_header", field, text))
+        return ops, y
     return ops, h or y
 
 
@@ -379,18 +452,26 @@ register(Component(
 
 def _client_ticker(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dict], float]:
     dark = p["dark"]
-    size = float(p["size"])
-    height = h or (size * LEADING + 2 * float(p["pad"]))
+    size = max(float(p["size"]), float(theme.size_floor("label") or 0))  # names are read: body floor
     runs = []
     for i, name in enumerate(p["names"]):
         if i:
             runs.append({"text": f"  {p['separator']}  ", "color": "accent" if dark else "muted"})
         runs.append({"text": str(name), "bold": True})
+    # a long list wraps onto a second line (the band grows) rather than shrink under the floor
+    text_h = _wrapped_lines("".join(r["text"] for r in runs), w, size * BOLD_WRAP) * size * LEADING
+    natural = text_h + 2 * float(p["pad"])
+    height = h or natural
+    warn = h is not None and h < text_h + INSETS - 0.5
+    if warn:
+        height = natural
     ops: list[dict] = [
         {"op": "box", "x": 0, "y": 0, "w": w, "h": height, "fill": "surface_dark" if dark else "surface", "role": "band"},
         {"op": "text", "x": 0, "y": 0, "w": w, "h": height, "runs": [runs], "style": "label", "size": size, "color": "on_dark" if dark else "ink",
          "align": "CENTER", "valign": "MIDDLE", "role": "names"},
     ]
+    if warn:
+        ops.append(_too_long("client_ticker", "names", ", ".join(str(n) for n in p["names"])))
     return ops, height
 
 
@@ -401,7 +482,7 @@ register(Component(
         Prop("names", "list", "Noms des clients.", required=True),
         Prop("dark", "bool", "Bandeau sombre (sinon gris clair).", default=True),
         Prop("separator", "str", "Séparateur.", default="·"),
-        Prop("size", "number", "Taille du texte.", default=12),
+        Prop("size", "number", "Taille du texte (13 pt minimum, la taille du corps).", default=13),
         Prop("pad", "number", "Marge verticale.", default=12),
     ],
     render=_client_ticker,
@@ -416,6 +497,7 @@ def _do_dont(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
     gap = float(p["gap"])
     cw = (w - gap) / 2
     pad = 12.0
+    qs, ns = theme.size("quote"), theme.size("caption")
     ops: list[dict] = []
     y = 0.0
     for pair in p["pairs"]:
@@ -424,8 +506,8 @@ def _do_dont(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
         for key, bg, ink, label in sides:
             quote = str(pair.get(key, ""))
             note = pair.get(f"{key}_note") or pair.get(f"note_{key}")
-            qh = _text_height(quote, cw - 2 * pad, 11.5)
-            nh = _text_height(note, cw - 2 * pad, 10) if note else 0.0
+            qh = _bold_h(quote, cw - 2 * pad, qs)  # the verbatim is bold italic
+            nh = _text_height(note, cw - 2 * pad, ns) if note else 0.0
             ch = pad + 16 + qh + (nh + 2 if note else 0) + pad
             cards.append((key, bg, ink, label, quote, note, qh, nh, ch))
         rh = max(c[-1] for c in cards)
@@ -433,14 +515,20 @@ def _do_dont(p: dict, theme: Theme, w: float, h: float | None) -> tuple[list[dic
             x = j * (cw + gap)
             ops.append({"op": "box", "x": x, "y": y, "w": cw, "h": rh, "shape": "ROUND_RECTANGLE", "fill": bg, "role": key})
             ops.append({"op": "text", "x": x + pad, "y": y + pad - 4, "w": cw - 2 * pad, "h": 12 + INSETS, "text": str(label), "style": "card_label",
-                        "size": 10, "color": ink, "role": f"{key}_label"})
-            ops.append({"op": "text", "x": x + pad, "y": y + pad + 12, "w": cw - 2 * pad, "h": qh, "markdown": quote, "style": "quote", "size": 11.5,
+                        "color": ink, "role": f"{key}_label"})
+            ops.append({"op": "text", "x": x + pad, "y": y + pad + 12, "w": cw - 2 * pad, "h": qh, "markdown": quote, "style": "quote",
                         "color": "ink", "role": f"{key}_text"})
             if note:
                 ops.append({"op": "text", "x": x + pad, "y": y + pad + 12 + qh, "w": cw - 2 * pad, "h": nh, "markdown": str(note), "style": "caption",
-                            "size": 10, "role": f"{key}_note"})
+                            "role": f"{key}_note"})
         y += rh + gap
-    return ops, h or max(0.0, y - gap)
+    natural = max(0.0, y - gap)
+    if h is not None and h < natural - 0.5:
+        # the verbatims keep the charter size: the pairs keep their natural height rather than overlap
+        longest = max((str(pair.get(k, "")) for pair in p["pairs"] for k in ("do", "dont")), key=len)
+        ops.append(_too_long("do_dont", "verbatim", longest))
+        return ops, natural
+    return ops, h or natural
 
 
 register(Component(

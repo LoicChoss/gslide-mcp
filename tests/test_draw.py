@@ -325,9 +325,35 @@ def test_runs_and_overrides_respect_the_theme_size_floor():
     reqs, _ = draw.ops_to_requests("s", [{"op": "text", "x": 0, "y": 0, "w": 100, "h": 20, "style": "body", "size": 8,
                                           "runs": [[{"text": "a", "size": 7}, {"text": "b"}]]}], peri, prefix="cmp")
     sizes = [r["updateTextStyle"]["style"]["fontSize"]["magnitude"] for r in reqs if "updateTextStyle" in r and "fontSize" in r["updateTextStyle"]["style"]]
-    assert sizes == [11, 11]
+    assert sizes == [13, 13]
     reqs, _ = _run([{"op": "text", "x": 0, "y": 0, "w": 100, "h": 20, "size": 6, "text": "t", "color": "mint"}])  # theme without rules
     assert [r["updateTextStyle"]["style"]["fontSize"]["magnitude"] for r in reqs if "updateTextStyle" in r] == [6]
+
+
+def _font_sizes(reqs):
+    return [r["updateTextStyle"]["style"]["fontSize"]["magnitude"] for r in reqs
+            if "updateTextStyle" in r and "fontSize" in r["updateTextStyle"]["style"]]
+
+
+def test_small_ok_never_takes_body_text_under_its_floor():
+    from gslides_mcp import themes as T
+    peri = T.load("periscope")
+    ops = [{"op": "text", "x": 0, "y": 0, "w": 100, "h": 20, "text": "a", "style": "body", "size": 9, "small_ok": True},
+           {"op": "text", "x": 0, "y": 0, "w": 100, "h": 20, "text": "b", "style": "caption", "size": 8, "small_ok": True},
+           {"op": "text", "x": 0, "y": 0, "w": 100, "h": 20, "text": "c", "style": "chart_value", "size": 8.5, "small_ok": True},
+           {"op": "text", "x": 0, "y": 0, "w": 100, "h": 20, "text": "d", "style": "caption", "size": 9, "small_ok": True, "role": "source"}]
+    reqs, _ = draw.ops_to_requests("s", ops, peri, prefix="cmp")
+    assert _font_sizes(reqs) == [13, 10, 8.5, 9]
+
+
+def test_a_run_with_its_own_style_takes_that_style_floor():
+    """« Collecte (GA4) »: the 13 pt label, the note in caption size, which may be 10 pt."""
+    from gslides_mcp import themes as T
+    peri = T.load("periscope")
+    reqs, _ = draw.ops_to_requests("s", [{"op": "text", "x": 0, "y": 0, "w": 100, "h": 20, "style": "kpi_label",
+                                          "runs": [[{"text": "Collecte"}, {"text": " (GA4)", "style": "caption", "size": 8}, {"text": " x", "style": "caption"}]]}],
+                                   peri, prefix="cmp")
+    assert _font_sizes(reqs) == [13, 10, 10]
 
 
 def test_box_outline_dash_style():

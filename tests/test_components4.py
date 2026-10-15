@@ -151,6 +151,57 @@ def test_palette_swatches_with_ratio():
     assert "8.12:1" in _texts(ops) and height == 30
 
 
+LONG = "Une phrase nettement plus longue que prévu, qui oblige le bloc à passer sur plusieurs lignes"
+
+
+def test_lot4_body_texts_hold_at_13_pt_and_rows_share_one_geometry():
+    cards = [{"kind": "bad", "label": "Idée reçue", "title": "Un titre assez long pour passer sur deux lignes", "text": "court"},
+             {"kind": "good", "title": "Court", "text": "Un texte"}]
+    ops, _ = _render("compare_cards", {"cards": cards})
+    titles, texts = _of(ops, "text", "title"), [o for o in _of(ops, "text") if o.get("style") == "body"]
+    assert len({t["y"] for t in titles}) == 1 and len({t["y"] for t in texts}) == 1  # no label, a one-line title: still aligned
+    assert all(t["size"] >= 13 for t in titles + texts)
+    phases = [{"title": "Cadrage", "text": LONG, "note": "n", "deliverables": ["a"]}, {"title": "Dev", "text": "court", "note": "n", "deliverables": ["b"]}]
+    ops, _ = _render("phase_cards", {"phases": phases})
+    assert len({lb["y"] for lb in _of(ops, "text", "deliverables")}) == 1
+    # before_after: item k of the before faces item k of the after
+    ops, _ = _render("before_after", {"before": {"title": "Avant", "items": [LONG, "b"]}, "after": {"title": "Après", "items": ["x", "y"]}})
+    rules = _of(ops, "line", "rule")
+    assert [r["y1"] for r in rules[:2]] == [r["y1"] for r in rules[2:]]
+    # a wrapped agenda title makes its row taller rather than smaller
+    ops, h = _render("agenda", {"items": ["Court", LONG]}, w=300)
+    assert h > 2 * 24 and all(t["size"] == 13 for t in _of(ops, "text"))
+
+
+def test_lot4_grids_drop_a_column_rather_than_cut_a_word():
+    cards = [{"kind": "bad", "title": "a", "text": "Les sous-intentions"}, {"kind": "good", "title": "b"}, {"kind": "bad", "title": "c"}]
+    ops, _ = _render("compare_cards", {"cards": cards}, w=420)
+    boxes = _of(ops, "box", "card")
+    assert boxes[2]["x"] == 0 and boxes[2]["y"] > 0 and not [o for o in ops if o["op"] == "warning"]  # 2 + 1
+    # columns asked by the caller are kept: the word is reported instead
+    ops, _ = _render("compare_cards", {"cards": cards, "cols": 3}, w=420)
+    assert len({b["y"] for b in _of(ops, "box", "card")}) == 1
+    assert any("sous-intentions" in o["text"] for o in ops if o["op"] == "warning")
+
+
+def test_before_after_stacks_when_a_url_does_not_hold_and_warns_under_a_forced_height():
+    props = {"before": {"title": "Avant", "items": ["opc.fr/conseils/cataracte/l-operation-de-la-cataracte"]},
+             "after": {"title": "Après", "items": ["opc.fr/x"]}}
+    ops, h = _render("before_after", props, w=420)
+    a, b = _of(ops, "box", "panel")
+    assert a["w"] == b["w"] == 420 and b["x"] == 0 and b["y"] > a["y"] + a["h"]
+    assert _of(ops, "text", "arrow")[0]["text"] == "↓" and h == pytest.approx(b["y"] + b["h"])
+    ops, h = _render("before_after", props, w=420, h=60)
+    assert h == 60 and _of(ops, "box", "panel")[1]["x"] > 0 and [o for o in ops if o["op"] == "warning"]
+
+
+def test_lot4_forced_height_too_small_warns_instead_of_shrinking():
+    ops, h = _render("numbered_list", {"items": [{"title": LONG, "sub": LONG}]}, w=300, h=40)
+    (warn,) = [o for o in ops if o["op"] == "warning"]
+    assert warn["text"].startswith("numbered_list : items «") and warn["text"].endswith("trop long, raccourcir") and h == 40
+    assert all(o["size"] >= 13 and not o.get("small_ok") for o in _of(ops, "text"))
+
+
 # --- people / logos / kpi cards ---------------------------------------------------------
 
 def test_person_card_photo_cover_or_initials():
@@ -208,6 +259,32 @@ def test_kpi_cards_delta_sign_and_series_dots():
     assert [d["fill"] for d in dots] == ["series_1", "coral"]
     assert len(_of(ops, "image")) == 1 and "tint" not in _of(ops, "image")[0]
     assert height == 54
+
+
+def test_team_grid_texts_at_the_charter_size_one_geometry_per_row():
+    people = [{"name": "Sébastien Nouvel-Martin", "role": "Développeur web", "bio": "Intégration et développement WordPress, maintenance."},
+              {"name": "Théo L.", "bio": "Maquettes."}]
+    ops, height = _render("team_grid", {"people": people, "cols": 2}, w=360)
+    names, bios = _of(ops, "text", "name"), _of(ops, "text", "bio")
+    # the names and bios of a row start on the same lines, whatever each one's length
+    assert names[0]["y"] == names[1]["y"] and names[0]["h"] == names[1]["h"] and bios[0]["y"] == bios[1]["y"]
+    assert all(o.get("size") is None for o in names + bios)  # drawn at the theme's 13 pt, the boxes sized for it
+    assert bios[0]["h"] >= 2 * PERISCOPE.size("body") * 1.35 + 8
+    # a forced height too small: the texts keep their size, the grid its natural height, and the caller is told
+    short, h2 = _render("team_grid", {"people": people, "cols": 2}, w=360, h=40)
+    assert h2 == pytest.approx(height) and [o for o in short if o["op"] == "warning" and o["text"].startswith("team_grid : bio")]
+
+
+def test_people_markers_sit_on_the_capitals_and_logo_grid_rows_align():
+    from gslides_mcp.components.builtin import caps_centre
+    ops, _ = _render("kpi_cards", {"items": [{"label": "A", "value": "11 454"}]})
+    dot, value = _of(ops, "box", "dot")[0], _of(ops, "text", "value")[0]
+    assert dot["y"] + dot["h"] / 2 == pytest.approx(caps_centre(value["y"], value["size"]))
+    items = [{"logo": "google", "name": "Google Drive", "title": "T"}, {"name": "Jira", "title": "Pour la recette du site web"}]
+    ops, _ = _render("logo_grid", {"items": items, "cols": 2}, w=300)
+    logo, names, titles = _of(ops, "image")[0], _of(ops, "text", "name"), _of(ops, "text", "title")
+    assert logo["y"] + logo["h"] / 2 == pytest.approx(caps_centre(names[0]["y"], PERISCOPE.size("card_title")))
+    assert titles[0]["y"] == titles[1]["y"] and titles[0]["h"] == titles[1]["h"] and titles[0].get("size") is None
 
 
 # --- charts -----------------------------------------------------------------------------
@@ -277,15 +354,17 @@ def test_flowchart_grid_layout_and_elbow_arrows():
              "edges": [["a", "b"], {"from": "b", "to": "c", "label": "oui"}, {"from": "c", "to": "a", "dash": True}], "gap_x": 20, "gap_y": 10, "node_h": 40}
     ops, height = _render("flowchart", props, w=220)
     nodes = _of(ops, "box", "node")
-    assert [n["x"] for n in nodes] == [0, 120, 120] and nodes[2]["y"] == 50 and nodes[0]["w"] == 100
+    # « B » and its sub-line at 13 pt need 43.1 pt: every row grows from 40 to 43.5
+    assert all(n["h"] == 43.5 for n in nodes)
+    assert [n["x"] for n in nodes] == [0, 120, 120] and nodes[2]["y"] == 53.5 and nodes[0]["w"] == 100
     assert nodes[1]["color"] == "on_dark" and nodes[1]["runs"][1][0]["text"] == "s"
     edges = _of(ops, "polyline", "edge")
     assert all(e["end_arrow"] == "arrow" for e in edges)
-    assert edges[0]["points"] == [[100, 20], [120, 20]]  # same row: straight
-    assert edges[1]["points"] == [[170, 40], [170, 50]]  # same column: straight down
-    assert edges[2]["points"] == [[170, 90], [170, 102], [50, 102], [50, 40]] and edges[2]["dash"] == "DASH"  # lane under the grid, back up into A
+    assert edges[0]["points"] == [[100, 21.75], [120, 21.75]]  # same row: straight
+    assert edges[1]["points"] == [[170, 43.5], [170, 53.5]]  # same column: straight down
+    assert edges[2]["points"] == [[170, 97], [170, 109], [50, 109], [50, 43.5]] and edges[2]["dash"] == "DASH"  # lane under the grid, back up into A
     assert _of(ops, "text", "edge_label")[0]["text"] == "oui"
-    assert height == 102
+    assert height == 109
     with pytest.raises(ValueError, match="unknown node"):
         components.render("flowchart", {"nodes": [{"id": "a", "label": "A"}], "edges": [["a", "zz"]]}, PERISCOPE, 200)
 
@@ -331,8 +410,12 @@ def test_component_sources_declare_charter_sizes():
     for entry in components.catalogue():
         ops, _ = components.render(entry["name"], entry["example"]["props"], PERISCOPE, 400)
         for o in ops:
-            if o["op"] == "table" or o.get("size") is None or o.get("small_ok"):
-                continue  # small_ok: the block cannot grow, the size may go under the floor
+            if o["op"] == "table" or o.get("size") is None:
+                continue
+            if o.get("small_ok"):
+                # under the floor only for chart internals, eyebrows, badges and sources
+                assert PERISCOPE.small_ok(o.get("style"), o.get("role")), (entry["name"], o.get("style"), o.get("role"))
+                continue
             floor = PERISCOPE.size_floor(o.get("style"))
             assert floor is None or o["size"] >= floor, (entry["name"], o.get("style"), o["size"])
             for para in o.get("runs", []):
